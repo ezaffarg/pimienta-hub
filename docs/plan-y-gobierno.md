@@ -64,7 +64,7 @@ En todos los niveles se presenta el plan y se espera aprobación. En nivel 🔴 
 | Fase | Alcance | Estado |
 | --- | --- | --- |
 | 0. Decisiones y consolidación | Fuente de verdad, límites, decisiones pendientes y reglas de agentes | Completada |
-| 1. Seguridad base | Auth server-side, autorización, tenant resolution, validación y errores | Pendiente |
+| 1. Seguridad base | Auth server-side, autorización, tenant resolution, validación y errores | En curso — Subfase 1.1 completada |
 | 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | Pendiente |
 | 3. OAuth Mercado Libre | Inicio, callback, state, replay protection, tokens cifrados, conexión y desconexión | Pendiente |
 | 4. UI de conexiones | Stores, estados, conectar, reautorizar y desconectar | Pendiente |
@@ -113,13 +113,18 @@ No se crearán `src/application/` ni `src/domain/` hasta que una responsabilidad
 #### Subfases previstas
 
 1. **1.0 — Gobierno y modelo de autorización:** documentación y decisiones, sin código funcional.
-2. **1.2 — Guards base y contrato HTTP:** sesión, Organization y errores uniformes.
-3. **1.3 — Roles, permisos y policy de scope:** contrato reemplazable y pruebas de aislamiento.
-4. **1.4 — Endpoints demo y Zod:** protección y validación de `/api/products` y `/api/users`.
-5. **1.5 — Sentry y cierre de seguridad:** minimización de datos, auditoría y documentación.
-6. **1.6 — Validación y checkpoint:** comprobaciones finales y cierre de fase.
+2. **1.1 — Auditoría y contrato de pruebas:** Vitest en entorno Node, configuración compartida, smoke test y matriz de pruebas; sin guards ni seguridad funcional.
+3. **1.2 — Guards base y contrato HTTP:** sesión, Organization y errores uniformes.
+4. **1.3 — Roles, permisos y policy de scope:** contrato reemplazable y pruebas de aislamiento.
+5. **1.4 — Endpoints demo y Zod:** protección y validación de `/api/products` y `/api/users`.
+6. **1.5 — Sentry y cierre de seguridad:** minimización de datos, auditoría y documentación.
+7. **1.6 — Validación y checkpoint:** comprobaciones finales y cierre de fase.
 
 Cada subfase requiere aprobación independiente mediante el Subfase Approval Gate.
+
+#### Infraestructura de testing de Fase 1
+
+Vitest se ejecuta en entorno Node con alias `@` hacia `src` y scripts `test` y `test:watch`. La infraestructura inicial no incorpora DOM, Testing Library, Playwright, cobertura, fixtures de scope ni tests de seguridad funcional; estos se agregan únicamente en sus subfases aprobadas.
 
 ### Fase 2 — Persistencia multi-tenant
 
