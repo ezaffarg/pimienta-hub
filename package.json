@@ -30,6 +30,7 @@
     "@sentry/nextjs": "^10.45.0",
     "@shadcn/helpers": "^0.1.0",
     "@shadcn/react": "^0.2.1",
+    "@supabase/supabase-js": "^2.112.3",
     "@tabler/icons-react": "^3.40.0",
     "@tailwindcss/postcss": "^4.2.2",
     "@tanstack/react-form": "^1.28.5",

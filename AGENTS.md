@@ -749,6 +749,29 @@ See "Theming System" section above or `docs/themes.md`.
 
 ## Notes for AI Agents
 
+### Gobierno de fases y decisiones del proyecto
+
+Estas reglas son obligatorias para este proyecto:
+
+1. No saltar fases.
+2. No implementar fases futuras sin autorización explícita.
+3. No implementar decisiones no confirmadas. Registrar una **DECISIÓN PENDIENTE** y solicitar definición cuando el asunto pueda afectar arquitectura, seguridad, datos, integraciones o UX.
+4. No modificar la arquitectura sin documentar primero la decisión y su motivo.
+5. No tocar integraciones futuras mientras la fase activa sea seguridad o persistencia, salvo autorización explícita.
+6. Cada fase debe pasar `typecheck`, `lint`, `build` y los tests definidos para esa fase.
+7. Cada fase debe actualizar la documentación correspondiente.
+8. Todo acceso a datos debe estar autenticado, autorizado y tenant-scoped en servidor.
+9. Nunca exponer secretos, access tokens o refresh tokens al cliente, navegador, logs, respuestas o trazas.
+10. No borrar funcionalidades del starter hasta confirmar si son reutilizables.
+11. No hacer cambios masivos sin explicar primero el alcance y los archivos que se modificarán.
+12. No avanzar a la siguiente fase hasta cumplir todas las condiciones de salida documentadas.
+
+El plan, las puertas de fase y el registro de decisiones están en [docs/plan-y-gobierno.md](./docs/plan-y-gobierno.md). Ese documento es la fuente de verdad operativa; los documentos especializados aportan detalle y el análisis histórico conserva contexto, pero no autoriza por sí mismo implementación futura.
+
+### Distinción obligatoria entre decisión y suposición
+
+Los agentes deben distinguir explícitamente entre decisiones confirmadas, suposiciones y decisiones pendientes. Una suposición no puede convertirse silenciosamente en un modelo de datos, contrato de API, migración, integración o comportamiento de seguridad.
+
 1. **Always use `cn()` for className merging** - never concatenate strings manually
 2. **Respect the feature-based structure** - put new feature code in `src/features/`
 3. **Server components by default** - only add `'use client'` when using browser APIs or React hooks

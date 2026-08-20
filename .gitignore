@@ -21,6 +21,10 @@ pnpm-lock.yaml
 # misc
 .DS_Store
 *.pem
+env.example.txt
+
+# local/editor history
+.history/
 
 # debug
 npm-debug.log*
