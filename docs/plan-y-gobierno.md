@@ -104,6 +104,12 @@ Clerk aporta identidad, autenticación, Organization y roles/permisos base. La a
 
 El servidor resuelve la identidad y Organization desde Clerk; `organizationId`, `clientId`, `storeId` y otros IDs del request son datos no confiables hasta cruzarlos con tenant, permiso y scope. Una Store existente pero fuera del alcance del usuario devuelve `403` en las pruebas explícitas de Fase 1. `404` se reserva para recursos cuya existencia se decida ocultar según el tipo de recurso; no es una regla universal.
 
+#### DECISIÓN CONFIRMADA — límites preparatorios de arquitectura
+
+`features/` representa capacidades y experiencias del producto; `integrations/` representa adapters técnicos hacia proveedores externos. Una Store tendrá conexiones/configuración persistidas, no una copia del código del proveedor: `Organization -> Store -> IntegrationConnection -> Provider`. Se mantiene una única implementación reutilizable por proveedor en `src/integrations/mercado-libre/`.
+
+No se crearán `src/application/` ni `src/domain/` hasta que una responsabilidad real justifique extraer código de su módulo actual y aporte un beneficio arquitectónico concreto. Los tipos de `src/integrations/core/` permanecen temporalmente allí; su ubicación se revisará antes de adapters reales de ventas, productos, inventario u órdenes. Estas decisiones no autorizan OAuth, persistencia, StoreIntegrationResolver ni integraciones funcionales.
+
 #### Subfases previstas
 
 1. **1.0 — Gobierno y modelo de autorización:** documentación y decisiones, sin código funcional.

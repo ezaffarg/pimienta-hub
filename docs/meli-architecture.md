@@ -10,10 +10,19 @@ Usuario -> Clerk -> Organization/Tenant -> Store -> External Connection -> Merca
 
 La integracion vive en `src/integrations/`. Las features consumen modelos canonicos y no conocen DTOs de Mercado Libre.
 
+## Límites de capas confirmados
+
+- `features/` contiene capacidades y experiencias del producto; permanece desacoplado de proveedores externos.
+- `integrations/` contiene adapters técnicos hacia sistemas externos. Existe una única implementación reutilizable por proveedor, por ejemplo `src/integrations/mercado-libre/`; una Store nunca contiene una copia del código de Mercado Libre.
+- Una Store es una entidad de negocio que en el futuro tendrá conexiones/configuración persistidas: `Organization -> Store -> IntegrationConnection -> Provider`. La conexión conserva referencias y credenciales seguras; el código del provider permanece una sola vez en `integrations/`.
+- `src/application/` solo se introducirá cuando existan casos de uso compartidos reales que no correspondan a una feature. `src/domain/` solo se introducirá cuando existan modelos propios de negocio que justifiquen esa frontera. No crear carpetas vacías ni anticipatorias.
+
+Los tipos canónicos de `src/integrations/core/` permanecen allí temporalmente. Antes de implementar adapters reales de ventas, productos, inventario u órdenes se revisará si deben moverse a un dominio o puertos propios.
+
 ## Contrato
 
 `EcommerceIntegration` debe ser agnostico al proveedor y expresar capacidades opcionales. El primer hito solo implementa conexion OAuth; la lectura y las mutaciones son fases posteriores.
 
 ## Limite
 
-No modificar componentes base ni migrar mocks innecesariamente. Mantener cambios de dominio pequenos para conservar actualizaciones del upstream.
+No modificar componentes base ni migrar mocks innecesariamente. Mantener cambios de dominio pequeños para conservar actualizaciones del upstream. Mercado Libre se consumirá exclusivamente mediante APIs oficiales; análisis de productos externos solo son referencia funcional y nunca fuente de endpoints privados.
