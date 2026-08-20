@@ -22,6 +22,12 @@ This document explains the fully client-side RBAC (Role-Based Access Control) sy
 
 **Note**: For actual security (API routes, server actions, page protection), always use server-side checks.
 
+## Límite de la navegación frente a la autorización de dominio
+
+Los checks client-side de este documento solo controlan visibilidad. Roles como Owner, Manager, Employee y Client, y los permisos de Clerk, no sustituyen la autorización de dominio. Client, Store, Team, ownership, asignaciones y Resource Scope se resuelven en servidor mediante `User -> Role -> Permission -> Resource Scope -> Resource`.
+
+Una UI puede ocultar una acción, pero cada Route Handler o Server Action protegido debe comprobar sesión, Organization activa, permiso y scope del recurso. No se representa una Store, un Client, un Team ni sus asignaciones solo con roles de Clerk.
+
 ## Performance Characteristics
 
 ### All Checks Are Synchronous
@@ -58,8 +64,8 @@ This document explains the fully client-side RBAC (Role-Based Access Control) sy
   // All client-side checks - instant!
   access: {
     requireOrg: true,
-    permission: 'org:admin:manage',  // Client-side from membership.permissions
-    role: 'admin'  // Client-side from membership.role
+    permission: 'stores:assign',  // Solo visibilidad client-side
+    role: 'manager'  // Solo visibilidad client-side
 }
 ```
 
@@ -123,9 +129,9 @@ The system automatically:
 
 ### Adding New Access Types
 
-1. Add to `PermissionCheck` interface in `src/app/actions/rbac.ts`
-2. Add check logic in `checkAccess()` function
-3. Update `use-nav.ts` to handle the new type
+1. Add to `PermissionCheck` in `src/types/index.ts`
+2. Add the visibility check in `src/hooks/use-nav.ts`
+3. Implement the autorización real por separado, en guards server-side
 
 ## Comparison: Before vs After
 

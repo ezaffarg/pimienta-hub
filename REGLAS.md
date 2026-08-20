@@ -13,6 +13,8 @@ Estas reglas son obligatorias para cualquier cambio de e-ngenieria Hub.
 - No usar Supabase service role desde el navegador.
 - No permitir acceso cross-tenant.
 - No usar el ocultamiento de botones como autorizacion.
+- No reducir Client, Store, Team, asignaciones u ownership a roles de Clerk.
+- No confiar en IDs de Organization, Client, Store o Team enviados por el cliente sin comprobar tenant, permiso y scope en servidor.
 - No crear una integracion especifica dentro de un feature de negocio.
 - No importar DTOs de Mercado Libre en features o dominio.
 - No colocar secretos en el repositorio, logs o respuestas.
@@ -24,6 +26,12 @@ Estas reglas son obligatorias para cualquier cambio de e-ngenieria Hub.
 - Clerk es la unica identidad y autenticacion.
 - Clerk Organizations representa el tenant.
 - Toda operacion server-side valida autenticacion, autorizacion y tenant.
+- La autorizacion se evalua como `User -> Role -> Permission -> Resource Scope -> Resource`.
+- Owner, Manager, Employee y Client son roles distintos; Employee y Client nunca obtienen acceso global por su rol.
+- Clerk resuelve identidad, autenticacion, Organization y roles/permisos base; la aplicacion resuelve el alcance comercial de Client, Store, Team, ownership y asignaciones.
+- Toda ruta de negocio requiere Organization activa salvo que este definida expresamente como publica o global.
+- Todo body, params y query string se valida en runtime antes de usarse.
+- Los errores HTTP no exponen secretos, tokens, trazas, SQL, detalles de Clerk ni infraestructura. Un recurso existente fuera de scope devuelve 403 cuando su existencia no deba ocultarse; 404 se usa solo cuando la politica del recurso exija ocultarla.
 - Toda entidad de negocio tiene aislamiento por tenant.
 - Los datos externos se transforman mediante mappers.
 - Las features consumen modelos canonicos, no DTOs de proveedor.

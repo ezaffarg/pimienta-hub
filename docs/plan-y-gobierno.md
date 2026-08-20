@@ -37,11 +37,33 @@ Este documento gobierna el orden de ejecución y las reglas de trabajo. Los docu
 
 Si dos documentos discrepan, primero se debe registrar la discrepancia como decisión pendiente y resolverla explícitamente antes de implementar.
 
+## Subfase Approval Gate
+
+Ninguna subfase comienza automáticamente. Antes de ejecutar una subfase, el agente debe leer la documentación aplicable, revisar el estado del repositorio, identificar archivos a modificar e inspeccionar, dependencias, riesgos, herramientas, APIs, servicios externos, costes y acciones irreversibles. Debe explicar el alcance, qué no hará, la complejidad y una estimación aproximada de contexto/tokens; luego presenta el plan y se detiene hasta recibir aprobación explícita.
+
+```text
+PLANNING → ANÁLISIS → ESTIMACIÓN DE IMPACTO / TOKENS / COSTES
+                                      ↓
+                              🛑 USER APPROVAL
+                                      ↓
+APPROVED → EXECUTING → VALIDATION → CHECKPOINT → 🛑 STOP
+```
+
+Nunca se permite `PLANNING → EXECUTING` sin aprobación explícita. Solo autorizan expresiones inequívocas como `APROBAR SUBFASE 1.1`, `CONTINUAR` o una instrucción afirmativa equivalente y claramente dirigida a la subfase propuesta. Preguntas, comentarios, “ok”, “bien”, “perfecto” o una aprobación previa no autorizan la siguiente subfase.
+
+Cada subfase se clasifica antes de ejecutarse:
+
+- 🟢 **Bajo:** 1–3 archivos, cambios localizados, sin arquitectura ni integraciones.
+- 🟡 **Medio:** varios archivos, refactors, guards, contratos o tests nuevos.
+- 🔴 **Alto:** autenticación, autorización, OAuth, integraciones, migraciones, base de datos, cambios estructurales, costes externos o consumo significativo de contexto.
+
+En todos los niveles se presenta el plan y se espera aprobación. En nivel 🔴 se detallan además alternativas, dependencias, riesgos, impacto, tokens/contexto y costes potenciales. Al cerrar una subfase se validan cambios, se documentan hechos, pendientes, archivos, riesgos, consumo y costes, se presenta el checkpoint y se detiene.
+
 ## Estado de fases
 
 | Fase | Alcance | Estado |
 | --- | --- | --- |
-| 0. Decisiones y consolidación | Fuente de verdad, límites, decisiones pendientes y reglas de agentes | En curso |
+| 0. Decisiones y consolidación | Fuente de verdad, límites, decisiones pendientes y reglas de agentes | Completada |
 | 1. Seguridad base | Auth server-side, autorización, tenant resolution, validación y errores | Pendiente |
 | 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | Pendiente |
 | 3. OAuth Mercado Libre | Inicio, callback, state, replay protection, tokens cifrados, conexión y desconexión | Pendiente |
@@ -66,7 +88,32 @@ No se ejecutará un formateo masivo como parte de esta Fase 0. La normalización
 
 ### Fase 1 — Seguridad base
 
-Proteger todos los endpoints, resolver tenant desde Clerk en servidor, autorizar por rol/permiso, validar inputs con Zod, normalizar errores y revisar la configuración de Sentry.
+Define y aplica seguridad server-side antes de persistencia o integraciones: autenticación, Organization activa, roles, permisos, alcance de recurso, validación Zod, errores HTTP y revisión de Sentry. Protege los endpoints demo `/api/products` y `/api/users`; estar bajo `/api` o `/dashboard` no es protección.
+
+Quedan fuera de Fase 1 la persistencia definitiva de Client, Store, Team y asignaciones, OAuth, Mercado Libre, sincronización, UI de conexiones, ajustes de Google Sans Flex y `metadataBase`.
+
+#### Modelo de autorización confirmado
+
+```text
+User → Role → Permission → Resource Scope → Resource
+```
+
+Los roles son Owner, Manager, Employee y Client; nunca se simplifican a `admin/member`. Existe un Owner con alcance global; los Managers tienen privilegios cercanos pero no adquieren automáticamente permisos globales ni condición de Owner; Employees operan solo dentro de sus asignaciones; Clients solo operan sus propios recursos. Client, Store, Team, User y Resource Scope son conceptos distintos. Un Client puede tener varias Stores y una Store puede ser asignada a múltiples Employees, Teams y Managers.
+
+Clerk aporta identidad, autenticación, Organization y roles/permisos base. La aplicación conserva Client, Store, Team, ownership, asignaciones y alcance comercial; no se modelan exclusivamente mediante roles de Clerk. Fase 1 define el contrato de guards y un resolver temporal testeable para scope. Fase 2 lo reemplazará por un resolver persistente sin cambiar ese contrato.
+
+El servidor resuelve la identidad y Organization desde Clerk; `organizationId`, `clientId`, `storeId` y otros IDs del request son datos no confiables hasta cruzarlos con tenant, permiso y scope. Una Store existente pero fuera del alcance del usuario devuelve `403` en las pruebas explícitas de Fase 1. `404` se reserva para recursos cuya existencia se decida ocultar según el tipo de recurso; no es una regla universal.
+
+#### Subfases previstas
+
+1. **1.0 — Gobierno y modelo de autorización:** documentación y decisiones, sin código funcional.
+2. **1.2 — Guards base y contrato HTTP:** sesión, Organization y errores uniformes.
+3. **1.3 — Roles, permisos y policy de scope:** contrato reemplazable y pruebas de aislamiento.
+4. **1.4 — Endpoints demo y Zod:** protección y validación de `/api/products` y `/api/users`.
+5. **1.5 — Sentry y cierre de seguridad:** minimización de datos, auditoría y documentación.
+6. **1.6 — Validación y checkpoint:** comprobaciones finales y cierre de fase.
+
+Cada subfase requiere aprobación independiente mediante el Subfase Approval Gate.
 
 ### Fase 2 — Persistencia multi-tenant
 
@@ -141,3 +188,14 @@ Antes de pasar de fase deben estar comprobados:
 - Tests de aislamiento entre organizaciones cuando exista persistencia.
 - `bun run typecheck`, `bun run lint`, `bun run build` y los tests definidos para la fase.
 - Documentación y estado de fase alineados con el código real.
+
+### Condición de salida específica de Fase 1
+
+- Auditoría de handlers, Server Actions, acceso a datos, IDs del cliente, guards, validaciones y Sentry.
+- Guards de autenticación, Organization, rol/permiso y resource scope en servidor.
+- Tenant isolation y contratos de scope testeables sin persistencia definitiva.
+- `/api/products` y `/api/users` protegidos y validados con Zod.
+- Contrato HTTP uniforme sin secretos, tokens, trazas, SQL ni detalles internos.
+- Revisión de Sentry para excluir PII, cookies, headers Authorization, credenciales y secretos innecesarios.
+- Vitest y pruebas de: sin sesión, sin Organization, sin permiso, Employee fuera de Store, Client de otra Store, otra Organization, Owner permitido, Manager permitido y Manager ante operación exclusiva de Owner.
+- `typecheck`, `lint`, formato según la excepción vigente, `build`, tests y documentación aprobados.
