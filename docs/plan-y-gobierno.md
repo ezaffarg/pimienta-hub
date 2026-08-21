@@ -72,7 +72,7 @@ En todos los niveles se presenta el plan y se espera aprobación. En nivel 🔴 
 | --- | --- | --- |
 | 0. Decisiones y consolidación | Fuente de verdad, límites, decisiones pendientes y reglas de agentes | Completada |
 | 1. Seguridad base | Auth server-side, autorización, tenant resolution, validación, errores y privacidad Sentry | Cerrada — Checkpoint 1.6 |
-| 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | Pendiente |
+| 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | En planificación — auditoría 2.0 y decisiones aprobadas; 2.1 pendiente |
 | 3. OAuth Mercado Libre | Inicio, callback, state, replay protection, tokens cifrados, conexión y desconexión | Pendiente |
 | 4. UI de conexiones | Stores, estados, conectar, reautorizar y desconectar | Pendiente |
 | 5. Adapter y dominio inicial | Cliente server-only, DTOs, mappers y una capacidad inicial | Pendiente |
@@ -175,6 +175,16 @@ El siguiente bloque pendiente es Fase 2: Store, persistencia, connections, fuent
 ### Fase 2 — Persistencia multi-tenant
 
 Modelar `stores`, `external_connections`, `external_accounts` y `audit_log`, con tenant keys, constraints, índices, migraciones reproducibles, repositorios server-only y RLS como defensa adicional.
+
+#### Decisiones aprobadas después de la auditoría 2.0
+
+`hub_memberships` será la fuente server-side definitiva de los roles e-Hub por `Clerk userId + Organization`; el mapping Clerk de Fase 1 es solo transitorio. El primer Owner se inicializará mediante bootstrap server-side cerrado una vez que la Organization tenga Owner. Owner y Manager tienen scope implícito sobre todas las Stores de su Organization; Employee y Client requieren `store_assignments` explícitos y una membership inexistente se deniega.
+
+La base conceptual aprobada es `hub_memberships`, `stores`, `store_assignments` y `connections`. Store tiene relación 1:N con Connections; `provider + external_account_id` debe ser único entre conexiones activas cuando exista cuenta externa. La transferencia de cuenta será un workflow explícito posterior, nunca un cambio arbitrario de `store_id` u `organization_id` de una Connection activa. Provider permanece como conjunto controlado, sin tabla propia.
+
+Las migraciones usarán SQL versionado con Supabase CLI, cuya forma de pinning se auditará en 2.1; no se introduce ORM. La defensa primaria es backend server-only, queries/repositories tenant-scoped y constraints/FKs compuestas. RLS queda diferido como defensa adicional porque service role no es una garantía de aislamiento. Tokens OAuth permanecen fuera de Connections hasta Fase 3. Ver el [mandato archivado](./prompts/phase-02/2.0-decisions.md).
+
+La secuencia provisional es: 2.1 decisiones finales de schema y convención de migraciones; 2.2 schema mínimo; 2.3 repositories y fuente propia de roles; 2.4 Store Scope; 2.5 Connections sin OAuth; 2.6 checkpoint. Esta decisión no autoriza iniciar 2.1.
 
 ### Fase 3 — MVP OAuth de Mercado Libre
 

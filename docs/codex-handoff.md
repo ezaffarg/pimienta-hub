@@ -6,12 +6,12 @@ Este es el punto de entrada para una nueva sesión de agente. Resume el estado s
 
 e-ngenieria Hub es un SaaS B2B multi-tenant para centralizar la operación de clientes, Stores y cuentas ecommerce desde una plataforma. La relación objetivo es `Organization -> Store -> Connection -> Provider`; Mercado Libre será el primer provider y otros adapters podrán incorporarse después.
 
-**Estado actual:** Fase 0 completada; Fase 1 cerrada en `b543597`; Fase 2 está pendiente y no queda autorizada por este documento. El working tree debe verificarse antes de trabajar.
+**Estado actual:** Fase 0 completada; Fase 1 cerrada en `b543597`; Fase 2 está en planificación: la auditoría 2.0 y sus decisiones están aprobadas, pero 2.1 todavía no está autorizada. El working tree debe verificarse antes de trabajar.
 
 ## Arquitectura vigente
 
 - **IMPLEMENTADO:** Clerk resuelve sesión e Organization en servidor. Las APIs demo tienen RBAC default-deny, permisos, scope por Organization, validación Zod, contrato de errores y privacidad Sentry. La suite de Fase 1 cerró con 31 tests.
-- **DECIDIDO:** `features/` expresa capacidades del producto; `src/integrations/` contiene adapters técnicos reutilizables. Una Store no copia código de un provider. Clerk no es la fuente definitiva de Manager, Client, ownership ni asignaciones. Supabase será PostgreSQL, no Supabase Auth.
+- **DECIDIDO:** `features/` expresa capacidades del producto; `src/integrations/` contiene adapters técnicos reutilizables. Una Store no copia código de un provider. `hub_memberships` será la fuente definitiva server-side de roles e-Hub; Owner y Manager tienen scope implícito de todas las Stores de su Organization, mientras Employee y Client requieren assignments explícitos. Supabase será PostgreSQL, no Supabase Auth.
 - **DIFERIDO:** Store, Client/Team, asignaciones, persistencia, repositorios, RLS aplicado, OAuth funcional, conexiones reales, Mercado Libre funcional, webhooks y sincronización.
 - **PROPUESTO:** módulos de ventas, productos, publicaciones, inventario, precios, preguntas, operaciones masivas, notificaciones, reportes, automatizaciones e IA; no son backlog aprobado.
 - **OBSERVADO EN REFERENCIA:** MercadoCuentas aporta necesidades funcionales y UX, nunca contratos, APIs, backend ni fuente de datos. Ver [referencia funcional](./mercado-cuentas-functional-reference.md).
@@ -37,12 +37,12 @@ MercadoCuentas es referencia funcional/producto. La investigación incluyó nave
 
 ## Siguiente paso y lectura mínima
 
-La siguiente fase candidata es **Fase 2 — Persistencia multi-tenant**, pero requiere un plan y aprobación explícitos. Antes de proponerla, leer:
+La siguiente subfase candidata es **2.1 — decisiones finales de schema + convención de migraciones**, pero requiere aprobación explícita. Antes de proponerla, leer:
 
 1. [Plan y gobierno](./plan-y-gobierno.md).
 2. [Workflow de agentes](./agent-workflow.md).
 3. [Multi-tenancy](./meli-multi-tenancy.md), [seguridad](./meli-security.md) y [arquitectura](./meli-architecture.md).
-4. [Base de datos](./meli-database.md) y [prompts de Fase 1](./prompts/phase-01/README.md).
+4. [Base de datos](./meli-database.md), [prompts de Fase 1](./prompts/phase-01/README.md) y [decisiones 2.0](./prompts/phase-02/2.0-decisions.md).
 
 Para cualquier trabajo de proveedor, leer además [OAuth y API](./meli-mercadolibre-OAuth/API.md), [integración](./meli-integration.md) y la documentación oficial vigente.
 

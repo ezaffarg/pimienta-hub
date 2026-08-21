@@ -7,7 +7,7 @@ Cuando el texto literal no quedó guardado en el repositorio, la entrada se marc
 ## Índice
 
 - [Fase 1 — cierre de seguridad](./phase-01/README.md)
-- [Fase 2 — registro reservado](./phase-02/README.md)
+- [Fase 2 — planificación y decisiones](./phase-02/README.md)
 
 ## Convención
 
