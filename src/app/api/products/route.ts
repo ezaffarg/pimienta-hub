@@ -16,11 +16,11 @@
 // ============================================================
 
 import { fakeProducts } from '@/constants/mock-api';
-import { withServerTenantContext } from '@/lib/auth/server-context';
+import { withServerPermission } from '@/lib/auth/server-context';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
-  return withServerTenantContext(async () => {
+  return withServerPermission('products.read', async () => {
     const { searchParams } = request.nextUrl;
 
     const page = Number(searchParams.get('page') ?? 1);
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  return withServerTenantContext(async () => {
+  return withServerPermission('products.write', async () => {
     const body = await request.json();
     const data = await fakeProducts.createProduct(body);
     return NextResponse.json(data, { status: 201 });

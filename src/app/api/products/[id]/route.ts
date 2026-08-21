@@ -5,13 +5,13 @@
 // ============================================================
 
 import { fakeProducts } from '@/constants/mock-api';
-import { withServerTenantContext } from '@/lib/auth/server-context';
+import { withServerPermission } from '@/lib/auth/server-context';
 import { NextRequest, NextResponse } from 'next/server';
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(request: NextRequest, { params }: Params) {
-  return withServerTenantContext(async () => {
+  return withServerPermission('products.read', async () => {
     const { id } = await params;
     const data = await fakeProducts.getProductById(Number(id));
 
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 }
 
 export async function PUT(request: NextRequest, { params }: Params) {
-  return withServerTenantContext(async () => {
+  return withServerPermission('products.write', async () => {
     const { id } = await params;
     const body = await request.json();
     const data = await fakeProducts.updateProduct(Number(id), body);
@@ -38,7 +38,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(request: NextRequest, { params }: Params) {
-  return withServerTenantContext(async () => {
+  return withServerPermission('products.write', async () => {
     const { id } = await params;
     const data = await fakeProducts.deleteProduct(Number(id));
 

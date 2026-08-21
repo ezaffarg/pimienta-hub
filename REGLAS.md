@@ -29,6 +29,7 @@ Estas reglas son obligatorias para cualquier cambio de e-ngenieria Hub.
 - La autorizacion se evalua como `User -> Role -> Permission -> Resource Scope -> Resource`.
 - Owner, Manager, Employee y Client son roles distintos; Employee y Client nunca obtienen acceso global por su rol.
 - Clerk resuelve identidad, autenticacion, Organization y roles/permisos base; la aplicacion resuelve el alcance comercial de Client, Store, Team, ownership y asignaciones.
+- Mientras no exista una fuente propia de roles, el mapping provisional server-side es `org:admin -> Owner` y `org:member -> Employee`; cualquier otro rol de Clerk se deniega. Manager y Client no se infieren desde Clerk.
 - Toda ruta de negocio requiere Organization activa salvo que este definida expresamente como publica o global.
 - Todo body, params y query string se valida en runtime antes de usarse.
 - Los errores HTTP no exponen secretos, tokens, trazas, SQL, detalles de Clerk ni infraestructura. Un recurso existente fuera de scope devuelve 403 cuando su existencia no deba ocultarse; 404 se usa solo cuando la politica del recurso exija ocultarla.

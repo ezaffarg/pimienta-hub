@@ -19,3 +19,9 @@ La autorizacion real ocurre en route handlers/servicios server-side; la navegaci
 `requireServerTenantContext()` obtiene exclusivamente de `auth()` de Clerk el `userId` y la Organization activa. No recibe ni acepta identidad, tenant, roles o permisos desde body, query, headers o estado del navegador.
 
 Los Route Handlers de `/api/products` y `/api/users` usan `withServerTenantContext()` antes de acceder a datos o procesar body y parámetros. El error uniforme es `{ error: { code, message } }`: ausencia de sesión devuelve `401 AUTHENTICATION_REQUIRED`; una sesión sin Organization activa devuelve `403 ORGANIZATION_REQUIRED`, porque la identidad es válida pero no está autorizada para operar sobre un tenant. RBAC, permisos y scope siguen fuera de esta subfase.
+
+## Subfase 1.3A — RBAC base
+
+Clerk continúa resolviendo la sesión, Organization y membership en servidor; e-Hub controla los roles de negocio y sus permisos. El mapping temporal es `org:admin -> Owner` y `org:member -> Employee`. Manager y Client son roles aprobados del e-Hub, pero no se resuelven automáticamente desde Clerk hasta que exista una fuente propia aprobada. Un rol Clerk desconocido se deniega por defecto.
+
+La policy inicial usa permisos estables: `products.read`, `products.write`, `users.read` y `users.write`. Owner tiene todos; Manager tiene lectura/escritura de productos y lectura de usuarios; Employee solo lectura de productos; Client no recibe permisos globales antes de Resource Scope. Los handlers validan el permiso en servidor y devuelven `403 AUTHORIZATION_DENIED` cuando no está permitido. Resource Scope, Store y asignaciones siguen fuera de esta subfase.

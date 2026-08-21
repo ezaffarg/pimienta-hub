@@ -132,6 +132,12 @@ Vitest se ejecuta en entorno Node con alias `@` hacia `src` y scripts `test` y `
 
 Esta subfase no implementa roles, permisos, resource scope, Store, Team, persistencia ni integraciones. Esos datos no se aceptan como autoridad desde el request.
 
+#### Subfase 1.3A — RBAC y policy base
+
+La autorización server-side usa los roles e-Hub Owner, Manager, Employee y Client, sin acoplar la policy a nombres de Clerk. Hasta contar con una fuente propia aprobada, el mapping temporal y testeable es `org:admin -> Owner` y `org:member -> Employee`; cualquier otro rol Clerk se deniega. Manager y Client no se resuelven automáticamente durante esta subfase.
+
+Permisos implementados: `products.read`, `products.write`, `users.read` y `users.write`. La matriz explícita es Owner: todos; Manager: `products.read`, `products.write`, `users.read`; Employee: `products.read`; Client: ninguno global. Toda combinación no listada se deniega. Resource Scope, Store, Team, asignaciones y persistencia permanecen fuera de 1.3A.
+
 ### Fase 2 — Persistencia multi-tenant
 
 Modelar `stores`, `external_connections`, `external_accounts` y `audit_log`, con tenant keys, constraints, índices, migraciones reproducibles, repositorios server-only y RLS como defensa adicional.

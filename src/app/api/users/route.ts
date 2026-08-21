@@ -16,11 +16,11 @@
 // ============================================================
 
 import { fakeUsers } from '@/constants/mock-api-users';
-import { withServerTenantContext } from '@/lib/auth/server-context';
+import { withServerPermission } from '@/lib/auth/server-context';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
-  return withServerTenantContext(async () => {
+  return withServerPermission('users.read', async () => {
     const { searchParams } = request.nextUrl;
 
     const page = Number(searchParams.get('page') ?? 1);
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  return withServerTenantContext(async () => {
+  return withServerPermission('users.write', async () => {
     const body = await request.json();
     const data = await fakeUsers.createUser(body);
     return NextResponse.json(data, { status: 201 });
