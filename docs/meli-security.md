@@ -12,7 +12,7 @@
 - Verificar state, replay, redirect URI exacta y configuracion vigente de PKCE antes de implementar OAuth.
 - No usar Supabase service role desde el cliente.
 
-La autorizacion real ocurre en route handlers/servicios server-side; la navegacion solo mejora UX. El orden conceptual es `User -> Role -> Permission -> Resource Scope -> Resource`. Una Store existente fuera de alcance devuelve 403 en los escenarios de seguridad explícitos; 404 puede usarse solo cuando la política del recurso requiera ocultar su existencia.
+La autorizacion real ocurre en route handlers/servicios server-side; la navegacion solo mejora UX. El orden conceptual es `User -> Role -> Permission -> Resource Scope -> Resource`. La política futura de un recurso puede usar `403` cuando su existencia pueda revelarse o `404` cuando deba ocultarse. En el scope actualmente implementado por Organization, un recurso de otra Organization devuelve `404`; Store scope todavía no existe.
 
 ## Subfase 1.2 — Contexto server-side
 

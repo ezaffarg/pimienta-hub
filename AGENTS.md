@@ -766,6 +766,8 @@ Estas reglas son obligatorias para este proyecto:
 
 El plan, las puertas de fase y el registro de decisiones están en [docs/plan-y-gobierno.md](./docs/plan-y-gobierno.md). Ese documento es la fuente de verdad operativa; los documentos especializados aportan detalle y el análisis histórico conserva contexto, pero no autoriza por sí mismo implementación futura.
 
+Antes de tocar código, un agente nuevo debe leer [el handoff](./docs/codex-handoff.md), [el workflow](./docs/agent-workflow.md), el plan y los documentos especializados que correspondan al alcance. El repositorio Git es la autoridad técnica; skills, Graphify y memoria externa solo son herramientas de apoyo. El índice de mandatos significativos está en [docs/prompts/README.md](./docs/prompts/README.md).
+
 ### Distinción obligatoria entre decisión y suposición
 
 Los agentes deben distinguir explícitamente entre decisiones confirmadas, suposiciones y decisiones pendientes. Una suposición no puede convertirse silenciosamente en un modelo de datos, contrato de API, migración, integración o comportamiento de seguridad.

@@ -33,9 +33,16 @@ Este documento gobierna el orden de ejecución y las reglas de trabajo. Los docu
 - [OAuth y API](./meli-mercadolibre-OAuth/API.md)
 - [Sincronización](./meli-sync.md)
 - [UI](./meli-ui.md)
+- [Handoff para agentes](./codex-handoff.md)
+- [Workflow de agentes](./agent-workflow.md)
+- [Referencia funcional de MercadoCuentas](./mercado-cuentas-functional-reference.md)
+- [Roadmap de módulos](./product-modules-roadmap.md)
+- [Índice de prompts y mandatos](./prompts/README.md)
 - [Análisis histórico](./Cursor-AnalisisInicio.md)
 
 Si dos documentos discrepan, primero se debe registrar la discrepancia como decisión pendiente y resolverla explícitamente antes de implementar.
+
+El handoff resume el estado para nuevas sesiones, pero no sustituye este plan. Los registros de prompts preservan decisiones significativas de forma resumida y no reemplazan el código, tests ni las reglas vigentes.
 
 ## Subfase Approval Gate
 
