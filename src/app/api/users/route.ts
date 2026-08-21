@@ -17,25 +17,21 @@
 
 import { fakeUsers } from '@/constants/mock-api-users';
 import { withServerPermission } from '@/lib/auth/server-context';
+import { parseJsonBody, userInputSchema, userListQuerySchema } from '@/lib/api-validation';
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   return withServerPermission('users.read', async (context) => {
-    const { searchParams } = request.nextUrl;
+    const query = userListQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
 
-    const page = Number(searchParams.get('page') ?? 1);
-    const limit = Number(searchParams.get('limit') ?? 10);
-    const roles = searchParams.get('roles') ?? undefined;
-    const search = searchParams.get('search') ?? undefined;
-    const sort = searchParams.get('sort') ?? undefined;
+    if (!query.success) {
+      return apiErrorResponse('VALIDATION_ERROR', 400);
+    }
 
     const data = await fakeUsers.getUsers({
       organizationId: context.organizationId,
-      page,
-      limit,
-      roles,
-      search,
-      sort
+      ...query.data
     });
 
     return NextResponse.json(data);
@@ -44,8 +40,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withServerPermission('users.write', async (context) => {
-    const { organizationId: _ignoredOrganizationId, ...body } = await request.json();
-    const data = await fakeUsers.createUser(body, context.organizationId);
+    const body = userInputSchema.safeParse(await parseJsonBody(request));
+
+    if (!body.success) {
+      return apiErrorResponse('VALIDATION_ERROR', 400);
+    }
+
+    const data = await fakeUsers.createUser(body.data, context.organizationId);
     return NextResponse.json(data, { status: 201 });
   });
 }

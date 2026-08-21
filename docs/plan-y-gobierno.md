@@ -144,6 +144,12 @@ Los recursos mock de productos y usuarios tienen un `organizationId` temporal y 
 
 La policy para recursos por ID es: falta de permiso `403`; recurso inexistente o de otra Organization `404`. No existe Store scope, Team scope, asignaciones, ownership de Client ni persistencia en esta subfase.
 
+#### Subfase 1.4 — Validación de inputs y contrato de errores
+
+Los handlers de productos y usuarios validan query, body e IDs con Zod. Los payloads son strict: no aceptan `organizationId`, roles, permisos ni scope del cliente. Los recursos por ID validan primero su sintaxis; un ID inválido devuelve `400 VALIDATION_ERROR`, y un ID válido inexistente o cross-tenant devuelve `404 NOT_FOUND`.
+
+El formato uniforme de errores es `{ error: { code, message } }` con `401 AUTHENTICATION_REQUIRED`, `403 ORGANIZATION_REQUIRED`, `403 AUTHORIZATION_DENIED`, `400 VALIDATION_ERROR` y `404 NOT_FOUND`. La secuencia mantiene auth, Organization, permiso, scope y luego validación/operación.
+
 ### Fase 2 — Persistencia multi-tenant
 
 Modelar `stores`, `external_connections`, `external_accounts` y `audit_log`, con tenant keys, constraints, índices, migraciones reproducibles, repositorios server-only y RLS como defensa adicional.

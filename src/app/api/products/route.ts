@@ -17,25 +17,23 @@
 
 import { fakeProducts } from '@/constants/mock-api';
 import { withServerPermission } from '@/lib/auth/server-context';
+import { parseJsonBody, productInputSchema, productListQuerySchema } from '@/lib/api-validation';
+import { apiErrorResponse } from '@/lib/api-errors';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   return withServerPermission('products.read', async (context) => {
-    const { searchParams } = request.nextUrl;
+    const query = productListQuerySchema.safeParse(
+      Object.fromEntries(request.nextUrl.searchParams)
+    );
 
-    const page = Number(searchParams.get('page') ?? 1);
-    const limit = Number(searchParams.get('limit') ?? 10);
-    const categories = searchParams.get('categories') ?? undefined;
-    const search = searchParams.get('search') ?? undefined;
-    const sort = searchParams.get('sort') ?? undefined;
+    if (!query.success) {
+      return apiErrorResponse('VALIDATION_ERROR', 400);
+    }
 
     const data = await fakeProducts.getProducts({
       organizationId: context.organizationId,
-      page,
-      limit,
-      categories,
-      search,
-      sort
+      ...query.data
     });
 
     return NextResponse.json(data);
@@ -44,8 +42,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   return withServerPermission('products.write', async (context) => {
-    const { organizationId: _ignoredOrganizationId, ...body } = await request.json();
-    const data = await fakeProducts.createProduct(body, context.organizationId);
+    const body = productInputSchema.safeParse(await parseJsonBody(request));
+
+    if (!body.success) {
+      return apiErrorResponse('VALIDATION_ERROR', 400);
+    }
+
+    const data = await fakeProducts.createProduct(body.data, context.organizationId);
     return NextResponse.json(data, { status: 201 });
   });
 }

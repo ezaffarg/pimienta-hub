@@ -31,3 +31,9 @@ La policy inicial usa permisos estables: `products.read`, `products.write`, `use
 Los mocks temporales incluyen `organizationId` explícito para representar recursos de dos Organizations deterministas. Los listados filtran siempre con `ServerAuthorizationContext.organizationId`; las creaciones reciben ese valor desde el contexto y descartan cualquier `organizationId` del body. Antes de leer, actualizar o eliminar por ID, los handlers consultan el recurso dentro del tenant resuelto en servidor.
 
 Un permiso ausente conserva `403 AUTHORIZATION_DENIED`. Un recurso inexistente o perteneciente a otra Organization devuelve `404`, de modo que no revela su existencia. Este scope solo es por Organization: Store, asignaciones, Team, ownership de Client y persistencia siguen pendientes.
+
+## Subfase 1.4 — Validación y contrato HTTP
+
+Los handlers validan body, query e IDs con Zod después de autenticación, Organization, permiso y scope. En `PUT`, el recurso se resuelve dentro del tenant antes de validar el body para conservar `404` ante un recurso cross-tenant. Los bodies aceptan únicamente los campos actuales del mock y rechazan `organizationId`, role, permissions y otros campos no confiables. El tenant sigue llegando solo desde `ServerAuthorizationContext`.
+
+El contrato común es `{ error: { code, message } }`: `400 VALIDATION_ERROR` para sintaxis o payload inválido; `401 AUTHENTICATION_REQUIRED`; `403 ORGANIZATION_REQUIRED` o `AUTHORIZATION_DENIED`; y `404 NOT_FOUND` para recurso inexistente o fuera de la Organization. El ID se valida sintácticamente antes de buscar el recurso; esa excepción técnica no concede autoridad al request.

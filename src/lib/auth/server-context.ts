@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { auth } from '@clerk/nextjs/server';
-import { NextResponse } from 'next/server';
+import { apiErrorResponse } from '@/lib/api-errors';
 import {
   type ApprovedRole,
   type Permission,
@@ -88,39 +88,15 @@ export async function withServerPermission(
     return await handler(context);
   } catch (error) {
     if (error instanceof AuthenticationRequiredError) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'AUTHENTICATION_REQUIRED',
-            message: error.message
-          }
-        },
-        { status: 401 }
-      );
+      return apiErrorResponse('AUTHENTICATION_REQUIRED', 401);
     }
 
     if (error instanceof OrganizationRequiredError) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'ORGANIZATION_REQUIRED',
-            message: error.message
-          }
-        },
-        { status: 403 }
-      );
+      return apiErrorResponse('ORGANIZATION_REQUIRED', 403);
     }
 
     if (error instanceof AuthorizationDeniedError) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'AUTHORIZATION_DENIED',
-            message: error.message
-          }
-        },
-        { status: 403 }
-      );
+      return apiErrorResponse('AUTHORIZATION_DENIED', 403);
     }
 
     throw error;

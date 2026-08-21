@@ -78,8 +78,26 @@ export const fakeUsers = {
     return users;
   },
 
+  async getUserById(id: number, organizationId?: string) {
+    await delay(800);
+
+    const user = organizationId
+      ? this.records.find((record) => record.id === id && record.organizationId === organizationId)
+      : undefined;
+
+    if (!user) {
+      return { success: false, message: `User with ID ${id} not found` };
+    }
+
+    return {
+      success: true,
+      message: `User with ID ${id} found`,
+      user
+    };
+  },
+
   async createUser(
-    data: Omit<User, 'id' | 'organizationId' | 'created_at' | 'updated_at'>,
+    data: Omit<User, 'id' | 'organizationId' | 'role' | 'created_at' | 'updated_at'>,
     organizationId?: string
   ) {
     await delay(800);
@@ -91,6 +109,7 @@ export const fakeUsers = {
     const newUser: User = {
       ...data,
       organizationId,
+      role: 'Member',
       id: this.records.length + 1,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -107,7 +126,7 @@ export const fakeUsers = {
 
   async updateUser(
     id: number,
-    data: Omit<User, 'id' | 'organizationId' | 'created_at' | 'updated_at'>,
+    data: Omit<User, 'id' | 'organizationId' | 'role' | 'created_at' | 'updated_at'>,
     organizationId?: string
   ) {
     await delay(800);
