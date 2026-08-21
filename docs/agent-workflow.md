@@ -7,14 +7,15 @@ El repositorio Git es la fuente de verdad técnica. Skills, agentes externos, Gr
 ## Flujo obligatorio por subfase
 
 1. Leer [el handoff](./codex-handoff.md), [el plan](./plan-y-gobierno.md), `AGENTS.md`, `REGLAS.md` y los documentos aplicables.
-2. Auditar el estado Git y el código que controla el comportamiento real.
-3. Distinguir **DECISIÓN CONFIRMADA**, **SUPOSICIÓN** y **DECISIÓN PENDIENTE**. No convertir una suposición en arquitectura, datos, contratos ni UX.
-4. Proponer el alcance mínimo: archivos, dependencias, riesgos, alternativas, coste y estimación de contexto. En cambios de alto impacto, detallar también acciones irreversibles y servicios externos.
-5. Detenerse hasta recibir aprobación explícita para la subfase concreta.
-6. Implementar solo lo aprobado; añadir o actualizar pruebas correspondientes.
-7. Ejecutar `bun run test`, `bun run typecheck`, `bun run lint`, `bun run build` y `git diff --check`, salvo excepción documental aprobada y registrada.
-8. Revisar el diff, actualizar la documentación y entregar un checkpoint con hechos, pendientes y warnings.
-9. Detenerse. Solo hacer `git add`, commit o push con autorización explícita posterior.
+2. Archivar el mandato operativo en `docs/prompts/` antes de la primera acción; no depender solo de conversación. Si hay bloqueo, conservarlo y actualizar su resultado.
+3. Auditar el estado Git y el código que controla el comportamiento real.
+4. Distinguir **DECISIÓN CONFIRMADA**, **SUPOSICIÓN** y **DECISIÓN PENDIENTE**. No convertir una suposición en arquitectura, datos, contratos ni UX.
+5. Proponer el alcance mínimo: archivos, dependencias, riesgos, alternativas, coste y estimación de contexto. En cambios de alto impacto, detallar también acciones irreversibles y servicios externos.
+6. Detenerse hasta recibir aprobación explícita para la subfase concreta.
+7. Implementar solo lo aprobado; añadir o actualizar pruebas correspondientes.
+8. Ejecutar `bun run test`, `bun run typecheck`, `bun run lint`, `bun run build` y `git diff --check`, salvo excepción documental aprobada y registrada.
+9. Revisar el diff, actualizar la documentación y entregar un checkpoint con hechos, pendientes y warnings.
+10. Detenerse. Solo hacer `git add`, commit o push con autorización explícita posterior.
 
 Los commits deben ser pequeños, temáticos y auditables. Cuando exista trabajo fuera de alcance, usar staging explícito por archivo; no usar `git add .` ni `git add -A`.
 

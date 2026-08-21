@@ -72,7 +72,7 @@ En todos los niveles se presenta el plan y se espera aprobación. En nivel 🔴 
 | --- | --- | --- |
 | 0. Decisiones y consolidación | Fuente de verdad, límites, decisiones pendientes y reglas de agentes | Completada |
 | 1. Seguridad base | Auth server-side, autorización, tenant resolution, validación, errores y privacidad Sentry | Cerrada — Checkpoint 1.6 |
-| 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | En planificación — auditoría 2.0 y decisiones aprobadas; 2.1 pendiente |
+| 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | En curso — 2.0/2.1B preparan diseño y CLI; no hay schema aplicado |
 | 3. OAuth Mercado Libre | Inicio, callback, state, replay protection, tokens cifrados, conexión y desconexión | Pendiente |
 | 4. UI de conexiones | Stores, estados, conectar, reautorizar y desconectar | Pendiente |
 | 5. Adapter y dominio inicial | Cliente server-only, DTOs, mappers y una capacidad inicial | Pendiente |
@@ -182,9 +182,9 @@ Modelar `stores`, `external_connections`, `external_accounts` y `audit_log`, con
 
 La base conceptual aprobada es `hub_memberships`, `stores`, `store_assignments` y `connections`. Store tiene relación 1:N con Connections; `provider + external_account_id` debe ser único entre conexiones activas cuando exista cuenta externa. La transferencia de cuenta será un workflow explícito posterior, nunca un cambio arbitrario de `store_id` u `organization_id` de una Connection activa. Provider permanece como conjunto controlado, sin tabla propia.
 
-Las migraciones usarán SQL versionado con Supabase CLI, cuya forma de pinning se auditará en 2.1; no se introduce ORM. La defensa primaria es backend server-only, queries/repositories tenant-scoped y constraints/FKs compuestas. RLS queda diferido como defensa adicional porque service role no es una garantía de aislamiento. Tokens OAuth permanecen fuera de Connections hasta Fase 3. Ver el [mandato archivado](./prompts/phase-02/2.0-decisions.md).
+Las migraciones usarán SQL versionado con Supabase CLI `2.114.0`, instalada como `devDependency` exacta e invocada con Bun. La política de antigüedad de paquetes permanece activa: el intento de `2.115.0` fue bloqueado, sin bypass. `supabase/` contiene solo configuración local versionable, sin link remoto ni schema. El DDL documental de 2.1 define `hub_memberships`, `stores`, `store_assignments` y `connections`, con UUID internos, IDs externos `text`, `timestamptz`, checks, FKs compuestas y un índice parcial para cuentas externas activas. No ha sido aplicado: 2.2 será la única subfase que podrá crear migraciones/tablas tras autorización explícita. La defensa primaria es backend server-only, queries/repositories tenant-scoped y constraints/FKs compuestas. RLS queda diferido como defensa adicional porque service role no es una garantía de aislamiento. Tokens OAuth permanecen fuera de Connections hasta Fase 3. Ver [base de datos y migraciones](./meli-database.md), [2.1](./prompts/phase-02/2.1-schema-migraciones.md) y [2.1B](./prompts/phase-02/2.1b-supabase-cli.md).
 
-La secuencia provisional es: 2.1 decisiones finales de schema y convención de migraciones; 2.2 schema mínimo; 2.3 repositories y fuente propia de roles; 2.4 Store Scope; 2.5 Connections sin OAuth; 2.6 checkpoint. Esta decisión no autoriza iniciar 2.1.
+La secuencia aprobada es: 2.1 diseño final de schema y convención de migraciones, sin aplicarlos; 2.1B instala la CLI exacta e inicializa configuración local sin schema; 2.2 schema mínimo; 2.3 repositories y fuente propia de roles; 2.4 Store Scope; 2.5 Connections sin OAuth; 2.6 checkpoint. La 2.1 no autorizó por sí sola crear `supabase/`, tablas, migraciones ni instalar la CLI; esa excepción limitada corresponde únicamente a 2.1B. Ninguna de las dos autoriza aplicar DDL.
 
 ### Fase 3 — MVP OAuth de Mercado Libre
 
