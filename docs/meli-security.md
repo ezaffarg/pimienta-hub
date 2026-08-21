@@ -37,3 +37,9 @@ Un permiso ausente conserva `403 AUTHORIZATION_DENIED`. Un recurso inexistente o
 Los handlers validan body, query e IDs con Zod después de autenticación, Organization, permiso y scope. En `PUT`, el recurso se resuelve dentro del tenant antes de validar el body para conservar `404` ante un recurso cross-tenant. Los bodies aceptan únicamente los campos actuales del mock y rechazan `organizationId`, role, permissions y otros campos no confiables. El tenant sigue llegando solo desde `ServerAuthorizationContext`.
 
 El contrato común es `{ error: { code, message } }`: `400 VALIDATION_ERROR` para sintaxis o payload inválido; `401 AUTHENTICATION_REQUIRED`; `403 ORGANIZATION_REQUIRED` o `AUTHORIZATION_DENIED`; y `404 NOT_FOUND` para recurso inexistente o fuera de la Organization. El ID se valida sintácticamente antes de buscar el recurso; esa excepción técnica no concede autoridad al request.
+
+## Subfase 1.5 — Privacidad de Sentry y pruebas HTTP
+
+Sentry usa `sendDefaultPii: false` en cliente, Node y Edge. Antes de enviar eventos, transacciones o breadcrumbs se eliminan headers, cookies, bodies, query strings y claves sensibles sin distinguir mayúsculas/minúsculas, incluyendo credenciales, tokens, secretos y PII identificable. No se agrega contexto de usuario u Organization a Sentry.
+
+Las pruebas directas representativas de handlers verifican `401`, `403` por Organization, `403` por permiso, `404` cross-tenant, `400` de validación y éxito server-scoped. Las APIs son el boundary de seguridad; los servicios de UI continúan consumiendo mocks demo temporales y todavía no demuestran la cadena server-side completa. Su migración corresponde a fases posteriores.

@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/nextjs';
+import { sanitizeSentryPayload } from '@/lib/sentry-sanitization';
 
 const sentryOptions: Sentry.NodeOptions | Sentry.EdgeOptions = {
   // Sentry DSN
@@ -7,8 +8,19 @@ const sentryOptions: Sentry.NodeOptions | Sentry.EdgeOptions = {
   // Enable Spotlight in development
   spotlight: process.env.NODE_ENV === 'development',
 
-  // Adds request headers and IP for users, for more info visit
-  sendDefaultPii: true,
+  sendDefaultPii: false,
+
+  beforeSend(event) {
+    return sanitizeSentryPayload(event);
+  },
+
+  beforeSendTransaction(event) {
+    return sanitizeSentryPayload(event);
+  },
+
+  beforeBreadcrumb(breadcrumb) {
+    return sanitizeSentryPayload(breadcrumb);
+  },
 
   // Adjust this value in production, or use tracesSampler for greater control
   tracesSampleRate: 1,

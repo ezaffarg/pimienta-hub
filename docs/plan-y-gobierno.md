@@ -150,6 +150,12 @@ Los handlers de productos y usuarios validan query, body e IDs con Zod. Los payl
 
 El formato uniforme de errores es `{ error: { code, message } }` con `401 AUTHENTICATION_REQUIRED`, `403 ORGANIZATION_REQUIRED`, `403 AUTHORIZATION_DENIED`, `400 VALIDATION_ERROR` y `404 NOT_FOUND`. La secuencia mantiene auth, Organization, permiso, scope y luego validación/operación.
 
+#### Subfase 1.5 — Privacidad de Sentry y pruebas HTTP
+
+Sentry deshabilita `sendDefaultPii` en todos sus runtimes y sanitiza eventos, transacciones y breadcrumbs antes de enviarlos. La sanitización redacta headers, cookies, request bodies, query strings y claves sensibles, sin incorporar identidad, email, Organization ni otros datos personales como contexto de telemetría.
+
+Las pruebas HTTP directas cubren de forma representativa autenticación, Organization, permiso, scope cross-tenant, validación y éxito server-scoped en los handlers de productos. Los servicios de UI siguen usando mocks demo directamente: no son el boundary server-side de seguridad ni prueban todavía la cadena completa, y su migración se difiere a fases posteriores.
+
 ### Fase 2 — Persistencia multi-tenant
 
 Modelar `stores`, `external_connections`, `external_accounts` y `audit_log`, con tenant keys, constraints, índices, migraciones reproducibles, repositorios server-only y RLS como defensa adicional.

@@ -2,13 +2,25 @@
 // The added config here will be used whenever a users loads a page in their browser.
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 import * as Sentry from '@sentry/nextjs';
+import { sanitizeSentryPayload } from '@/lib/sentry-sanitization';
 
 if (!process.env.NEXT_PUBLIC_SENTRY_DISABLED) {
   Sentry.init({
     dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
-    // Adds request headers and IP for users, for more info visit
-    sendDefaultPii: true,
+    sendDefaultPii: false,
+
+    beforeSend(event) {
+      return sanitizeSentryPayload(event);
+    },
+
+    beforeSendTransaction(event) {
+      return sanitizeSentryPayload(event);
+    },
+
+    beforeBreadcrumb(breadcrumb) {
+      return sanitizeSentryPayload(breadcrumb);
+    },
 
     // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
     tracesSampleRate: 1,
