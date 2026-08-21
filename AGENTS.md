@@ -528,11 +528,9 @@ NEXT_PUBLIC_SENTRY_DISABLED="true"
 
 ## Testing Strategy
 
-**Note**: This project does not include a test suite by default. Consider adding:
+The project uses Vitest in a Node environment for security and utility tests. The current suite covers server-side authentication, Organization, RBAC, Organization resource scope, input validation, HTTP error contracts, Sentry privacy, and representative Route Handler composition.
 
-- **Unit tests**: Vitest or Jest for utilities and hooks
-- **Component tests**: React Testing Library for UI components
-- **E2E tests**: Playwright for critical user flows
+Future component tests may use React Testing Library and critical end-to-end flows may use Playwright, but neither is part of the current Fase 1 test infrastructure.
 
 Recommended test locations:
 

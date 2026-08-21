@@ -23,6 +23,10 @@ Los tipos canónicos de `src/integrations/core/` permanecen allí temporalmente.
 
 `EcommerceIntegration` debe ser agnostico al proveedor y expresar capacidades opcionales. El primer hito solo implementa conexion OAuth; la lectura y las mutaciones son fases posteriores.
 
-## Limite
+## Límite
 
-No modificar componentes base ni migrar mocks innecesariamente. Mantener cambios de dominio pequeños para conservar actualizaciones del upstream. Mercado Libre se consumirá exclusivamente mediante APIs oficiales; análisis de productos externos solo son referencia funcional y nunca fuente de endpoints privados.
+No modificar componentes base ni migrar mocks innecesariamente. Mantener cambios de dominio pequeños para conservar actualizaciones del upstream.
+
+La integración funcional futura de Mercado Libre usará una Mercado Libre Developers Application, OAuth server-side y la API oficial. Sus credenciales técnicas (`client_id`, `client_secret`, `redirect_uri`) pertenecen al servidor, y cada cuenta vendedora autorizará la aplicación mediante OAuth. Nunca se expondrán `access_token`, `refresh_token` ni `client_secret` al navegador.
+
+MercadoCuentas es únicamente una referencia funcional o de producto: no es proveedor de datos, API, dependencia, backend ni integración. No se consumen ni copian endpoints privados; cualquier capacidad inspirada en ella se implementará con la API oficial de Mercado Libre, datos propios del e-Hub y cálculos propios según corresponda.

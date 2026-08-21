@@ -18,7 +18,7 @@ La autorizacion real ocurre en route handlers/servicios server-side; la navegaci
 
 `requireServerTenantContext()` obtiene exclusivamente de `auth()` de Clerk el `userId` y la Organization activa. No recibe ni acepta identidad, tenant, roles o permisos desde body, query, headers o estado del navegador.
 
-Los Route Handlers de `/api/products` y `/api/users` usan `withServerTenantContext()` antes de acceder a datos o procesar body y parámetros. El error uniforme es `{ error: { code, message } }`: ausencia de sesión devuelve `401 AUTHENTICATION_REQUIRED`; una sesión sin Organization activa devuelve `403 ORGANIZATION_REQUIRED`, porque la identidad es válida pero no está autorizada para operar sobre un tenant. RBAC, permisos y scope siguen fuera de esta subfase.
+Históricamente, la Subfase 1.2 introdujo el contexto server-side. El estado vigente usa `withServerPermission()` en los Route Handlers de `/api/products` y `/api/users`; además de sesión y Organization, aplica rol y permiso antes de procesar datos. El error uniforme es `{ error: { code, message } }`: ausencia de sesión devuelve `401 AUTHENTICATION_REQUIRED`; una sesión sin Organization activa devuelve `403 ORGANIZATION_REQUIRED`.
 
 ## Subfase 1.3A — RBAC base
 
@@ -43,3 +43,7 @@ El contrato común es `{ error: { code, message } }`: `400 VALIDATION_ERROR` par
 Sentry usa `sendDefaultPii: false` en cliente, Node y Edge. Antes de enviar eventos, transacciones o breadcrumbs se eliminan headers, cookies, bodies, query strings y claves sensibles sin distinguir mayúsculas/minúsculas, incluyendo credenciales, tokens, secretos y PII identificable. No se agrega contexto de usuario u Organization a Sentry.
 
 Las pruebas directas representativas de handlers verifican `401`, `403` por Organization, `403` por permiso, `404` cross-tenant, `400` de validación y éxito server-scoped. Las APIs son el boundary de seguridad; los servicios de UI continúan consumiendo mocks demo temporales y todavía no demuestran la cadena server-side completa. Su migración corresponde a fases posteriores.
+
+## Cierre de Fase 1
+
+Fase 1 queda cerrada con autenticación y Organization server-side, RBAC default-deny, permisos, Resource Scope por Organization, validación Zod, contrato HTTP uniforme, privacidad Sentry y pruebas de seguridad. Store scope, Client ownership por Store, asignaciones de Store/Team, persistencia y repositorios tenant-scoped reales quedan explícitamente diferidos a Fase 2.

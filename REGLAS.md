@@ -39,7 +39,7 @@ Estas reglas son obligatorias para cualquier cambio de e-ngenieria Hub.
 - Los tokens se almacenan cifrados y server-side.
 - Toda conexion pertenece a `Organization -> Store -> External Connection -> Provider`.
 - Los errores de proveedores se normalizan y no filtran secretos.
-- La UI solo usa endpoints internos protegidos.
+- La UI productiva debe usar endpoints internos protegidos. Los servicios demo que todavía consumen mocks directamente no son un boundary de seguridad ni una prueba de aislamiento; su migración a APIs/persistencia queda diferida a fases posteriores.
 - Los cambios conservan la capacidad de actualizar desde `upstream`.
 
 ## Flujo requerido

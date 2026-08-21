@@ -64,7 +64,7 @@ En todos los niveles se presenta el plan y se espera aprobación. En nivel 🔴 
 | Fase | Alcance | Estado |
 | --- | --- | --- |
 | 0. Decisiones y consolidación | Fuente de verdad, límites, decisiones pendientes y reglas de agentes | Completada |
-| 1. Seguridad base | Auth server-side, autorización, tenant resolution, validación y errores | En curso — Subfase 1.1 completada |
+| 1. Seguridad base | Auth server-side, autorización, tenant resolution, validación, errores y privacidad Sentry | Cerrada — Checkpoint 1.6 |
 | 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | Pendiente |
 | 3. OAuth Mercado Libre | Inicio, callback, state, replay protection, tokens cifrados, conexión y desconexión | Pendiente |
 | 4. UI de conexiones | Stores, estados, conectar, reautorizar y desconectar | Pendiente |
@@ -102,7 +102,7 @@ Los roles son Owner, Manager, Employee y Client; nunca se simplifican a `admin/m
 
 Clerk aporta identidad, autenticación, Organization y roles/permisos base. La aplicación conserva Client, Store, Team, ownership, asignaciones y alcance comercial; no se modelan exclusivamente mediante roles de Clerk. Fase 1 define el contrato de guards y un resolver temporal testeable para scope. Fase 2 lo reemplazará por un resolver persistente sin cambiar ese contrato.
 
-El servidor resuelve la identidad y Organization desde Clerk; `organizationId`, `clientId`, `storeId` y otros IDs del request son datos no confiables hasta cruzarlos con tenant, permiso y scope. Una Store existente pero fuera del alcance del usuario devuelve `403` en las pruebas explícitas de Fase 1. `404` se reserva para recursos cuya existencia se decida ocultar según el tipo de recurso; no es una regla universal.
+El servidor resuelve la identidad y Organization desde Clerk; `organizationId`, `clientId`, `storeId` y otros IDs del request son datos no confiables hasta cruzarlos con tenant, permiso y scope. El scope implementado en Fase 1 es únicamente por Organization: un recurso inexistente o de otra Organization devuelve `404` cuando su existencia debe ocultarse. Store scope, Client ownership y asignaciones no existen todavía y se difieren a Fase 2.
 
 #### DECISIÓN CONFIRMADA — límites preparatorios de arquitectura
 
@@ -110,15 +110,16 @@ El servidor resuelve la identidad y Organization desde Clerk; `organizationId`, 
 
 No se crearán `src/application/` ni `src/domain/` hasta que una responsabilidad real justifique extraer código de su módulo actual y aporte un beneficio arquitectónico concreto. Los tipos de `src/integrations/core/` permanecen temporalmente allí; su ubicación se revisará antes de adapters reales de ventas, productos, inventario u órdenes. Estas decisiones no autorizan OAuth, persistencia, StoreIntegrationResolver ni integraciones funcionales.
 
-#### Subfases previstas
+#### Subfases completadas
 
 1. **1.0 — Gobierno y modelo de autorización:** documentación y decisiones, sin código funcional.
-2. **1.1 — Auditoría y contrato de pruebas:** Vitest en entorno Node, configuración compartida, smoke test y matriz de pruebas; sin guards ni seguridad funcional.
-3. **1.2 — Guards base y contrato HTTP:** sesión, Organization y errores uniformes.
-4. **1.3 — Roles, permisos y policy de scope:** contrato reemplazable y pruebas de aislamiento.
-5. **1.4 — Endpoints demo y Zod:** protección y validación de `/api/products` y `/api/users`.
-6. **1.5 — Sentry y cierre de seguridad:** minimización de datos, auditoría y documentación.
-7. **1.6 — Validación y checkpoint:** comprobaciones finales y cierre de fase.
+2. **1.1 — Testing base:** Vitest en entorno Node, configuración compartida y smoke test.
+3. **1.2 — Authentication + Organization server-side:** sesión, Organization y errores uniformes.
+4. **1.3A — RBAC / permissions:** roles e-Hub, mapping provisional y default-deny.
+5. **1.3B — Resource Scope por Organization:** mocks tenantizados y aislamiento temporal.
+6. **1.4 — Zod + contrato de errores:** validación de `/api/products` y `/api/users`.
+7. **1.5 — Sentry privacy hardening + pruebas HTTP:** minimización de datos y composición de handlers.
+8. **1.6 — Checkpoint final:** auditoría, alineación documental y cierre de Fase 1.
 
 Cada subfase requiere aprobación independiente mediante el Subfase Approval Gate.
 
@@ -128,7 +129,7 @@ Vitest se ejecuta en entorno Node con alias `@` hacia `src` y scripts `test` y `
 
 #### Subfase 1.2 — Guards base y contrato HTTP
 
-`src/lib/auth/server-context.ts` resuelve en servidor el contexto mínimo `{ userId, organizationId }` mediante `auth()` de Clerk. Los handlers existentes de `/api/products` y `/api/users`, incluidos sus recursos por ID, ejecutan el helper antes de leer body, parámetros o mocks. Sin sesión responden `401` con `AUTHENTICATION_REQUIRED`; con sesión pero sin Organization activa responden `403` con `ORGANIZATION_REQUIRED`. La respuesta usa el formato uniforme `{ error: { code, message } }`.
+`src/lib/auth/server-context.ts` resuelve en servidor el contexto mínimo `{ userId, organizationId }` mediante `auth()` de Clerk. Los handlers existentes de `/api/products` y `/api/users`, incluidos sus recursos por ID, ejecutan `withServerPermission()` antes de leer body, parámetros o mocks. Sin sesión responden `401` con `AUTHENTICATION_REQUIRED`; con sesión pero sin Organization activa responden `403` con `ORGANIZATION_REQUIRED`. La respuesta usa el formato uniforme `{ error: { code, message } }`.
 
 Esta subfase no implementa roles, permisos, resource scope, Store, Team, persistencia ni integraciones. Esos datos no se aceptan como autoridad desde el request.
 
@@ -155,6 +156,14 @@ El formato uniforme de errores es `{ error: { code, message } }` con `401 AUTHEN
 Sentry deshabilita `sendDefaultPii` en todos sus runtimes y sanitiza eventos, transacciones y breadcrumbs antes de enviarlos. La sanitización redacta headers, cookies, request bodies, query strings y claves sensibles, sin incorporar identidad, email, Organization ni otros datos personales como contexto de telemetría.
 
 Las pruebas HTTP directas cubren de forma representativa autenticación, Organization, permiso, scope cross-tenant, validación y éxito server-scoped en los handlers de productos. Los servicios de UI siguen usando mocks demo directamente: no son el boundary server-side de seguridad ni prueban todavía la cadena completa, y su migración se difiere a fases posteriores.
+
+#### Subfase 1.6 — Checkpoint final y cierre documental
+
+Fase 1 queda cerrada. Implementa Authentication y Organization server-side, RBAC con default-deny, permisos, Resource Scope por Organization, validación Zod, contrato HTTP consistente, privacidad Sentry y pruebas de seguridad. No implementa Store scope, Client ownership por Store, asignaciones de Store/Team, persistencia, repositorios, OAuth, Mercado Libre funcional ni sincronización.
+
+La integración futura de Mercado Libre se realizará con una Mercado Libre Developers Application, OAuth server-side y la API oficial. `client_id`, `client_secret`, `redirect_uri`, `access_token` y `refresh_token` son datos server-only; cada cuenta vendedora autorizará la aplicación mediante OAuth. MercadoCuentas es solo referencia funcional/producto: no se usan ni copian sus endpoints privados, y no es una dependencia ni un backend.
+
+El siguiente bloque pendiente es Fase 2: Store, persistencia, connections, fuente definitiva de roles/asignaciones y preparación del StoreIntegrationResolver. Esta referencia no autoriza implementar esos componentes antes de su aprobación explícita.
 
 ### Fase 2 — Persistencia multi-tenant
 
@@ -238,5 +247,5 @@ Antes de pasar de fase deben estar comprobados:
 - `/api/products` y `/api/users` protegidos y validados con Zod.
 - Contrato HTTP uniforme sin secretos, tokens, trazas, SQL ni detalles internos.
 - Revisión de Sentry para excluir PII, cookies, headers Authorization, credenciales y secretos innecesarios.
-- Vitest y pruebas de: sin sesión, sin Organization, sin permiso, Employee fuera de Store, Client de otra Store, otra Organization, Owner permitido, Manager permitido y Manager ante operación exclusiva de Owner.
+- Vitest y pruebas de: sin sesión, sin Organization, sin permiso, roles y mapping provisional, aislamiento entre Organizations, cross-tenant `404`, validación `400`, contrato HTTP y privacidad Sentry. Las pruebas de Store, Client ownership y asignaciones se difieren a Fase 2 porque esas entidades no existen todavía.
 - `typecheck`, `lint`, formato según la excepción vigente, `build`, tests y documentación aprobados.
