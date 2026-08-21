@@ -11,9 +11,9 @@ import { NextRequest, NextResponse } from 'next/server';
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(request: NextRequest, { params }: Params) {
-  return withServerPermission('products.read', async () => {
+  return withServerPermission('products.read', async (context) => {
     const { id } = await params;
-    const data = await fakeProducts.getProductById(Number(id));
+    const data = await fakeProducts.getProductById(Number(id), context.organizationId);
 
     if (!data.success) {
       return NextResponse.json(data, { status: 404 });
@@ -24,10 +24,10 @@ export async function GET(request: NextRequest, { params }: Params) {
 }
 
 export async function PUT(request: NextRequest, { params }: Params) {
-  return withServerPermission('products.write', async () => {
+  return withServerPermission('products.write', async (context) => {
     const { id } = await params;
-    const body = await request.json();
-    const data = await fakeProducts.updateProduct(Number(id), body);
+    const { organizationId: _ignoredOrganizationId, ...body } = await request.json();
+    const data = await fakeProducts.updateProduct(Number(id), body, context.organizationId);
 
     if (!data.success) {
       return NextResponse.json(data, { status: 404 });
@@ -38,9 +38,9 @@ export async function PUT(request: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(request: NextRequest, { params }: Params) {
-  return withServerPermission('products.write', async () => {
+  return withServerPermission('products.write', async (context) => {
     const { id } = await params;
-    const data = await fakeProducts.deleteProduct(Number(id));
+    const data = await fakeProducts.deleteProduct(Number(id), context.organizationId);
 
     if (!data.success) {
       return NextResponse.json(data, { status: 404 });

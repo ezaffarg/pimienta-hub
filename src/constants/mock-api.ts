@@ -4,11 +4,13 @@
 
 import { faker } from '@faker-js/faker';
 import { matchSorter } from 'match-sorter'; // For filtering
+import { MOCK_ORGANIZATIONS } from './mock-tenants';
 
 export const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Define the shape of Product data
 export type Product = {
+  organizationId: string;
   photo_url: string;
   name: string;
   description: string;
@@ -32,6 +34,7 @@ function generateRandomProductData(id: number): Product {
   ];
 
   return {
+    organizationId: id % 2 === 0 ? MOCK_ORGANIZATIONS.orgB : MOCK_ORGANIZATIONS.orgA,
     id,
     name: faker.commerce.productName(),
     description: faker.commerce.productDescription(),
@@ -59,8 +62,18 @@ export const fakeProducts = {
   },
 
   // Get all products with optional category filtering and search
-  async getAll({ categories = [], search }: { categories?: string[]; search?: string }) {
-    let products = [...this.records];
+  async getAll({
+    organizationId,
+    categories = [],
+    search
+  }: {
+    organizationId?: string;
+    categories?: string[];
+    search?: string;
+  }) {
+    let products = organizationId
+      ? this.records.filter((product) => product.organizationId === organizationId)
+      : [];
 
     // Filter products based on selected categories
     if (categories.length > 0) {
@@ -79,12 +92,14 @@ export const fakeProducts = {
 
   // Get paginated results with optional category filtering, search, and sorting
   async getProducts({
+    organizationId,
     page = 1,
     limit = 10,
     categories,
     search,
     sort
   }: {
+    organizationId?: string;
     page?: number;
     limit?: number;
     categories?: string | string[];
@@ -98,6 +113,7 @@ export const fakeProducts = {
         : String(categories).split(/[.,]/)
       : [];
     const allProducts = await this.getAll({
+      organizationId,
       categories: categoriesArray,
       search
     });
@@ -149,11 +165,15 @@ export const fakeProducts = {
   },
 
   // Get a specific product by its ID
-  async getProductById(id: number) {
+  async getProductById(id: number, organizationId?: string) {
     await delay(3000); // Simulate a slow API call
 
     // Find the product by its ID
-    const product = this.records.find((product) => product.id === id);
+    const product = organizationId
+      ? this.records.find(
+          (product) => product.id === id && product.organizationId === organizationId
+        )
+      : undefined;
 
     if (!product) {
       return {
@@ -174,11 +194,19 @@ export const fakeProducts = {
   },
 
   // Create a new product
-  async createProduct(data: Omit<Product, 'id' | 'created_at' | 'updated_at' | 'photo_url'>) {
+  async createProduct(
+    data: Omit<Product, 'id' | 'organizationId' | 'created_at' | 'updated_at' | 'photo_url'>,
+    organizationId?: string
+  ) {
     await delay(1000);
+
+    if (!organizationId) {
+      throw new Error('Organization scope is required');
+    }
 
     const newProduct: Product = {
       ...data,
+      organizationId,
       id: this.records.length + 1,
       photo_url: `https://api.slingacademy.com/public/sample-products/${this.records.length + 1}.png`,
       created_at: new Date().toISOString(),
@@ -197,11 +225,18 @@ export const fakeProducts = {
   // Update an existing product
   async updateProduct(
     id: number,
-    data: Omit<Product, 'id' | 'created_at' | 'updated_at' | 'photo_url'>
+    data: Omit<Product, 'id' | 'organizationId' | 'created_at' | 'updated_at' | 'photo_url'>,
+    organizationId?: string
   ) {
     await delay(1000);
 
-    const index = this.records.findIndex((product) => product.id === id);
+    if (!organizationId) {
+      throw new Error('Organization scope is required');
+    }
+
+    const index = this.records.findIndex(
+      (product) => product.id === id && product.organizationId === organizationId
+    );
 
     if (index === -1) {
       return {
@@ -224,10 +259,16 @@ export const fakeProducts = {
   },
 
   // Delete a product
-  async deleteProduct(id: number) {
+  async deleteProduct(id: number, organizationId?: string) {
     await delay(1000);
 
-    const index = this.records.findIndex((product) => product.id === id);
+    if (!organizationId) {
+      throw new Error('Organization scope is required');
+    }
+
+    const index = this.records.findIndex(
+      (product) => product.id === id && product.organizationId === organizationId
+    );
 
     if (index === -1) {
       return { success: false, message: `Product with ID ${id} not found` };

@@ -20,7 +20,7 @@ import { withServerPermission } from '@/lib/auth/server-context';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
-  return withServerPermission('users.read', async () => {
+  return withServerPermission('users.read', async (context) => {
     const { searchParams } = request.nextUrl;
 
     const page = Number(searchParams.get('page') ?? 1);
@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get('sort') ?? undefined;
 
     const data = await fakeUsers.getUsers({
+      organizationId: context.organizationId,
       page,
       limit,
       roles,
@@ -42,9 +43,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  return withServerPermission('users.write', async () => {
-    const body = await request.json();
-    const data = await fakeUsers.createUser(body);
+  return withServerPermission('users.write', async (context) => {
+    const { organizationId: _ignoredOrganizationId, ...body } = await request.json();
+    const data = await fakeUsers.createUser(body, context.organizationId);
     return NextResponse.json(data, { status: 201 });
   });
 }

@@ -4,10 +4,12 @@
 
 import { faker } from '@faker-js/faker';
 import { matchSorter } from 'match-sorter';
+import { MOCK_ORGANIZATIONS } from './mock-tenants';
 
 export const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type User = {
+  organizationId: string;
   id: number;
   first_name: string;
   last_name: string;
@@ -24,6 +26,7 @@ function generateRandomUserData(id: number): User {
   const statuses = ['Active', 'Inactive', 'Invited'];
 
   return {
+    organizationId: id % 2 === 0 ? MOCK_ORGANIZATIONS.orgB : MOCK_ORGANIZATIONS.orgA,
     id,
     first_name: faker.person.firstName(),
     last_name: faker.person.lastName(),
@@ -49,8 +52,18 @@ export const fakeUsers = {
     this.records = sampleUsers;
   },
 
-  async getAll({ roles = [], search }: { roles?: string[]; search?: string }) {
-    let users = [...this.records];
+  async getAll({
+    organizationId,
+    roles = [],
+    search
+  }: {
+    organizationId?: string;
+    roles?: string[];
+    search?: string;
+  }) {
+    let users = organizationId
+      ? this.records.filter((user) => user.organizationId === organizationId)
+      : [];
 
     if (roles.length > 0) {
       users = users.filter((user) => roles.includes(user.role));
@@ -65,11 +78,19 @@ export const fakeUsers = {
     return users;
   },
 
-  async createUser(data: Omit<User, 'id' | 'created_at' | 'updated_at'>) {
+  async createUser(
+    data: Omit<User, 'id' | 'organizationId' | 'created_at' | 'updated_at'>,
+    organizationId?: string
+  ) {
     await delay(800);
+
+    if (!organizationId) {
+      throw new Error('Organization scope is required');
+    }
 
     const newUser: User = {
       ...data,
+      organizationId,
       id: this.records.length + 1,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -84,10 +105,20 @@ export const fakeUsers = {
     };
   },
 
-  async updateUser(id: number, data: Omit<User, 'id' | 'created_at' | 'updated_at'>) {
+  async updateUser(
+    id: number,
+    data: Omit<User, 'id' | 'organizationId' | 'created_at' | 'updated_at'>,
+    organizationId?: string
+  ) {
     await delay(800);
 
-    const index = this.records.findIndex((user) => user.id === id);
+    if (!organizationId) {
+      throw new Error('Organization scope is required');
+    }
+
+    const index = this.records.findIndex(
+      (user) => user.id === id && user.organizationId === organizationId
+    );
 
     if (index === -1) {
       return { success: false, message: `User with ID ${id} not found` };
@@ -106,10 +137,16 @@ export const fakeUsers = {
     };
   },
 
-  async deleteUser(id: number) {
+  async deleteUser(id: number, organizationId?: string) {
     await delay(800);
 
-    const index = this.records.findIndex((user) => user.id === id);
+    if (!organizationId) {
+      throw new Error('Organization scope is required');
+    }
+
+    const index = this.records.findIndex(
+      (user) => user.id === id && user.organizationId === organizationId
+    );
 
     if (index === -1) {
       return { success: false, message: `User with ID ${id} not found` };
@@ -124,12 +161,14 @@ export const fakeUsers = {
   },
 
   async getUsers({
+    organizationId,
     page = 1,
     limit = 10,
     roles,
     search,
     sort
   }: {
+    organizationId?: string;
     page?: number;
     limit?: number;
     roles?: string | string[];
@@ -139,6 +178,7 @@ export const fakeUsers = {
     await delay(800);
     const rolesArray = roles ? (Array.isArray(roles) ? roles : String(roles).split(/[.,]/)) : [];
     const allUsers = await this.getAll({
+      organizationId,
       roles: rolesArray,
       search
     });

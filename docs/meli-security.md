@@ -25,3 +25,9 @@ Los Route Handlers de `/api/products` y `/api/users` usan `withServerTenantConte
 Clerk continúa resolviendo la sesión, Organization y membership en servidor; e-Hub controla los roles de negocio y sus permisos. El mapping temporal es `org:admin -> Owner` y `org:member -> Employee`. Manager y Client son roles aprobados del e-Hub, pero no se resuelven automáticamente desde Clerk hasta que exista una fuente propia aprobada. Un rol Clerk desconocido se deniega por defecto.
 
 La policy inicial usa permisos estables: `products.read`, `products.write`, `users.read` y `users.write`. Owner tiene todos; Manager tiene lectura/escritura de productos y lectura de usuarios; Employee solo lectura de productos; Client no recibe permisos globales antes de Resource Scope. Los handlers validan el permiso en servidor y devuelven `403 AUTHORIZATION_DENIED` cuando no está permitido. Resource Scope, Store y asignaciones siguen fuera de esta subfase.
+
+## Subfase 1.3B — Organization Resource Scope
+
+Los mocks temporales incluyen `organizationId` explícito para representar recursos de dos Organizations deterministas. Los listados filtran siempre con `ServerAuthorizationContext.organizationId`; las creaciones reciben ese valor desde el contexto y descartan cualquier `organizationId` del body. Antes de leer, actualizar o eliminar por ID, los handlers consultan el recurso dentro del tenant resuelto en servidor.
+
+Un permiso ausente conserva `403 AUTHORIZATION_DENIED`. Un recurso inexistente o perteneciente a otra Organization devuelve `404`, de modo que no revela su existencia. Este scope solo es por Organization: Store, asignaciones, Team, ownership de Client y persistencia siguen pendientes.

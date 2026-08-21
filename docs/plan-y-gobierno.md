@@ -138,6 +138,12 @@ La autorización server-side usa los roles e-Hub Owner, Manager, Employee y Clie
 
 Permisos implementados: `products.read`, `products.write`, `users.read` y `users.write`. La matriz explícita es Owner: todos; Manager: `products.read`, `products.write`, `users.read`; Employee: `products.read`; Client: ninguno global. Toda combinación no listada se deniega. Resource Scope, Store, Team, asignaciones y persistencia permanecen fuera de 1.3A.
 
+#### Subfase 1.3B — Resource Scope de Organization
+
+Los recursos mock de productos y usuarios tienen un `organizationId` temporal y determinista únicamente para probar aislamiento multi-tenant sin persistencia. Los handlers filtran listados y resuelven recursos por ID usando exclusivamente `ServerAuthorizationContext.organizationId`; el request no puede elegir el tenant. Las creaciones asignan el tenant del contexto server-side e ignoran `organizationId` del body.
+
+La policy para recursos por ID es: falta de permiso `403`; recurso inexistente o de otra Organization `404`. No existe Store scope, Team scope, asignaciones, ownership de Client ni persistencia en esta subfase.
+
 ### Fase 2 — Persistencia multi-tenant
 
 Modelar `stores`, `external_connections`, `external_accounts` y `audit_log`, con tenant keys, constraints, índices, migraciones reproducibles, repositorios server-only y RLS como defensa adicional.
