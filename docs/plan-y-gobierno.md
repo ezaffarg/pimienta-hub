@@ -126,6 +126,12 @@ Cada subfase requiere aprobación independiente mediante el Subfase Approval Gat
 
 Vitest se ejecuta en entorno Node con alias `@` hacia `src` y scripts `test` y `test:watch`. La infraestructura inicial no incorpora DOM, Testing Library, Playwright, cobertura, fixtures de scope ni tests de seguridad funcional; estos se agregan únicamente en sus subfases aprobadas.
 
+#### Subfase 1.2 — Guards base y contrato HTTP
+
+`src/lib/auth/server-context.ts` resuelve en servidor el contexto mínimo `{ userId, organizationId }` mediante `auth()` de Clerk. Los handlers existentes de `/api/products` y `/api/users`, incluidos sus recursos por ID, ejecutan el helper antes de leer body, parámetros o mocks. Sin sesión responden `401` con `AUTHENTICATION_REQUIRED`; con sesión pero sin Organization activa responden `403` con `ORGANIZATION_REQUIRED`. La respuesta usa el formato uniforme `{ error: { code, message } }`.
+
+Esta subfase no implementa roles, permisos, resource scope, Store, Team, persistencia ni integraciones. Esos datos no se aceptan como autoridad desde el request.
+
 ### Fase 2 — Persistencia multi-tenant
 
 Modelar `stores`, `external_connections`, `external_accounts` y `audit_log`, con tenant keys, constraints, índices, migraciones reproducibles, repositorios server-only y RLS como defensa adicional.

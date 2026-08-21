@@ -13,3 +13,9 @@
 - No usar Supabase service role desde el cliente.
 
 La autorizacion real ocurre en route handlers/servicios server-side; la navegacion solo mejora UX. El orden conceptual es `User -> Role -> Permission -> Resource Scope -> Resource`. Una Store existente fuera de alcance devuelve 403 en los escenarios de seguridad explícitos; 404 puede usarse solo cuando la política del recurso requiera ocultar su existencia.
+
+## Subfase 1.2 — Contexto server-side
+
+`requireServerTenantContext()` obtiene exclusivamente de `auth()` de Clerk el `userId` y la Organization activa. No recibe ni acepta identidad, tenant, roles o permisos desde body, query, headers o estado del navegador.
+
+Los Route Handlers de `/api/products` y `/api/users` usan `withServerTenantContext()` antes de acceder a datos o procesar body y parámetros. El error uniforme es `{ error: { code, message } }`: ausencia de sesión devuelve `401 AUTHENTICATION_REQUIRED`; una sesión sin Organization activa devuelve `403 ORGANIZATION_REQUIRED`, porque la identidad es válida pero no está autorizada para operar sobre un tenant. RBAC, permisos y scope siguen fuera de esta subfase.

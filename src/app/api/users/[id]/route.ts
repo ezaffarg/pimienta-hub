@@ -5,29 +5,34 @@
 // ============================================================
 
 import { fakeUsers } from '@/constants/mock-api-users';
+import { withServerTenantContext } from '@/lib/auth/server-context';
 import { NextRequest, NextResponse } from 'next/server';
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function PUT(request: NextRequest, { params }: Params) {
-  const { id } = await params;
-  const body = await request.json();
-  const data = await fakeUsers.updateUser(Number(id), body);
+  return withServerTenantContext(async () => {
+    const { id } = await params;
+    const body = await request.json();
+    const data = await fakeUsers.updateUser(Number(id), body);
 
-  if (!data.success) {
-    return NextResponse.json(data, { status: 404 });
-  }
+    if (!data.success) {
+      return NextResponse.json(data, { status: 404 });
+    }
 
-  return NextResponse.json(data);
+    return NextResponse.json(data);
+  });
 }
 
 export async function DELETE(request: NextRequest, { params }: Params) {
-  const { id } = await params;
-  const data = await fakeUsers.deleteUser(Number(id));
+  return withServerTenantContext(async () => {
+    const { id } = await params;
+    const data = await fakeUsers.deleteUser(Number(id));
 
-  if (!data.success) {
-    return NextResponse.json(data, { status: 404 });
-  }
+    if (!data.success) {
+      return NextResponse.json(data, { status: 404 });
+    }
 
-  return NextResponse.json(data);
+    return NextResponse.json(data);
+  });
 }
