@@ -6,13 +6,13 @@ Este es el punto de entrada para una nueva sesión de agente. Resume el estado s
 
 e-ngenieria Hub es un SaaS B2B multi-tenant para centralizar la operación de clientes, Stores y cuentas ecommerce desde una plataforma. La relación objetivo es `Organization -> Store -> Connection -> Provider`; Mercado Libre será el primer provider y otros adapters podrán incorporarse después.
 
-**Estado actual:** Fase 0 completada; Fase 1 cerrada en `b543597`; Fase 2 está en curso. La 2.2 creó la migración mínima sin ejecutarla; la 2.3 prepara repositorios server-only y resolución persistente de roles, sin DB real ni Store Scope. El working tree debe verificarse antes de trabajar.
+**Estado actual:** Fase 0 completada; Fase 1 cerrada en `b543597`; Fase 2 está en curso. La 2.2 creó la migración mínima sin ejecutarla; 2.3 agregó repositorios y roles persistentes; 2.4 agrega Store Scope server-only sin DB real. El working tree debe verificarse antes de trabajar.
 
 ## Arquitectura vigente
 
 - **IMPLEMENTADO:** Clerk resuelve sesión e Organization en servidor. Las APIs demo tienen RBAC default-deny, permisos, scope por Organization, validación Zod, contrato de errores y privacidad Sentry. La suite de Fase 1 cerró con 31 tests.
 - **DECIDIDO:** `features/` expresa capacidades del producto; `src/integrations/` contiene adapters técnicos reutilizables. Una Store no copia código de un provider. `hub_memberships` será la fuente definitiva server-side de roles e-Hub; Owner y Manager tienen scope implícito de todas las Stores de su Organization, mientras Employee y Client requieren assignments explícitos. Supabase será PostgreSQL, no Supabase Auth. La migración 2.2 versiona `hub_memberships`, `stores` y `store_assignments` con FKs compuestas por Organization; no fue ejecutada. La CLI `2.114.0` es una devDependency exacta. `supabase/config.toml` es configuración local versionada; Docker y cualquier link remoto siguen diferidos.
-- **DIFERIDO:** Store, Client/Team, asignaciones, persistencia, repositorios, RLS aplicado, OAuth funcional, conexiones reales, Mercado Libre funcional, webhooks y sincronización.
+- **DIFERIDO:** ejecución real de Store/memberships/assignments, RLS aplicado, OAuth funcional, conexiones reales, Mercado Libre funcional, webhooks y sincronización.
 - **PROPUESTO:** módulos de ventas, productos, publicaciones, inventario, precios, preguntas, operaciones masivas, notificaciones, reportes, automatizaciones e IA; no son backlog aprobado.
 - **OBSERVADO EN REFERENCIA:** MercadoCuentas aporta necesidades funcionales y UX, nunca contratos, APIs, backend ni fuente de datos. Ver [referencia funcional](./mercado-cuentas-functional-reference.md).
 
@@ -24,7 +24,7 @@ No crear `src/application/` ni `src/domain/` por estilo. Solo se justifican ante
 2. Todo acceso protegido sigue `Authentication -> Authorization -> Tenant resolution -> Validation -> Service -> Repository -> Database`.
 3. La autoridad del tenant proviene de Clerk en servidor; el navegador no prueba Organization, rol, permiso ni Store.
 4. Nunca exponer secretos, tokens ni credenciales en UI, respuestas, logs o trazas.
-5. El scope actual es solo Organization. Un recurso de otra Organization se oculta con `404`; la falta de permiso es `403`.
+5. Organization Scope sigue siendo el límite superior. Store Scope server-only añade `all-stores` para Owner/Manager y assignments explícitos para Employee/Client; un recurso de otra Organization se oculta con `404` y la falta de permiso/scope es `403`.
 6. No usar UI, visibilidad de navegación ni mocks demo como boundary de seguridad.
 
 Los detalles normativos están en [REGLAS.md](../REGLAS.md), [seguridad](./meli-security.md) y [multi-tenancy](./meli-multi-tenancy.md).
@@ -37,7 +37,7 @@ MercadoCuentas es referencia funcional/producto. La investigación incluyó nave
 
 ## Siguiente paso y lectura mínima
 
-La siguiente subfase candidata es **2.2 — schema mínimo**, que requiere aprobación explícita para ejecutar DDL. La instalación pinneada de Supabase CLI ya está preparada, pero Docker local sigue pendiente. Antes de proponerla, leer:
+La siguiente subfase candidata es **2.5 — Connections sin OAuth**, que requiere aprobación explícita. La instalación pinneada de Supabase CLI ya está preparada, pero Docker local sigue pendiente. Antes de proponerla, leer:
 
 1. [Plan y gobierno](./plan-y-gobierno.md).
 2. [Workflow de agentes](./agent-workflow.md).

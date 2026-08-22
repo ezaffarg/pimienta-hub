@@ -98,5 +98,5 @@ En este equipo no se detectó Docker, por lo que la validación local no puede p
 
 - RLS no se crea ni se habilita en esta subfase. La service role puede bypassearla; la defensa primaria posterior será contexto server-side, repositorios tenant-scoped y estas constraints.
 - Toda lectura o mutación futura debe recibir `organization_id` desde `ServerAuthorizationContext`, incluirlo en su predicado y ejecutarse atómicamente. `store_id` de URL/body/query solo identifica el objetivo y nunca autoriza el tenant.
-- Los repositorios 2.3 son server-only y exigen `organization_id` en cada lookup; no habilitan rutas, guards nuevos, Store Scope, bootstrap de Owner ni conexiones funcionales. La migración aún no fue ejecutada.
+- Los repositorios 2.3/2.4 son server-only y exigen `organization_id` en cada lookup, incluso al listar IDs de Store autorizados. El resolver de Store Scope no habilita rutas, guards nuevos, bootstrap de Owner ni conexiones funcionales. La migración aún no fue ejecutada.
 - La generación de tipos de base de datos se evaluará cuando el schema exista realmente y haya un contrato de consumo server-side aprobado; no se genera ni se versiona ahora.

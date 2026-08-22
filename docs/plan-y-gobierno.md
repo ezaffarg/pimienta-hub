@@ -72,7 +72,7 @@ En todos los niveles se presenta el plan y se espera aprobación. En nivel 🔴 
 | --- | --- | --- |
 | 0. Decisiones y consolidación | Fuente de verdad, límites, decisiones pendientes y reglas de agentes | Completada |
 | 1. Seguridad base | Auth server-side, autorización, tenant resolution, validación, errores y privacidad Sentry | Cerrada — Checkpoint 1.6 |
-| 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | En curso — 2.3 prepara repositorios y resolver persistente; DB aún no ejecutada |
+| 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | En curso — 2.4 implementa Store Scope server-only; DB aún no ejecutada |
 | 3. OAuth Mercado Libre | Inicio, callback, state, replay protection, tokens cifrados, conexión y desconexión | Pendiente |
 | 4. UI de conexiones | Stores, estados, conectar, reautorizar y desconectar | Pendiente |
 | 5. Adapter y dominio inicial | Cliente server-only, DTOs, mappers y una capacidad inicial | Pendiente |
@@ -187,6 +187,12 @@ Las migraciones usan SQL versionado con Supabase CLI `2.114.0`, instalada como `
 La secuencia aprobada es: 2.1 diseño final de schema y convención de migraciones; 2.1B instala la CLI exacta e inicializa configuración local; 2.2 crea la migración mínima sin ejecutarla; 2.3 repositories y fuente propia de roles; 2.4 Store Scope; 2.5 Connections sin OAuth; 2.6 checkpoint. La ejecución local de DDL requiere Docker y una aprobación operativa correspondiente.
 
 La 2.3 incorpora repositorios server-only tenant-scoped para `hub_memberships`, `stores` y `store_assignments`, y un resolver de rol persistente testeable. Mientras la migración no esté aplicada, los guards existentes conservan el mapping Clerk como fallback transitorio; no se persisten memberships durante login. **BOOTSTRAP FIRST OWNER: DEFERRED**: su seguridad concurrente requiere una decisión y una constraint/schema explícitos antes de implementarse.
+
+La 2.4 incorpora Store Scope server-only: Owner y Manager resuelven `all-stores` dentro de la Organization activa; Employee y Client resuelven únicamente IDs provenientes de assignments tenant-scoped. Permission y Store Scope son controles independientes. El resolver no se integra aún con rutas de Store porque no existen, y la migración sigue sin ejecutarse.
+
+#### Security Hardening Backlog
+
+Antes de exponer funcionalidades públicas o productivas se revisarán explícitamente: queries parametrizadas y SQL/RPC futuros; validación Zod con allow-list y límites de inputs, arrays, payloads, IDs y paginación; mass assignment; rate limiting; RLS como defensa adicional; prompt injection y límites de tools; salida/XSS; CSRF/Origin; uploads; y logging/privacidad sin tokens, cookies, secretos ni payloads sensibles indiscriminados. Este backlog no declara ninguna de esas defensas como implementada.
 
 ### Fase 3 — MVP OAuth de Mercado Libre
 

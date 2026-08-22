@@ -51,6 +51,39 @@ describe('server-only repositories', () => {
     expect('getById' in repository).toBe(false);
   });
 
+  it('lists selected Store IDs only after filtering by Organization', async () => {
+    const storeIdFilter = vi.fn().mockResolvedValue({ data: [], error: null });
+    const organizationFilter = vi.fn(() => ({ in: storeIdFilter }));
+    const repository = new StoreRepository(
+      clientFor({ select: vi.fn(() => ({ eq: organizationFilter })) })
+    );
+
+    await expect(repository.listByOrganizationAndIds('org_a', ['store_a'])).resolves.toEqual([]);
+    expect(organizationFilter).toHaveBeenCalledWith('organization_id', 'org_a');
+    expect(storeIdFilter).toHaveBeenCalledWith('id', ['store_a']);
+  });
+
+  it('uses the server-provided Organization when creating a Store', async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: { id: 'store_a', organization_id: 'org_a', name: 'Store A', status: 'active' },
+      error: null
+    });
+    const select = vi.fn(() => ({ single }));
+    const insert = vi.fn(() => ({ select }));
+    const repository = new StoreRepository(clientFor({ insert }));
+
+    await expect(
+      repository.create('org_a', { name: 'Store A', status: 'active' })
+    ).resolves.toMatchObject({
+      organizationId: 'org_a'
+    });
+    expect(insert).toHaveBeenCalledWith({
+      organization_id: 'org_a',
+      name: 'Store A',
+      status: 'active'
+    });
+  });
+
   it('lists assignments only with membership and Organization', async () => {
     const membershipFilter = vi.fn().mockResolvedValue({ data: [], error: null });
     const organizationFilter = vi.fn(() => ({ eq: membershipFilter }));

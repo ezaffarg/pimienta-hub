@@ -18,6 +18,8 @@ export interface StoreRecord {
   status: 'active' | 'disabled';
 }
 
+export type CreateStoreInput = Omit<StoreRecord, 'id' | 'organizationId'>;
+
 export interface StoreAssignment {
   membershipId: string;
   storeId: string;
@@ -121,6 +123,28 @@ export class StoreRepository {
     }));
   }
 
+  async listByOrganizationAndIds(
+    organizationId: string,
+    storeIds: readonly string[]
+  ): Promise<StoreRecord[]> {
+    if (storeIds.length === 0) {
+      return [];
+    }
+
+    const { data, error } = await this.client
+      .from('stores')
+      .select('id, organization_id, name, status')
+      .eq('organization_id', organizationId)
+      .in('id', storeIds);
+
+    return requireData(data, error).map((store) => ({
+      id: store.id,
+      organizationId: store.organization_id,
+      name: store.name,
+      status: store.status as StoreRecord['status']
+    }));
+  }
+
   async getByOrganizationAndId(
     organizationId: string,
     storeId: string
@@ -143,10 +167,10 @@ export class StoreRepository {
     };
   }
 
-  async create(input: Omit<StoreRecord, 'id'>): Promise<StoreRecord> {
+  async create(organizationId: string, input: CreateStoreInput): Promise<StoreRecord> {
     const { data, error } = await this.client
       .from('stores')
-      .insert({ organization_id: input.organizationId, name: input.name, status: input.status })
+      .insert({ organization_id: organizationId, name: input.name, status: input.status })
       .select('id, organization_id, name, status')
       .single();
 
