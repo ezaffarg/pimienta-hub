@@ -190,6 +190,8 @@ La 2.3 incorpora repositorios server-only tenant-scoped para `hub_memberships`, 
 
 La 2.4 incorpora Store Scope server-only: Owner y Manager resuelven `all-stores` dentro de la Organization activa; Employee y Client resuelven únicamente IDs provenientes de assignments tenant-scoped. Permission y Store Scope son controles independientes. El resolver no se integra aún con rutas de Store porque no existen, y la migración sigue sin ejecutarse.
 
+La 2.5 agrega una migración aditiva de `connections` y un repository server-only tenant-scoped. La tabla conserva metadata provider-agnostic, scopes y expiración opcional; no contiene tokens ni secretos. `active` reserva globalmente `provider + external_account_id`; `disabled` permite un workflow futuro de release. OAuth, RLS y StoreIntegrationResolver permanecen diferidos.
+
 #### Security Hardening Backlog
 
 Antes de exponer funcionalidades públicas o productivas se revisarán explícitamente: queries parametrizadas y SQL/RPC futuros; validación Zod con allow-list y límites de inputs, arrays, payloads, IDs y paginación; mass assignment; rate limiting; RLS como defensa adicional; prompt injection y límites de tools; salida/XSS; CSRF/Origin; uploads; y logging/privacidad sin tokens, cookies, secretos ni payloads sensibles indiscriminados. Este backlog no declara ninguna de esas defensas como implementada.

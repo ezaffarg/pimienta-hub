@@ -4,7 +4,7 @@ Supabase se usará únicamente como PostgreSQL; Supabase Auth queda fuera de la 
 
 ## Estado de la Subfase 2.1
 
-**Migración inicial creada en 2.2; no ejecutada.** La primera migración es `supabase/migrations/20260821230525_phase_2_store_foundation.sql`: contiene `hub_memberships`, `stores` y `store_assignments`. No hay tablas verificadas en una base, repositorios ni conexiones funcionales porque Docker no está disponible. `connections` permanece diferida a 2.5.
+**Migraciones creadas pero no ejecutadas.** La 2.2 contiene `hub_memberships`, `stores` y `store_assignments`; la 2.5 agrega `20260822202032_phase_2_connections.sql` con `connections`. No hay tablas verificadas en una base porque Docker no está disponible. Connections no contiene tokens ni secretos y OAuth permanece diferido.
 
 Supabase CLI `2.114.0` está instalada como `devDependency` exacta y se ejecuta con `bunx supabase`; `bunfig.toml` mantiene su política de antigüedad mínima de siete días. El intento documentado de `2.115.0` fue bloqueado por esa política y no se la desactivó. `supabase init` creó la configuración local versionable en `supabase/config.toml`, sin link remoto, credenciales ni schema funcional.
 

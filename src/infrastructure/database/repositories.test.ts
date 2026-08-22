@@ -5,6 +5,7 @@ vi.mock('server-only', () => ({}));
 
 import {
   HubMembershipRepository,
+  ConnectionRepository,
   PersistenceError,
   StoreAssignmentRepository,
   StoreRepository
@@ -15,6 +16,47 @@ function clientFor(builder: Record<string, unknown>): SupabaseClient {
 }
 
 describe('server-only repositories', () => {
+  it('scopes Connections by Organization and Store', async () => {
+    const storeFilter = vi.fn().mockResolvedValue({ data: [], error: null });
+    const organizationFilter = vi.fn(() => ({ eq: storeFilter }));
+    const repository = new ConnectionRepository(
+      clientFor({ select: vi.fn(() => ({ eq: organizationFilter })) })
+    );
+
+    await expect(repository.listByStore('org_a', 'store_a')).resolves.toEqual([]);
+    expect(organizationFilter).toHaveBeenCalledWith('organization_id', 'org_a');
+    expect(storeFilter).toHaveBeenCalledWith('store_id', 'store_a');
+  });
+
+  it('creates Connections with a trusted Organization separated from payload', async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        id: 'connection_a',
+        organization_id: 'org_a',
+        store_id: 'store_a',
+        provider: 'mercado-libre',
+        external_account_id: null,
+        status: 'disabled',
+        scopes: [],
+        expires_at: null
+      },
+      error: null
+    });
+    const select = vi.fn(() => ({ single }));
+    const insert = vi.fn(() => ({ select }));
+    const repository = new ConnectionRepository(clientFor({ insert }));
+
+    await expect(
+      repository.create('org_a', { storeId: 'store_a', provider: 'mercado-libre' })
+    ).resolves.toMatchObject({ organizationId: 'org_a', status: 'disabled' });
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organization_id: 'org_a',
+        store_id: 'store_a',
+        provider: 'mercado-libre'
+      })
+    );
+  });
   it('looks up memberships by Organization and Clerk user, never globally', async () => {
     const maybeSingle = vi.fn().mockResolvedValue({
       data: {

@@ -6,7 +6,7 @@ Este es el punto de entrada para una nueva sesión de agente. Resume el estado s
 
 e-ngenieria Hub es un SaaS B2B multi-tenant para centralizar la operación de clientes, Stores y cuentas ecommerce desde una plataforma. La relación objetivo es `Organization -> Store -> Connection -> Provider`; Mercado Libre será el primer provider y otros adapters podrán incorporarse después.
 
-**Estado actual:** Fase 0 completada; Fase 1 cerrada en `b543597`; Fase 2 está en curso. La 2.2 creó la migración mínima sin ejecutarla; 2.3 agregó repositorios y roles persistentes; 2.4 agrega Store Scope server-only sin DB real. El working tree debe verificarse antes de trabajar.
+**Estado actual:** Fase 0 completada; Fase 1 cerrada en `b543597`; Fase 2 está en curso. Las migraciones 2.2 y 2.5 están creadas sin ejecutar; 2.3 agregó repositorios/roles, 2.4 Store Scope y 2.5 Connections server-only sin OAuth. El working tree debe verificarse antes de trabajar.
 
 ## Arquitectura vigente
 

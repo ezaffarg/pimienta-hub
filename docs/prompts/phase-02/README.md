@@ -1,6 +1,6 @@
 # Fase 2 — registro reservado
 
-Status: **ACTIVE — Subfase 2.4 implementa Store Scope server-only; no hay DB ejecutada**.
+Status: **ACTIVE — Subfase 2.5 prepara Connections server-only sin OAuth; no hay DB ejecutada**.
 
 La auditoría 2.0 y sus decisiones bloqueantes están archivadas; no autorizan implementación. Cuando exista una aprobación significativa, registrar su objetivo, límites, decisiones, resultado y commit siguiendo la convención del [índice de prompts](../README.md).
 
@@ -12,3 +12,4 @@ La auditoría 2.0 y sus decisiones bloqueantes están archivadas; no autorizan i
 - [Subfase 2.3 — repositories y roles persistentes](./2.3-repositories-roles.md)
 - [Cierre de Subfase 2.3](./2.3-close.md)
 - [Subfase 2.4 — Store Scope persistente](./2.4-store-scope.md)
+- [Subfase 2.5 — Connections sin OAuth](./2.5-connections.md)

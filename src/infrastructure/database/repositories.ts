@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ApprovedRole } from '@/lib/auth/authorization';
+import type { IntegrationProvider } from '@/integrations/core';
 import { getSupabaseServerClient } from './supabase-server';
 
 export interface HubMembership {
@@ -24,6 +25,26 @@ export interface StoreAssignment {
   membershipId: string;
   storeId: string;
   organizationId: string;
+}
+
+export interface ConnectionRecord {
+  id: string;
+  organizationId: string;
+  storeId: string;
+  provider: IntegrationProvider;
+  externalAccountId: string | null;
+  status: 'active' | 'disabled';
+  scopes: string[];
+  expiresAt: string | null;
+}
+
+export interface CreateConnectionInput {
+  storeId: string;
+  provider: IntegrationProvider;
+  externalAccountId?: string | null;
+  status?: ConnectionRecord['status'];
+  scopes?: string[];
+  expiresAt?: string | null;
 }
 
 export class PersistenceError extends Error {
@@ -219,4 +240,73 @@ export class StoreAssignmentRepository {
       organizationId: record.organization_id
     };
   }
+}
+
+export class ConnectionRepository {
+  constructor(private readonly client: SupabaseClient = getSupabaseServerClient()) {}
+
+  async listByStore(organizationId: string, storeId: string): Promise<ConnectionRecord[]> {
+    const { data, error } = await this.client
+      .from('connections')
+      .select(
+        'id, organization_id, store_id, provider, external_account_id, status, scopes, expires_at'
+      )
+      .eq('organization_id', organizationId)
+      .eq('store_id', storeId);
+    return requireData(data, error).map(connectionRecord);
+  }
+
+  async getById(organizationId: string, connectionId: string): Promise<ConnectionRecord | null> {
+    const { data, error } = await this.client
+      .from('connections')
+      .select(
+        'id, organization_id, store_id, provider, external_account_id, status, scopes, expires_at'
+      )
+      .eq('organization_id', organizationId)
+      .eq('id', connectionId)
+      .maybeSingle();
+    throwOnError(error);
+    return data ? connectionRecord(data) : null;
+  }
+
+  async create(organizationId: string, input: CreateConnectionInput): Promise<ConnectionRecord> {
+    const { data, error } = await this.client
+      .from('connections')
+      .insert({
+        organization_id: organizationId,
+        store_id: input.storeId,
+        provider: input.provider,
+        external_account_id: input.externalAccountId ?? null,
+        status: input.status ?? 'disabled',
+        scopes: input.scopes ?? [],
+        expires_at: input.expiresAt ?? null
+      })
+      .select(
+        'id, organization_id, store_id, provider, external_account_id, status, scopes, expires_at'
+      )
+      .single();
+    return connectionRecord(requireData(data, error));
+  }
+}
+
+function connectionRecord(record: {
+  id: string;
+  organization_id: string;
+  store_id: string;
+  provider: string;
+  external_account_id: string | null;
+  status: string;
+  scopes: string[];
+  expires_at: string | null;
+}): ConnectionRecord {
+  return {
+    id: record.id,
+    organizationId: record.organization_id,
+    storeId: record.store_id,
+    provider: record.provider as IntegrationProvider,
+    externalAccountId: record.external_account_id,
+    status: record.status as ConnectionRecord['status'],
+    scopes: record.scopes,
+    expiresAt: record.expires_at
+  };
 }
