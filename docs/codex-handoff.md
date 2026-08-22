@@ -6,7 +6,7 @@ Este es el punto de entrada para una nueva sesión de agente. Resume el estado s
 
 e-ngenieria Hub es un SaaS B2B multi-tenant para centralizar la operación de clientes, Stores y cuentas ecommerce desde una plataforma. La relación objetivo es `Organization -> Store -> Connection -> Provider`; Mercado Libre será el primer provider y otros adapters podrán incorporarse después.
 
-**Estado actual:** Fase 0 completada; Fase 1 cerrada en `b543597`; Fase 2 está en curso. La 2.0 está cerrada; la 2.1 documentó el DDL y la 2.1B preparó Supabase CLI `2.114.0` exacta. La 2.2 creó una migración mínima de memberships/Stores/assignments, pero no la ejecutó: no hay schema aplicado. El working tree debe verificarse antes de trabajar.
+**Estado actual:** Fase 0 completada; Fase 1 cerrada en `b543597`; Fase 2 está en curso. La 2.2 creó la migración mínima sin ejecutarla; la 2.3 prepara repositorios server-only y resolución persistente de roles, sin DB real ni Store Scope. El working tree debe verificarse antes de trabajar.
 
 ## Arquitectura vigente
 

@@ -763,6 +763,7 @@ Estas reglas son obligatorias para este proyecto:
 10. No borrar funcionalidades del starter hasta confirmar si son reutilizables.
 11. No hacer cambios masivos sin explicar primero el alcance y los archivos que se modificarán.
 12. No avanzar a la siguiente fase hasta cumplir todas las condiciones de salida documentadas.
+13. Los prompts operativos pueden preautorizar acciones rutinarias dentro del workspace; no solicitar confirmación repetida para esas acciones explícitamente autorizadas. Las operaciones sensibles, destructivas, globales, remotas o fuera de scope siguen requiriendo aprobación.
 
 El plan, las puertas de fase y el registro de decisiones están en [docs/plan-y-gobierno.md](./docs/plan-y-gobierno.md). Ese documento es la fuente de verdad operativa; los documentos especializados aportan detalle y el análisis histórico conserva contexto, pero no autoriza por sí mismo implementación futura.
 

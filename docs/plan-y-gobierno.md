@@ -72,7 +72,7 @@ En todos los niveles se presenta el plan y se espera aprobación. En nivel 🔴 
 | --- | --- | --- |
 | 0. Decisiones y consolidación | Fuente de verdad, límites, decisiones pendientes y reglas de agentes | Completada |
 | 1. Seguridad base | Auth server-side, autorización, tenant resolution, validación, errores y privacidad Sentry | Cerrada — Checkpoint 1.6 |
-| 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | En curso — 2.2 creó la migración base sin ejecutarla; no hay schema aplicado |
+| 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | En curso — 2.3 prepara repositorios y resolver persistente; DB aún no ejecutada |
 | 3. OAuth Mercado Libre | Inicio, callback, state, replay protection, tokens cifrados, conexión y desconexión | Pendiente |
 | 4. UI de conexiones | Stores, estados, conectar, reautorizar y desconectar | Pendiente |
 | 5. Adapter y dominio inicial | Cliente server-only, DTOs, mappers y una capacidad inicial | Pendiente |
@@ -185,6 +185,8 @@ La base conceptual aprobada es `hub_memberships`, `stores`, `store_assignments` 
 Las migraciones usan SQL versionado con Supabase CLI `2.114.0`, instalada como `devDependency` exacta e invocada con Bun. La política de antigüedad de paquetes permanece activa: el intento de `2.115.0` fue bloqueado, sin bypass. La 2.2 creó `20260821230525_phase_2_store_foundation.sql` con `hub_memberships`, `stores` y `store_assignments`: UUID internos, IDs externos `text`, `timestamptz`, checks, FKs compuestas e índices mínimos. La migración no fue ejecutada por ausencia de Docker; por lo tanto no hay schema aplicado. `connections`, su índice parcial y los tokens OAuth permanecen diferidos a 2.5/Fase 3. La defensa primaria es backend server-only, queries/repositories tenant-scoped y constraints/FKs compuestas. RLS queda diferido como defensa adicional porque service role no es una garantía de aislamiento. Ver [base de datos y migraciones](./meli-database.md) y el [mandato 2.2](./prompts/phase-02/2.2-persistencia.md).
 
 La secuencia aprobada es: 2.1 diseño final de schema y convención de migraciones; 2.1B instala la CLI exacta e inicializa configuración local; 2.2 crea la migración mínima sin ejecutarla; 2.3 repositories y fuente propia de roles; 2.4 Store Scope; 2.5 Connections sin OAuth; 2.6 checkpoint. La ejecución local de DDL requiere Docker y una aprobación operativa correspondiente.
+
+La 2.3 incorpora repositorios server-only tenant-scoped para `hub_memberships`, `stores` y `store_assignments`, y un resolver de rol persistente testeable. Mientras la migración no esté aplicada, los guards existentes conservan el mapping Clerk como fallback transitorio; no se persisten memberships durante login. **BOOTSTRAP FIRST OWNER: DEFERRED**: su seguridad concurrente requiere una decisión y una constraint/schema explícitos antes de implementarse.
 
 ### Fase 3 — MVP OAuth de Mercado Libre
 

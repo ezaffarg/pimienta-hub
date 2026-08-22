@@ -19,6 +19,10 @@ El repositorio Git es la fuente de verdad técnica. Skills, agentes externos, Gr
 
 Los commits deben ser pequeños, temáticos y auditables. Cuando exista trabajo fuera de alcance, usar staging explícito por archivo; no usar `git add .` ni `git add -A`.
 
+## Aprobaciones rutinarias preautorizadas
+
+Los prompts operativos pueden preautorizar acciones rutinarias dentro del workspace. El agente no debe solicitar confirmación repetida para acciones explícitamente autorizadas por el mandato. Operaciones sensibles, destructivas, globales, remotas o fuera de scope continúan requiriendo aprobación.
+
 ## Seguridad y fases
 
 Ninguna fase comienza automáticamente. Toda operación futura debe preservar autenticación, Organization, permiso y scope en servidor. Los datos provenientes del navegador —incluidos IDs, roles y permisos— no son autoridad.
