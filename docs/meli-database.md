@@ -4,7 +4,7 @@ Supabase se usará únicamente como PostgreSQL; Supabase Auth queda fuera de la 
 
 ## Estado de la Subfase 2.1
 
-**Diseño aprobado para preparar 2.2; no aplicado.** Este documento define el DDL objetivo y la convención de migraciones. No existe aún `supabase/`, una migración, tabla, repositorio ni conexión funcional en el repositorio.
+**Migración inicial creada en 2.2; no ejecutada.** La primera migración es `supabase/migrations/20260821230525_phase_2_store_foundation.sql`: contiene `hub_memberships`, `stores` y `store_assignments`. No hay tablas verificadas en una base, repositorios ni conexiones funcionales porque Docker no está disponible. `connections` permanece diferida a 2.5.
 
 Supabase CLI `2.114.0` está instalada como `devDependency` exacta y se ejecuta con `bunx supabase`; `bunfig.toml` mantiene su política de antigüedad mínima de siete días. El intento documentado de `2.115.0` fue bloqueado por esa política y no se la desactivó. `supabase init` creó la configuración local versionable en `supabase/config.toml`, sin link remoto, credenciales ni schema funcional.
 
@@ -18,9 +18,9 @@ Supabase CLI `2.114.0` está instalada como `devDependency` exacta y se ejecuta 
 - Roles, estados y providers se representan como `text` con `CHECK`, no como PostgreSQL enums: cambian sin migraciones de tipo y son consistentes con los contratos TypeScript.
 - No se añade `deleted_at` por convención. Las conexiones usan estado controlado; el borrado de memberships y Stores se restringe mientras existan relaciones.
 
-## DDL propuesto para Subfase 2.2
+## DDL creado para Subfase 2.2
 
-Este bloque es una especificación documental, **no una migración ejecutada**. La primera migración reproducirá este orden y revisará el resultado contra una base local nueva.
+Este bloque corresponde a la migración versionada, **aún no ejecutada**. La validación real contra una base local queda pendiente de Docker.
 
 ```sql
 create extension if not exists pgcrypto;
@@ -53,7 +53,6 @@ create table public.store_assignments (
   store_id uuid not null,
   organization_id text not null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
   constraint store_assignments_pkey primary key (membership_id, store_id),
   constraint store_assignments_membership_organization_fkey
     foreign key (membership_id, organization_id)
@@ -66,39 +65,11 @@ create table public.store_assignments (
 create index store_assignments_store_membership_idx
   on public.store_assignments (store_id, membership_id);
 
-create table public.connections (
-  id uuid primary key default gen_random_uuid(),
-  organization_id text not null,
-  store_id uuid not null,
-  provider text not null check (provider in (
-    'mercado-libre', 'shopify', 'tiendanube', 'woocommerce'
-  )),
-  external_account_id text,
-  status text not null default 'disconnected' check (status in (
-    'connected', 'expired', 'reauthorization_required', 'error',
-    'disconnected', 'disabled'
-  )),
-  scopes text[] not null default '{}'::text[],
-  expires_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint connections_id_organization_key unique (id, organization_id),
-  constraint connections_store_organization_fkey
-    foreign key (store_id, organization_id)
-    references public.stores (id, organization_id) on delete restrict
-);
-
-create index connections_organization_store_idx on public.connections (organization_id, store_id);
-
-create unique index connections_active_provider_account_key
-  on public.connections (provider, external_account_id)
-  where external_account_id is not null
-    and status in ('connected', 'expired', 'reauthorization_required', 'error');
 ```
 
-No existe una tabla local de Organizations: `organization_id` referencia la Organization externa de Clerk. Las claves foráneas compuestas impiden que un assignment o una connection relacione registros de Organizations distintas. No hay una restricción SQL simple para limitar assignments a Employee/Client sin duplicar el rol: los repositorios posteriores impondrán esa política junto con permiso y Store Scope.
+No existe una tabla local de Organizations: `organization_id` referencia la Organization externa de Clerk. Las claves foráneas compuestas de la migración impiden que un assignment relacione memberships y Stores de Organizations distintas. No hay una restricción SQL simple para limitar assignments a Employee/Client sin duplicar el rol: los repositorios posteriores impondrán esa política junto con permiso y Store Scope.
 
-Los nombres de Store no son únicos por Organization: son etiquetas de usuario, no una clave de negocio estable. Un slug o código único solo se añadirá si un caso de producto lo necesita. `connections` no contiene tokens ni secretos OAuth; estos pertenecen al diseño confidencial de Fase 3. El estado `disabled` libera una cuenta para un workflow futuro explícito de transferencia; las conexiones que aún representan una cuenta (`connected`, `expired`, `reauthorization_required` o `error`) mantienen la unicidad provider/cuenta.
+Los nombres de Store no son únicos por Organization: son etiquetas de usuario, no una clave de negocio estable. Un slug o código único solo se añadirá si un caso de producto lo necesita. `connections` no fue creada: su contrato, tokens OAuth y su futura unicidad parcial permanecen diferidos a 2.5/Fase 3.
 
 ## Estrategia reproducible de migraciones
 
@@ -119,7 +90,7 @@ supabase/migrations/<UTC timestamp>_<descripcion_en_snake_case>.sql
 
 Ejemplo: `20260821143000_create_hub_tenant_schema.sql`. La CLI debe generar el nombre (`supabase migration new create_hub_tenant_schema`) para evitar colisiones. Cada cambio posterior será una migración nueva y aditiva; no se edita una migración ya aplicada. Una corrección se realiza mediante una migración forward, no mediante rollback destructivo en entornos compartidos.
 
-El flujo reproducible previsto es: inicializar la configuración con la CLI aprobada, crear migración vacía, colocar el DDL revisado, arrancar una instancia local de Supabase con Docker, aplicar desde cero mediante `supabase db reset`, inspeccionar el schema/constraints/índices y ejecutar los tests que se creen en 2.2. `supabase link`, `supabase db push`, login y cualquier base remota están expresamente fuera de 2.1 y no son parte de la validación inicial.
+El flujo reproducible previsto es: crear la migración con la CLI aprobada, arrancar una instancia local de Supabase con Docker, aplicar desde cero mediante `supabase db reset`, inspeccionar el schema/constraints/índices y ejecutar los tests que se creen en 2.2. Esta migración no se ejecutó aún. `supabase link`, `supabase db push`, login y cualquier base remota están fuera de 2.2 y no son parte de la validación inicial.
 
 En este equipo no se detectó Docker, por lo que la validación local no puede prometerse aún. Antes de 2.2 deberá estar disponible un runtime Docker compatible. Una base remota de desarrollo solo podrá evaluarse después de definir acceso, aislamiento y un procedimiento no destructivo; no sustituye la repetición local desde cero.
 

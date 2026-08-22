@@ -1,6 +1,6 @@
 # Fase 2 — registro reservado
 
-Status: **ACTIVE — Subfase 2.1 de diseño documental en curso; no hay schema aplicado**.
+Status: **ACTIVE — Subfase 2.2 creó una migración mínima sin aplicarla; no hay schema aplicado**.
 
 La auditoría 2.0 y sus decisiones bloqueantes están archivadas; no autorizan implementación. Cuando exista una aprobación significativa, registrar su objetivo, límites, decisiones, resultado y commit siguiendo la convención del [índice de prompts](../README.md).
 
@@ -8,3 +8,4 @@ La auditoría 2.0 y sus decisiones bloqueantes están archivadas; no autorizan i
 - [Subfase 2.1 — schema SQL y migraciones](./2.1-schema-migraciones.md)
 - [Subfase 2.1B — Supabase CLI reproducible](./2.1b-supabase-cli.md)
 - [Cierre de 2.1 + 2.1B](./2.1b-close.md)
+- [Subfase 2.2 — schema mínimo persistente](./2.2-persistencia.md)
