@@ -196,6 +196,10 @@ La 2.5 agrega una migración aditiva de `connections` y un repository server-onl
 
 Antes de exponer funcionalidades públicas o productivas se revisarán explícitamente: queries parametrizadas y SQL/RPC futuros; validación Zod con allow-list y límites de inputs, arrays, payloads, IDs y paginación; mass assignment; rate limiting; RLS como defensa adicional; prompt injection y límites de tools; salida/XSS; CSRF/Origin; uploads; y logging/privacidad sin tokens, cookies, secretos ni payloads sensibles indiscriminados. Este backlog no declara ninguna de esas defensas como implementada.
 
+#### Fase 2 — Estado final
+
+**Clasificación:** **FASE 2 CLOSED — CODE/DESIGN COMPLETE; RUNTIME DB VALIDATION PENDING.** **Implementado/versionado:** tooling Supabase, migraciones, memberships/Stores/assignments, repositorios server-only, resolver de rol persistente, Store Scope y Connections provider-agnostic. **Transitorio:** `org:admin → Owner` y `org:member → Employee`. **Diferido:** Bootstrap First Owner, RLS, rate limiting, hardening completo y StoreIntegrationResolver. **No ejecutado:** migraciones PostgreSQL, Supabase local/remoto, link y `db push`. **BLOCKER BEFORE REMOVING TRANSITIONAL ROLE FALLBACK:** el primer Owner requiere una constraint, transacción/advisory lock u otra estrategia PostgreSQL segura contra carreras concurrentes. **Próximo paso único:** Database Runtime Validation antes de reevaluar OAuth.
+
 ### Fase 3 — MVP OAuth de Mercado Libre
 
 Implementar únicamente el flujo de conexión: inicio, state criptográfico, expiración, consumo único, callback, redirect URI exacta, intercambio de tokens, cuenta autorizada, cifrado, rotación, desconexión y reautorización.
