@@ -41,3 +41,6 @@ Los documentos canónicos son la Source of Truth; este índice sólo resume prop
 | [2.10](./2.10-persistent-membership-activation.md) | Completed / `0436622` | Autoridad primaria memberships | [multi-tenancy](../../meli-multi-tenancy.md), [plan](../../plan-y-gobierno.md) |
 
 Obsidian conserva índice y memoria resumida; el detalle vive en documentos y prompts versionados.
+# 2.11 — Real Membership Provisioning + Store Assignment Preparation
+
+Prompt archivado: [2.11](2.11-real-membership-provisioning.md). Estado: ACTIVE / PENDING.

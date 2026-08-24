@@ -110,3 +110,6 @@ En este equipo no se detectó Docker, por lo que la validación local no puede p
 - Toda lectura o mutación futura debe recibir `organization_id` desde `ServerAuthorizationContext`, incluirlo en su predicado y ejecutarse atómicamente. `store_id` de URL/body/query solo identifica el objetivo y nunca autoriza el tenant.
 - Los repositorios 2.3/2.4 son server-only y exigen `organization_id` en cada lookup, incluso al listar IDs de Store autorizados. El resolver de Store Scope no habilita rutas, guards nuevos, bootstrap de Owner ni conexiones funcionales. La migración aún no fue ejecutada.
 - La generación de tipos de base de datos se evaluará cuando el schema exista realmente y haya un contrato de consumo server-side aprobado; no se genera ni se versiona ahora.
+# Subfase 2.11
+
+No se requieren migraciones nuevas ni cambios remotos. Las primitivas usan las tablas existentes, verifican pertenencia por Organization y mantienen la invariante de último Owner en el servicio. La revocación elimina únicamente la tupla `(organization_id, membership_id, store_id)` exacta.

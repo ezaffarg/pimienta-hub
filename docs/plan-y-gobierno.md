@@ -286,3 +286,6 @@ Antes de pasar de fase deben estar comprobados:
 - Revisión de Sentry para excluir PII, cookies, headers Authorization, credenciales y secretos innecesarios.
 - Vitest y pruebas de: sin sesión, sin Organization, sin permiso, roles y mapping provisional, aislamiento entre Organizations, cross-tenant `404`, validación `400`, contrato HTTP y privacidad Sentry. Las pruebas de Store, Client ownership y asignaciones se difieren a Fase 2 porque esas entidades no existen todavía.
 - `typecheck`, `lint`, formato según la excepción vigente, `build`, tests y documentación aprobados.
+# Subfase 2.11 — estado
+
+La preparación de provisioning de memberships y Store assignments queda limitada a código server-only y fixtures/tests deterministas. No se crean usuarios o Stores reales, no se retira el fallback Clerk, no se implementa OAuth ni se inicia Fase 3.

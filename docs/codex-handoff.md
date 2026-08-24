@@ -61,3 +61,6 @@ Skills, agentes, Graphify y la memoria de Obsidian son ayudas opcionales. El rep
 - [Multi-tenancy y autorización](./meli-multi-tenancy.md)
 - [Evidencia de validación runtime](./database-runtime-validation.md)
 - [Índice operativo de Fase 2](./prompts/phase-02/README.md)
+# Actualización 2.11
+
+El estado pendiente de Fase 2 incluye provisioning persistente controlado y Store assignment preparation. La autoridad sigue siendo el contexto server-side y el repositorio Git; no hay cutover del fallback ni datos reales.

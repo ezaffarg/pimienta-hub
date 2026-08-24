@@ -131,6 +131,19 @@ export class HubMembershipRepository {
     };
   }
 
+  async listByOrganization(organizationId: string): Promise<HubMembership[]> {
+    const { data, error } = await this.client
+      .from('hub_memberships')
+      .select('id, organization_id, clerk_user_id, role')
+      .eq('organization_id', organizationId);
+    return requireData(data, error).map((record) => ({
+      id: record.id,
+      organizationId: record.organization_id,
+      clerkUserId: record.clerk_user_id,
+      role: record.role as ApprovedRole
+    }));
+  }
+
   async bootstrapFirstOwner(
     organizationId: string,
     clerkUserId: string
@@ -259,6 +272,17 @@ export class StoreAssignmentRepository {
       storeId: record.store_id,
       organizationId: record.organization_id
     };
+  }
+
+  async remove(organizationId: string, membershipId: string, storeId: string): Promise<boolean> {
+    const { error, count } = await this.client
+      .from('store_assignments')
+      .delete({ count: 'exact' })
+      .eq('organization_id', organizationId)
+      .eq('membership_id', membershipId)
+      .eq('store_id', storeId);
+    throwOnError(error);
+    return (count ?? 0) > 0;
   }
 }
 
