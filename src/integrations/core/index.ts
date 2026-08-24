@@ -4,6 +4,7 @@ export type {
   CanonicalInventory,
   CanonicalOrder,
   CanonicalProduct,
+  ExternalListingSummary,
   IntegrationConnection,
   IntegrationContext,
   IntegrationError,

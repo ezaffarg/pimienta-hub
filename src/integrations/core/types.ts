@@ -27,6 +27,23 @@ export interface CanonicalProduct {
   status: string | null;
 }
 
+export interface ExternalListingSummary {
+  externalId: string;
+  title: string;
+  status: string;
+  price: number | null;
+  currency: string | null;
+  availableQuantity: number | null;
+  soldQuantity: number | null;
+  listingType: string | null;
+  permalink: string | null;
+  thumbnail: string | null;
+  catalogProductId: string | null;
+  sellerSku: string | null;
+  sellerCustomField: string | null;
+  condition: string | null;
+}
+
 export interface CanonicalOrder {
   externalId: string;
   status: string;
