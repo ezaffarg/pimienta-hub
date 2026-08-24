@@ -101,9 +101,17 @@ La Organization, membership, permiso y Store Scope se derivan server-side. `orga
 
 La foundation 2.16 implementa localmente `oauth_attempts`, secretos cifrados separados, audit events, unicidad histórica de Connection y primitives transaccionales sin rutas OAuth. OAuth real, token exchange, `GET /users/me`, refresh y cualquier escritura remota siguen sin implementar.
 
-La foundation 2.19B añade localmente `oauth_pending_authorizations`: tras validar y consumir un OAuth attempt, un callback futuro podrá cifrar los tokens y guardar `String(/users/me.id)` junto con `nickname` opcional durante 20 minutos. La pending authorization está bound a Organization, actor, provider y purpose, es de uso único y no es una Connection ni un secreto definitivo. El callback, token exchange, `GET /users/me`, rutas HTTP y OAuth real siguen diferidos.
+La foundation 2.19B añade `oauth_pending_authorizations`: tras validar y consumir un OAuth attempt, el callback 2.19D cifra los tokens y guarda `String(/users/me.id)` junto con `nickname` opcional durante 20 minutos. La pending authorization está bound a Organization, actor, provider y purpose, es de uso único y no es una Connection ni un secreto definitivo.
 
 El onboarding final deberá usar una nueva primitive SQL transaccional que reciba el pending ID y Store.name: crea o reactiva Connection, mueve los secretos a `integration_secrets`, registra auditoría y consume la pending en la misma transacción. No se reutilizan las RPCs 2.16 para ello porque aceptan una identidad externa sin el pending ID ni su transferencia cifrada.
+
+## Runtime OAuth 2.19D
+
+Se implementan `POST /api/integrations/mercado-libre/connect` y `GET /api/integrations/mercado-libre/callback`, ambos server-only. El inicio exige sesión Clerk, Organization activa y membership persistente; Owner y Manager usan `integration:connect`, Client sólo `integration:self_connect` con `client_self_onboard`, y Employee se deniega. El body no controla Organization, actor, membership, Store, provider ni identidad externa; el origen del POST debe coincidir con el origin de la redirect URI estática.
+
+El runtime guarda un attempt de diez minutos y devuelve sólo la authorization URL oficial. La callback exige la misma sesión/membership tenant-bound, comprueba state, expiración y consumo antes de intercambiar el code; luego consulta `/users/me`, cifra tokens al crear la pending authorization y devuelve únicamente `READY_FOR_ONBOARDING` o `READY_FOR_RECONNECT` con displayName opcional. No devuelve tokens, code, ciphertext ni identidad técnica. Replays, respuestas inválidas y denials no realizan un segundo token exchange.
+
+La configuración es server-only: `MERCADO_LIBRE_CLIENT_ID`, `MERCADO_LIBRE_CLIENT_SECRET`, `MERCADO_LIBRE_REDIRECT_URI`, `INTEGRATION_SECRETS_MASTER_KEY` y el flag explícito `MERCADO_LIBRE_PKCE_ENABLED`. PKCE usa S256 sólo cuando ese flag es `true` y la Developers Application lo tiene habilitado. No se ejecutó authorize, callback, token exchange ni `GET /users/me` reales durante esta subfase; tampoco se creó Store, Connection, assignment, secreto permanente ni audit event.
 
 ## Permisos funcionales y capabilities futuras
 

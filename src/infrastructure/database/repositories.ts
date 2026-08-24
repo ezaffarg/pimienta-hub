@@ -313,6 +313,22 @@ export class ConnectionRepository {
     return data ? connectionRecord(data) : null;
   }
 
+  async findByProviderAndExternalAccount(
+    provider: IntegrationProvider,
+    externalAccountId: string
+  ): Promise<ConnectionRecord | null> {
+    const { data, error } = await this.client
+      .from('connections')
+      .select(
+        'id, organization_id, store_id, provider, external_account_id, status, scopes, expires_at'
+      )
+      .eq('provider', provider)
+      .eq('external_account_id', externalAccountId)
+      .maybeSingle();
+    throwOnError(error);
+    return data ? connectionRecord(data) : null;
+  }
+
   async create(organizationId: string, input: CreateConnectionInput): Promise<ConnectionRecord> {
     const { data, error } = await this.client
       .from('connections')

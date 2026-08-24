@@ -100,6 +100,30 @@ describe('OAuth foundation validation', () => {
     expect(query.gt).toHaveBeenCalledWith('expires_at', '2030-01-01T00:00:00.000Z');
   });
 
+  it('classifies OAuth attempt state only inside its actor and organization binding', async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { expires_at: '2029-01-01T00:00:00.000Z', consumed_at: null },
+      error: null
+    });
+    const query = { select: vi.fn(), eq: vi.fn(), maybeSingle };
+    query.select.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    const repository = new OAuthFoundationRepository({ from: vi.fn(() => query) } as never);
+
+    await expect(
+      repository.getOAuthAttemptState({
+        organizationId: 'org_test',
+        actorMembershipId: '10000000-0000-4000-8000-000000000002',
+        state: 'a'.repeat(32),
+        now: '2030-01-01T00:00:00.000Z'
+      })
+    ).resolves.toBe('expired');
+    expect(query.eq).toHaveBeenCalledWith(
+      'actor_membership_id',
+      '10000000-0000-4000-8000-000000000002'
+    );
+  });
+
   it('consumes a pending authorization only once', async () => {
     const maybeSingle = vi
       .fn()

@@ -46,6 +46,8 @@ export interface OAuthAttemptRecord {
   expiresAt: string;
 }
 
+export type OAuthAttemptState = 'active' | 'expired' | 'consumed';
+
 export interface DecryptedCredentials {
   accessToken: string;
   refreshToken: string;
@@ -179,6 +181,34 @@ export class OAuthFoundationRepository {
       keyVersion: data.key_version,
       expiresAt: data.expires_at
     };
+  }
+
+  async getOAuthAttemptState(input: {
+    organizationId: string;
+    actorMembershipId: string;
+    state: string;
+    now: string;
+  }): Promise<OAuthAttemptState | null> {
+    const parsed = z
+      .object({
+        organizationId: z.string().min(1).max(255),
+        actorMembershipId: uuidSchema,
+        state: z.string().min(32).max(512),
+        now: z.iso.datetime()
+      })
+      .strict()
+      .parse(input);
+    const { data, error } = await this.client
+      .from('oauth_attempts')
+      .select('expires_at, consumed_at')
+      .eq('organization_id', parsed.organizationId)
+      .eq('actor_membership_id', parsed.actorMembershipId)
+      .eq('state_digest', stateDigest(parsed.state))
+      .maybeSingle();
+    throwOnError(error);
+    if (!data) return null;
+    if (data.consumed_at) return 'consumed';
+    return data.expires_at <= parsed.now ? 'expired' : 'active';
   }
 
   async storeEncryptedCredentials(input: {
