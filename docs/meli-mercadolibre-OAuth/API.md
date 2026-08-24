@@ -99,7 +99,7 @@ La Organization, membership, permiso y Store Scope se derivan server-side. `orga
 4. primitive transaccional/RPC que cree/reutilice Store y Connection sin dejar Store huérfana;
 5. actualización/rotación atómica de credenciales y estados.
 
-La foundation 2.16 implementa localmente `oauth_attempts`, secretos cifrados separados, audit events, unicidad histórica de Connection y primitives transaccionales sin rutas OAuth. OAuth real, token exchange, `GET /users/me`, refresh y cualquier escritura remota siguen sin implementar.
+La foundation 2.16 implementa localmente `oauth_attempts`, secretos cifrados separados, audit events, unicidad histórica de Connection y primitives transaccionales sin rutas OAuth. El runtime posterior implementó OAuth y onboarding server-only. En 2.20A se validó una única lectura real `GET /users/me` con la Connection persistida: los secretos se descifraron sólo en memoria, el access token seguía vigente y la identidad devuelta coincidió con `external_account_id`. No fue necesario refresh, no se realizaron mutaciones de negocio ni se registró una auditoría adicional para la lectura.
 
 La foundation 2.19B añade `oauth_pending_authorizations`: tras validar y consumir un OAuth attempt, el callback 2.19D cifra los tokens y guarda `String(/users/me.id)` junto con `nickname` opcional durante 20 minutos. La pending authorization está bound a Organization, actor, provider y purpose, es de uso único y no es una Connection ni un secreto definitivo.
 
