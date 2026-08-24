@@ -40,6 +40,12 @@ La migración forward-only `20260824191800_database_privilege_hardening.sql` hab
 
 `PUBLIC`, `anon` y `authenticated` no tienen acceso directo a esas tablas ni `EXECUTE` sobre `bootstrap_first_owner` o los RPCs de onboarding. Sólo `service_role` conserva DML/ejecución necesarios para el backend. Las tres functions continúan como `SECURITY DEFINER` porque realizan mutaciones atómicas que requieren esa primitive, con tablas schema-qualified y `search_path = pg_catalog` fijo. La validación local se ejecutó con operaciones reales bajo `anon`, `authenticated` y `service_role`, todas las fixtures fueron revertidas y el estado remoto continúa sin cambios.
 
+## Subfase 2.18 — aplicación y validación remota
+
+Las migrations `20260824184934_oauth_security_foundations.sql` y `20260824191800_database_privilege_hardening.sql` fueron aplicadas al proyecto remoto dedicado `ffcudwwrzttkumbdvada` después de un dry-run que incluyó exclusivamente esas dos migrations. RLS está habilitado en las siete tablas Hub y no existen policies browser-facing. `PUBLIC`, `anon` y `authenticated` no tienen DML/SELECT directo; `service_role` conserva DML server-only y EXECUTE exclusivo de las tres RPCs internas.
+
+La validación remota ejecutó lecturas y llamadas de RPC denegadas para `anon` y `authenticated`, y una primitive de `service_role` dentro de rollback. No quedaron fixtures: hay una única membership Owner persistente y cero Stores, assignments, Connections, OAuth attempts, secretos de integración y eventos de auditoría. OAuth real y runtime Mercado Libre permanecen sin iniciar.
+
 ## DDL creado para Subfase 2.2
 
 Este bloque corresponde a la migración versionada, **aún no ejecutada**. La validación real contra una base local queda pendiente de Docker.

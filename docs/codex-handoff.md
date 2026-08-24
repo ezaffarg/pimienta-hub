@@ -69,3 +69,7 @@ El estado pendiente de Fase 2 incluye provisioning persistente controlado y Stor
 Real provisioning está en planificación y requiere aprobación humana. Current Clerk Admin fue confirmado como Current Real Owner y está aprobado sólo para provisioning futuro; el inventario remoto de memberships, Stores, assignments y connections está vacío. La matriz canónica vive en [docs/provisioning-plan.md](provisioning-plan.md); fallback Clerk sigue TRANSITIONAL y el cutover no está autorizado.
 
 La corrección 2.13 establece `bootstrap_first_owner` como el camino concurrente, idempotente y server-derived para el primer Owner. El Current Owner ya tiene una única membership persistente `Owner`; `provisionMembership()` se reserva para la autoridad persistente ya existente. La idempotencia quedó validada y la ruta temporal fue eliminada. Global fallback continúa TRANSITIONAL.
+
+# Actualización 2.18
+
+Las foundations OAuth y el hardening de privilegios ya están aplicados y validados en el remoto dedicado `ffcudwwrzttkumbdvada`. Las siete tablas Hub tienen RLS deny-by-default y cero policies browser-facing; `PUBLIC`, `anon` y `authenticated` no acceden directamente a tablas ni RPCs internas, mientras `service_role` sigue siendo la única frontera de base de datos para el backend. El remoto conserva una única membership Owner y cero Stores, assignments, Connections, OAuth attempts, secretos y audit events. OAuth real, Mercado Libre runtime y Fase 3 no están iniciados.
