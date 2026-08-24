@@ -31,6 +31,44 @@ Current business role: **CURRENT REAL OWNER**. Persistent state: **PERSISTENT**.
 
 Inventario remoto read-only confirmado: `stores = 0`. **EMPTY — STORE CREATION REQUIRED**. No deben provisionarse Employee ni Client hasta contar con Stores reales auditados y una matriz aprobada.
 
+## Real Store Creation Matrix
+
+Status: **DRAFT — USER APPROVAL REQUIRED**. No se creó ninguna Store en este checkpoint.
+
+### Contrato real de `stores`
+
+La migración vigente y `StoreRepository` exponen únicamente:
+
+- `id`: UUID generado por la base de datos; no es dato de entrada del usuario.
+- `organization_id`: obligatorio y derivado exclusivamente del contexto server-side de la Organization activa.
+- `name`: obligatorio; texto no vacío.
+- `status`: `active` o `disabled`; la base de datos aplica `active` por defecto, aunque el tipo actual de `StoreRepository.create()` lo recibe explícitamente.
+- `created_at` y `updated_at`: generados por la base de datos.
+
+No forman parte de `stores` datos de proveedor, seller, OAuth, tokens, cuentas externas ni conexiones; esos datos corresponden a `connections` y a la futura capa de integración.
+
+### Matriz pendiente de aprobación
+
+| Alias / cliente | Nombre exacto de Store | Estado inicial | Datos completos | Aprobación |
+| --- | --- | --- | --- | --- |
+| `[pendiente]` | `[pendiente]` | `active` / `disabled` | No | Requerida |
+
+No se inventan alias, nombres ni identificadores. Para cada Store, el usuario debe aportar únicamente:
+
+1. alias o cliente al que pertenece;
+2. nombre exacto visible de la Store;
+3. estado inicial, si debe comenzar deshabilitada (de lo contrario aplica `active`).
+
+### Modelo y primitive disponible
+
+- Un Client puede tener una o más Stores.
+- Una Store es la unidad operativa tenant-scoped; no contiene código del proveedor.
+- Una Store podrá tener una o más Connections futuras hacia proveedores externos.
+- `StoreRepository.create(organizationId, input)` existe como primitive server-only y deriva el tenant del argumento server-side.
+- La primitive todavía **no es idempotencia-segura para creación real**: no existe una clave única de negocio ni un lookup/resultado `already_exists` por nombre dentro de la Organization. La creación real requiere un checkpoint posterior que defina y apruebe ese contrato.
+
+Flujo futuro: Owner persistente aprobado → crear Store con `organizationId` del contexto → verificar pertenencia al tenant → aplicar creación idempotente. Este checkpoint no ejecuta ese flujo.
+
 ## Conflicts and blockers
 
 - **SAFE:** `hub_memberships = 1` (Current Owner), `stores = 0`, `store_assignments = 0`, `connections = 0` en el proyecto remoto linked auditado.
