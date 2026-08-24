@@ -40,6 +40,14 @@ El sync es idempotente por la constraint y el upsert: actualiza campos observabl
 
 La migration y matriz se validaron desde cero únicamente en Supabase local. Las fixtures deterministas se ejecutaron dentro de una transacción terminada en `ROLLBACK`: primer insert, segundo sync idempotente, actualización de precio/stock/status/timestamp, SKU nulo, dos listings, mismo external ID en otra Connection, rechazo cross-store y DML de `service_role`. Las lecturas directas de `anon` y `authenticated` fueron denegadas. No se aplicó migration ni se persistió una listing en remoto.
 
+## Subfase 2.20D — validación remota de listings
+
+La migration `20260824223000_phase_2_listings_foundation.sql` fue aplicada exclusivamente al proyecto remoto `ffcudwwrzttkumbdvada` después de un dry-run que enumeró sólo esa migration. Local y remoto quedaron alineados. La tabla `public.listings` existe con `price numeric(20,4)`, FK compuesta hacia `connections`, unique `(connection_id, external_listing_id)`, RLS enabled y cero policies browser-facing.
+
+La matriz remota se ejecutó con `service_role` dentro de una transacción revertida: first insert, upsert idempotente, actualización de precio/stock/status/sold quantity, SKU nulo, dos listings, mismo external ID en otra Connection, `last_synced_at` y ownership mismatch pasaron. Se observaron 3 fixtures durante la transacción y 0 después del rollback. `PUBLIC`, `anon` y `authenticated` no tienen acceso; las comprobaciones directas de SELECT e INSERT para anon/authenticated fueron denegadas. `service_role` conserva DML.
+
+El postcheck mantiene Listings 0, Stores 1, Connection 1 activa, Assignments 0, `integration_secrets` 1 y Owner persistente 1. No se persistió la publicación real de E.A.ZOCOOL, no hubo sync real ni mutaciones de Mercado Libre.
+
 ## Subfase 2.16 — foundations OAuth, Connection y Audit
 
 La migración `20260824184934_oauth_security_foundations.sql` añade foundations locales para `oauth_attempts`, `integration_secrets` y `audit_events`. Los intentos almacenan sólo el digest de state, se atan a Organization y actor membership, expiran y se consumen una sola vez. Las credenciales se separan de `connections` y se almacenan como ciphertext autenticado application-level; la clave maestra server-only se identifica como `INTEGRATION_SECRETS_MASTER_KEY` y nunca se versiona.
