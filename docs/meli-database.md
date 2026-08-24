@@ -4,7 +4,7 @@ Supabase se usará únicamente como PostgreSQL; Supabase Auth queda fuera de la 
 
 ## Estado de la Subfase 2.1
 
-**Migraciones creadas pero no ejecutadas.** La 2.2 contiene `hub_memberships`, `stores` y `store_assignments`; la 2.5 agrega `20260822202032_phase_2_connections.sql` con `connections`. No hay tablas verificadas en una base porque Docker no está disponible. Connections no contiene tokens ni secretos y OAuth permanece diferido.
+**Database Runtime Validation: LOCAL VALIDATED.** Docker y Supabase CLI ejecutaron localmente desde cero las migraciones 2.2 y 2.5 en dos resets reproducibles. La matriz runtime verificó schema, constraints, aislamiento por FKs compuestas, `ON DELETE RESTRICT` y semántica de Connections. No existe link remoto, no se ejecutó `db push` y OAuth permanece diferido. Este documento continúa siendo canónico; ver [checkpoint runtime](./database-runtime-validation.md) para la evidencia de ejecución. Connections no contiene tokens ni secretos.
 
 Supabase CLI `2.114.0` está instalada como `devDependency` exacta y se ejecuta con `bunx supabase`; `bunfig.toml` mantiene su política de antigüedad mínima de siete días. El intento documentado de `2.115.0` fue bloqueado por esa política y no se la desactivó. `supabase init` creó la configuración local versionable en `supabase/config.toml`, sin link remoto, credenciales ni schema funcional.
 
@@ -69,7 +69,7 @@ create index store_assignments_store_membership_idx
 
 No existe una tabla local de Organizations: `organization_id` referencia la Organization externa de Clerk. Las claves foráneas compuestas de la migración impiden que un assignment relacione memberships y Stores de Organizations distintas. No hay una restricción SQL simple para limitar assignments a Employee/Client sin duplicar el rol: los repositorios posteriores impondrán esa política junto con permiso y Store Scope.
 
-Los nombres de Store no son únicos por Organization: son etiquetas de usuario, no una clave de negocio estable. Un slug o código único solo se añadirá si un caso de producto lo necesita. `connections` no fue creada: su contrato, tokens OAuth y su futura unicidad parcial permanecen diferidos a 2.5/Fase 3.
+Los nombres de Store no son únicos por Organization: son etiquetas de usuario, no una clave de negocio estable. Un slug o código único solo se añadirá si un caso de producto lo necesita. `connections` está definida en la migración 2.5 y fue validada localmente; tokens OAuth permanecen diferidos a Fase 3.
 
 ## Estrategia reproducible de migraciones
 

@@ -6,7 +6,7 @@ Este es el punto de entrada para una nueva sesión de agente. Resume el estado s
 
 e-ngenieria Hub es un SaaS B2B multi-tenant para centralizar la operación de clientes, Stores y cuentas ecommerce desde una plataforma. La relación objetivo es `Organization -> Store -> Connection -> Provider`; Mercado Libre será el primer provider y otros adapters podrán incorporarse después.
 
-**Estado actual:** Fase 0 completada; Fase 1 cerrada en `b543597`; Fase 2 está en curso. Las migraciones 2.2 y 2.5 están creadas sin ejecutar; 2.3 agregó repositorios/roles, 2.4 Store Scope y 2.5 Connections server-only sin OAuth. El working tree debe verificarse antes de trabajar.
+**Estado actual:** Fase 0 completada; Fase 1 cerrada; Fase 2 está CLOSED — CODE/DESIGN COMPLETE. La **Database Runtime Validation** local está validada: dos resets aplicaron las migraciones 2.2 y 2.5 desde una DB limpia y la matriz de constraints pasó. Remote Database permanece NOT LINKED / NOT VALIDATED y Production NOT CONFIGURED. No se usa `db push` y Fase 3 no está iniciada. Ver [checkpoint runtime](./database-runtime-validation.md). El working tree debe verificarse antes de trabajar.
 
 ## Arquitectura vigente
 
@@ -37,7 +37,7 @@ MercadoCuentas es referencia funcional/producto. La investigación incluyó nave
 
 ## Siguiente paso y lectura mínima
 
-La siguiente subfase candidata es **2.5 — Connections sin OAuth**, que requiere aprobación explícita. La instalación pinneada de Supabase CLI ya está preparada, pero Docker local sigue pendiente. Antes de proponerla, leer:
+El siguiente checkpoint requiere decidir Bootstrap First Owner y preparar, con autorización independiente, el entorno remoto de Supabase. No inicia OAuth ni Fase 3. Antes de operar, leer:
 
 1. [Plan y gobierno](./plan-y-gobierno.md).
 2. [Workflow de agentes](./agent-workflow.md).

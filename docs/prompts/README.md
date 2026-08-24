@@ -18,3 +18,5 @@ Se archivan mandatos, no conversaciones completas. Si el trabajo se bloquea, el 
 ## Convención
 
 Cada entrada registra estado, propósito, decisión/limitaciones, resultado y commit. Los mandatos reemplazados deben indicar `SUPERSEDED` y enlazar al vigente. El commit que crea un prompt conserva `Commit: PENDING`: su propio hash se informa en el checkpoint y se registra en un mandato o cierre posterior cuando corresponda; no se crea un commit circular solo para insertar el hash en sí mismo.
+
+Los nombres usan una subfase cronológica estable: no se dejan placeholders permanentes como `2.x`. Cuando una etapa requiere más de un mandato, se usa un sufijo (`b`, `c`, `-retry` o `-close`), por ejemplo `2.6-phase-close-readiness.md`, `2.6b-phase-close-commit.md`, `2.7-runtime-db-validation.md` y `2.7b-runtime-db-validation-retry.md`.

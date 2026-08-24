@@ -1,6 +1,6 @@
 # Fase 2 — registro reservado
 
-Status: **ACTIVE — Subfase 2.5 prepara Connections server-only sin OAuth; no hay DB ejecutada**.
+Status: **LOCAL VALIDATED — Fase 2 code/design complete; remoto no enlazado, OAuth pendiente**.
 
 La auditoría 2.0 y sus decisiones bloqueantes están archivadas; no autorizan implementación. Cuando exista una aprobación significativa, registrar su objetivo, límites, decisiones, resultado y commit siguiendo la convención del [índice de prompts](../README.md).
 
@@ -13,3 +13,8 @@ La auditoría 2.0 y sus decisiones bloqueantes están archivadas; no autorizan i
 - [Cierre de Subfase 2.3](./2.3-close.md)
 - [Subfase 2.4 — Store Scope persistente](./2.4-store-scope.md)
 - [Subfase 2.5 — Connections sin OAuth](./2.5-connections.md)
+- [Cierre/readiness de Fase 2](./2.6-phase-close-readiness.md)
+- [Cierre documental de Fase 2](./2.6b-phase-close-commit.md)
+- [Database Runtime Validation — primer intento](./2.7-runtime-db-validation.md)
+- [Database Runtime Validation — retry](./2.7b-runtime-db-validation-retry.md)
+- [Cierre de Database Runtime Validation local](./2.7c-runtime-db-validation-close.md)
