@@ -28,7 +28,7 @@ describe('RBAC policy', () => {
     expect(hasPermission('Employee', 'users.read')).toBe(false);
 
     for (const permission of PERMISSIONS) {
-      expect(hasPermission('Client', permission)).toBe(false);
+      expect(hasPermission('Client', permission)).toBe(permission === 'integration:self_connect');
     }
   });
 });

@@ -8,16 +8,35 @@ export const PERMISSIONS = [
   'products.read',
   'products.write',
   'users.read',
-  'users.write'
+  'users.write',
+  'audit:read',
+  'integration:connect',
+  'integration:reconnect',
+  'integration:self_connect'
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
 
 const ROLE_PERMISSIONS: Readonly<Record<ApprovedRole, readonly Permission[]>> = {
-  Owner: ['products.read', 'products.write', 'users.read', 'users.write'],
-  Manager: ['products.read', 'products.write', 'users.read'],
+  Owner: [
+    'products.read',
+    'products.write',
+    'users.read',
+    'users.write',
+    'audit:read',
+    'integration:connect',
+    'integration:reconnect'
+  ],
+  Manager: [
+    'products.read',
+    'products.write',
+    'users.read',
+    'audit:read',
+    'integration:connect',
+    'integration:reconnect'
+  ],
   Employee: ['products.read'],
-  Client: []
+  Client: ['integration:self_connect']
 };
 
 const CLERK_ROLE_MAPPING: Readonly<Record<string, ApprovedRole>> = {

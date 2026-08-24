@@ -99,7 +99,7 @@ La Organization, membership, permiso y Store Scope se derivan server-side. `orga
 4. primitive transaccional/RPC que cree/reutilice Store y Connection sin dejar Store huérfana;
 5. actualización/rotación atómica de credenciales y estados.
 
-No se modifica schema, migraciones, repositorios ni OAuth durante 2.15.
+La foundation 2.16 implementa localmente `oauth_attempts`, secretos cifrados separados, audit events, unicidad histórica de Connection y primitives transaccionales sin rutas OAuth. OAuth real, token exchange, `GET /users/me`, refresh y cualquier escritura remota siguen sin implementar.
 
 ## Permisos funcionales y capabilities futuras
 
@@ -159,6 +159,6 @@ El futuro Audit Log será server-side: `audit:read` permitido a Owner y Manager,
 
 `Export Center` queda como capability futura, con Mercado Libre como primer provider considerado. Sus exportaciones deberán respetar RBAC y Store Scope y validarse individualmente contra la API oficial; no se implementa en 2.15.
 
-### Preparación requerida antes de OAuth real
+### Preparación restante antes de OAuth real
 
-El checkpoint 2.16 deberá abordar OAuth attempt/state single-use, secret storage, refresh rotation, uniqueness y reactivation de Connection, transacciones de onboarding, concurrencia, Audit foundation y RBAC Owner + Manager + Client self-service. Este documento no implementa esos puntos.
+2.16 deja foundations locales, pero todavía faltan secret storage de producción, refresh rotation real, servicio que derive el contexto Clerk para las primitives, rutas OAuth, UI, token exchange y validación remota separada. Ninguno se habilita por esta subfase.

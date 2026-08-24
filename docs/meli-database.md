@@ -28,6 +28,18 @@ Supabase CLI `2.114.0` está instalada como `devDependency` exacta y se ejecuta 
 - Roles, estados y providers se representan como `text` con `CHECK`, no como PostgreSQL enums: cambian sin migraciones de tipo y son consistentes con los contratos TypeScript.
 - No se añade `deleted_at` por convención. Las conexiones usan estado controlado; el borrado de memberships y Stores se restringe mientras existan relaciones.
 
+## Subfase 2.16 — foundations OAuth, Connection y Audit
+
+La migración `20260824184934_oauth_security_foundations.sql` añade foundations locales para `oauth_attempts`, `integration_secrets` y `audit_events`. Los intentos almacenan sólo el digest de state, se atan a Organization y actor membership, expiran y se consumen una sola vez. Las credenciales se separan de `connections` y se almacenan como ciphertext autenticado application-level; la clave maestra server-only se identifica como `INTEGRATION_SECRETS_MASTER_KEY` y nunca se versiona.
+
+La identidad externa pasa a ser única para `(provider, external_account_id)` aun si la Connection está `disabled`; deshabilitar no libera una cuenta para crear una fila histórica duplicada. Las primitives SQL de onboarding son atómicas: administrativa (Store + Connection) y Client (Store + Connection + assignment), con lock asesor por identidad externa y outcomes controlados. `audit_events` conserva metadata JSON limitada y rechaza claves sensibles conocidas. Nada de esta foundation ejecuta OAuth, crea datos reales ni aplica migraciones remotas.
+
+## Subfase 2.17 — hardening de privilegios local
+
+La migración forward-only `20260824191800_database_privilege_hardening.sql` habilita RLS deny-by-default, sin policies browser-facing, para `oauth_attempts`, `integration_secrets` y `audit_events`. También habilita el mismo límite para las tablas core (`hub_memberships`, `stores`, `store_assignments` y `connections`): es compatible con la arquitectura actual porque los repositories son server-only y `service_role` tiene `BYPASSRLS` y DML explícito.
+
+`PUBLIC`, `anon` y `authenticated` no tienen acceso directo a esas tablas ni `EXECUTE` sobre `bootstrap_first_owner` o los RPCs de onboarding. Sólo `service_role` conserva DML/ejecución necesarios para el backend. Las tres functions continúan como `SECURITY DEFINER` porque realizan mutaciones atómicas que requieren esa primitive, con tablas schema-qualified y `search_path = pg_catalog` fijo. La validación local se ejecutó con operaciones reales bajo `anon`, `authenticated` y `service_role`, todas las fixtures fueron revertidas y el estado remoto continúa sin cambios.
+
 ## DDL creado para Subfase 2.2
 
 Este bloque corresponde a la migración versionada, **aún no ejecutada**. La validación real contra una base local queda pendiente de Docker.
