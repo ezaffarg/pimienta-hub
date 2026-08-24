@@ -1,28 +1,164 @@
 # Mercado Libre OAuth y API
 
-Documento operativo. Revisar y actualizar antes de cada implementacion de OAuth o cambio de endpoint.
+Documento canónico de diseño para OAuth y onboarding de Connections. **Diseño auditado en 2.15; OAuth no está implementado.** Revalidar la documentación oficial y la configuración de la Developers Application inmediatamente antes de implementar.
 
-## OAuth verificado el 2026-08-19
+## Límites y modelo
 
-- Authorization Code server-side.
-- `state` criptografico, ligado al intento y de un solo uso.
-- La redirect URI debe usar HTTPS y ser estatica, exactamente igual a la configurada.
-- Los scopes disponibles documentados son `read`, `write` y `offline_access`; pedir el minimo necesario.
-- PKCE es opcional en la configuracion de la aplicacion y Mercado Libre recomienda usarlo. Si se habilita, `code_challenge`/`code_verifier` son obligatorios; se recomienda `S256` y no `plain`.
-- El code se intercambia server-side mediante body `application/x-www-form-urlencoded`.
-- La pagina documenta una validez de 6 horas, pero su ejemplo muestra `expires_in: 10800` segundos. No asumir una constante: persistir y respetar el `expires_in` real recibido, con margen de renovacion configurable, y verificar el comportamiento con usuarios de test.
-- El refresh token es de uso unico: cada refresh devuelve uno nuevo y el anterior queda invalido. Actualizarlo atomicamente.
-- La cuenta que autoriza debe ser la cuenta principal/administradora; los operadores o colaboradores pueden fallar con `invalid_operator_user_id`.
-- Desde el 2026-08-30 las aplicaciones deben separarse entre Mercado Libre y Mercado Pago; no mezclar scopes `urn:mp:*` en la aplicacion de Mercado Libre.
+```text
+Clerk Organization → Store interna → Connection → provider
+```
 
-## API
+- Una **Store** es una entidad interna tenant-scoped; puede tener varias Connections de distintos proveedores.
+- Una **Connection** vincula una Store con una cuenta de un proveedor.
+- Para Mercado Libre, `provider = 'mercado-libre'` y la identidad fuerte es `external_account_id = String(user.id)` de la cuenta autenticada en Mercado Libre.
+- `nickname` de `GET /users/me` es display/sugerencia de nombre; nunca una clave de identidad ni de idempotencia.
+- No se duplica el adapter por Store. MercadoCuentas es sólo referencia funcional/UX: no se consumen sus backends, cookies, endpoints privados ni scraping.
 
-Las llamadas externas deben salir de un cliente server-only, enviar Bearer token por header, usar DTOs tipados y pasar por mappers. Las operaciones de items, ordenes, preguntas, envios, notificaciones, rate limits y errores se implementaran en fases posteriores.
+## Flujo OAuth oficial
 
-## Fuente
+Mercado Libre documenta OAuth 2.0 **Authorization Code Grant server-side**:
 
-- https://developers.mercadolibre.com.ar/es_ar/api-docs-es
-- https://developers.mercadolibre.com.ar/es_ar/autenticacion-y-autorizacion
-- https://developers.mercadolibre.com.ar/es_ar/recomendaciones-de-autorizacion-y-token
+1. Un Owner autorizado inicia el intento server-side.
+2. Se redirige a `https://auth.mercadolibre.com.{site}/authorization` con `response_type=code`, `client_id`, `redirect_uri` estática registrada y `state` opaco.
+3. El callback server-side valida y consume el `state` una sola vez.
+4. El servidor intercambia `code` mediante `POST https://api.mercadolibre.com/oauth/token`, con `application/x-www-form-urlencoded`, `client_id`, `client_secret`, `code` y la misma `redirect_uri`.
+5. Con el Bearer token exclusivamente server-side consulta `GET https://api.mercadolibre.com/users/me`.
+6. El campo `id` de esa respuesta se normaliza a texto y se usa como `connections.external_account_id`; el `nickname` sólo alimenta la experiencia de nombre visible.
+7. Se resuelve la Connection antes de crear cualquier Store. Para una cuenta realmente nueva, se confirma/vincula la Store y se persisten Connection y secretos de manera atómica.
 
-Registrar fecha de revision, scopes confirmados, URLs por site y cambios/deprecaciones observados. Revalidar esta informacion antes de implementar o cambiar el flujo.
+La respuesta de token también informa `user_id`; se puede cotejar contra `/users/me`, pero el dato canónico de onboarding es `id` del recurso de identidad autenticada.
+
+## Estado, PKCE y seguridad del callback
+
+`createOAuthState()` y las utilidades de PKCE actuales sólo generan valores criptográficamente aleatorios. Son preparación de Fase 0, no constituyen un flujo OAuth: hoy no existe ruta, almacenamiento del intento, expiración, consumo único ni callback.
+
+La implementación futura debe usar un intento OAuth server-side de vida corta que contenga nonce/state, `code_verifier` cuando aplique, actor Clerk, Organization activa, membership persistente, permiso evaluado y expiración. El navegador sólo transporta el nonce opaco; no es autoridad y no debe transportar `organizationId` como dato confiable. El callback debe volver a comprobar sesión/contexto y consumir el intento de forma única antes del token exchange. Una tabla/RPC de intentos o almacenamiento server-side equivalente es una **decisión de implementación pendiente**.
+
+Mercado Libre documenta que `code_verifier` aplica cuando la aplicación tiene PKCE habilitado. La Developers Application debe confirmar esa capacidad antes de habilitar `MELI_PKCE_ENABLED`; si se habilita, challenge/verifier se conservan sólo server-side y se envían según el contrato oficial. No se asume PKCE universal ni se activa por una variable de cliente.
+
+Errores externos se normalizarán sin `code`, tokens, SQL ni detalles de infraestructura: `oauth_denied`, `invalid_state`, `token_exchange_failed`, `identity_lookup_failed`, `already_connected`, `connection_conflict`, `store_creation_failed` y `connection_creation_failed`.
+
+## Idempotencia, conflictos y concurrencia
+
+El schema actual tiene un índice único parcial global:
+
+```text
+(provider, external_account_id)
+WHERE external_account_id IS NOT NULL AND status = 'active'
+```
+
+Por tanto:
+
+- Bloquea dos Connections **activas** de la misma cuenta/proveedor, incluso entre Organizations.
+- No bloquea filas `disabled` con la misma cuenta; tampoco `NULL`.
+- `Store.name` no es único y no puede usarse como idempotency key.
+- `ConnectionRepository` actual sólo lista por Store u obtiene por id tenant-scoped; no resuelve aún una cuenta externa para onboarding.
+
+| Caso | Resultado propuesto |
+| --- | --- |
+| Cuenta ML nueva | Tras confirmar el nombre de Store, crear Store + Connection activa en una sola operación atómica. |
+| Misma cuenta con Connection activa | No crear Store. Devolver `already_connected` si pertenece a la misma Store; `connection_conflict` si pertenece a otra Store u Organization. No revelar detalles cross-tenant. |
+| Misma cuenta con Connection disabled | Reutilizar y reactivar la fila existente para su Store original; no crear una segunda Store ni una segunda Connection silenciosa. Una reasignación a otra Store exige flujo administrativo futuro explícito. |
+| Callback repetido | El intento OAuth de un solo uso retorna un resultado seguro ya resuelto; no recrea Store ni Connection. |
+| Callbacks simultáneos | Una transacción/RPC con lock por `(provider, external_account_id)` y el índice único parcial determina un único resultado. No basta `SELECT` seguido de `INSERT`. |
+
+La regla actual permite técnicamente que una cuenta deshabilitada sea liberada. La política de reactivar la misma fila es la recomendación de onboarding; conservar o cambiar la semántica de liberación requiere aprobación humana y posiblemente una migración posterior.
+
+## Store name y experiencia propuesta
+
+Se recomienda que el Owner elija/valide el nombre de la Store. El `nickname` de Mercado Libre se muestra como sugerencia inicial y puede aceptarse o editarse, pero no se persiste como identidad. Para no dejar Stores huérfanas, el callback puede resolver la identidad y llevar a una confirmación server-side de onboarding antes de la operación transaccional final. Esa pantalla y estado pendiente no están implementados.
+
+## Autorización y tenant safety
+
+Política aprobada para el diseño: **Owner y Manager** pueden iniciar, completar, reconectar o desconectar una Connection Mercado Libre para cualquier Store de su Organization. **Employee** queda denegado inicialmente. **Client** sólo puede hacer self-onboarding o reconnect de su propia Store, sin administración global. No se modifica RBAC funcional en este checkpoint.
+
+Toda futura operación sigue:
+
+```text
+Request → Authentication → Authorization → tenant resolution → validation → service → repository/transaction → database
+```
+
+La Organization, membership, permiso y Store Scope se derivan server-side. `organizationId`, `role`, `membershipId` y `storeId` del navegador identifican una intención/objetivo, nunca autorizan una mutación.
+
+## Tokens, refresh y desconexión
+
+- `access_token`, `refresh_token`, `client_secret` y `code` son server-only: nunca UI, cookies legibles por JavaScript, local/session storage, logs, respuestas ni Git.
+- `connections` almacena metadata de conexión y **deliberadamente no contiene secretos**. Hace falta diseñar una entidad o vault de secretos cifrados en reposo y con acceso server-only; no se crea en 2.15.
+- Se persiste el `expires_in` real recibido; no se fija una constante. El access token debe renovarse con margen configurable.
+- El refresh token es de uso único y rota en cada refresh. La actualización de access token, refresh token y expiración debe ser atómica y serializada por Connection para evitar que dos refresh invaliden la credencial entre sí. Si falla, se marca la Connection para reautorización sin exponer la causa interna.
+- La desconexión futura intenta la revocación oficial `DELETE /users/{user_id}/applications/{app_id}` con Bearer token cuando aún sea posible; elimina/inhabilita el secreto local y marca la Connection `disabled`. No borra automáticamente la Store. Si la revocación remota falla, se registra server-side y no se afirma éxito remoto.
+- La reconexión de la misma cuenta deshabilitada reactiva la Connection existente y actualiza secretos mediante el almacenamiento seguro futuro.
+
+## Persistencia y trabajo pendiente
+
+`StoreRepository.create()` y `ConnectionRepository.create()` no ofrecen una transacción conjunta ni idempotencia de onboarding. Para el flujo real se requiere diseño/implementación aprobados de:
+
+1. almacenamiento de intentos OAuth (`state`, actor/tenant, expiración, consumo único y PKCE si aplica);
+2. almacenamiento de secretos cifrados, separado de `connections`;
+3. lookup seguro y resolución de conflicto por provider + external account;
+4. primitive transaccional/RPC que cree/reutilice Store y Connection sin dejar Store huérfana;
+5. actualización/rotación atómica de credenciales y estados.
+
+No se modifica schema, migraciones, repositorios ni OAuth durante 2.15.
+
+## Permisos funcionales y capabilities futuras
+
+La Developers Application configura permisos funcionales de sólo lectura o lectura/escritura; la documentación oficial también expone `read`, `write` y `offline_access` en el flujo. Se solicitará el mínimo necesario y se decidirán los permisos cuando se aprueben capacidades concretas. Etiquetas de la pantalla de autorización son permiso funcional/UX, no equivalencia automática con scopes técnicos.
+
+Capacidades posteriores del adapter: Identity, Listings, Orders, Questions, Shipping, Promotions, Metrics y Billing/fiscal data sólo si la API y el permiso aprobado lo permiten. No se implementan en este checkpoint.
+
+## Decisiones humanas pendientes
+
+| Decisión | Recomendación |
+| --- | --- |
+| Quién conecta ML | Owner solamente en el primer hito; evaluar Manager después. |
+| Nombre inicial de Store | Owner lo confirma; nickname ML sólo sugerencia editable. |
+| Connection disabled | Reactivar la misma Connection de su Store original. |
+| Cuenta ya ligada a otra Store/tenant | Rechazar con conflicto opaco; reasignación sólo mediante flujo administrativo futuro. |
+| Store + Connection | Sí, una única transacción después de resolver identidad y confirmar Store. |
+| Liberación de cuenta disabled | Mantener como comportamiento técnico actual sólo hasta aprobar una política histórica definitiva. |
+
+## Fuentes oficiales revisadas el 2026-08-24
+
+- [Autenticación y autorización](https://developers.mercadolibre.com.ar/es_mx/autenticacion-y-autorizacion)
+- [Gestión de identidades y tokens](https://developers.mercadolibre.com.ar/es_ar/administra-proyectos-aplicaciones/gestion-de-identidades-y-accesos-oauth-y-tokens)
+- [Consulta de usuarios](https://developers.mercadolibre.com.ar/es_ar/manejo-de-envios/servicios-consulta-usuarios)
+- [Gestión de aplicaciones y revocación](https://developers.mercadolibre.com.ar/es_ar/es_ar/gestiona-tus-aplicaciones)
+- [Permisos funcionales](https://developers.mercadolibre.com.ar/permisos-funcionales)
+
+## Cierre 2.15 — onboarding, roles y auditoría
+
+### Benchmark funcional
+
+MercadoCuentas queda registrado únicamente como benchmark funcional, referencia de UX y de flujos operativos, y fuente de ideas de capacidades. Mercado Libre es el provider prioritario actual. No se copian backends, endpoints privados, AJAX, cookies, credenciales ni mecanismos propietarios; toda implementación futura usará APIs oficiales.
+
+### Roles de conexión
+
+El modelo canónico sigue siendo `Owner`, `Manager`, `Employee`, `Client`; no se agregan `Administrator` ni `Operator`.
+
+- `Owner`: permitido para conectar/reconectar cualquier Store de su Organization.
+- `Manager`: permitido para conectar/reconectar cualquier Store de su Organization.
+- `Employee`: denegado inicialmente para administrar Connections/OAuth.
+- `Client`: permitido sólo para self-onboarding y reconnect de su propia Store, sin administración global.
+
+El email puede ayudar a vincular la experiencia de Client, pero no prueba propiedad de Mercado Libre. La identidad técnica sigue siendo OAuth → `GET /users/me` → `id`.
+
+### Onboarding de Client y administrativo
+
+El flujo de Client previsto es Clerk → membership persistente Client → ausencia de assignment → OAuth oficial → identidad ML → confirmación de Store → Store + Connection + `store_assignment` → dashboard. El flujo administrativo Owner/Manager puede conectar y luego asignar Client/Employees. Cada Employee usa su propia identidad Clerk, membership y assignments; no se comparte login principal de Mercado Libre.
+
+Store + Connection deben ser atómicos en onboarding administrativo. Client requiere Store + Connection + assignment atómicos o transaccionalmente coherentes. No se implementa aún.
+
+### Idempotencia definitiva pendiente
+
+Una cuenta activa o deshabilitada no debe producir duplicados históricos silenciosos. Se recomienda reactivar la misma Connection disabled, denegar cross-tenant y exigir flujo administrativo explícito para otra Store. El índice parcial actual (`provider + external_account_id` sólo `active`) no expresa todavía la política definitiva; requiere revisión de schema antes de OAuth real. No se crea migration en 2.15.
+
+### Audit Log y Export Center
+
+El futuro Audit Log será server-side: `audit:read` permitido a Owner y Manager, denegado a Employee y Client. Los eventos deberán atribuir actor, acción, fecha, Organization, Store y recurso, con metadata allowlisted/sanitizada y sin secretos, tokens, códigos, cookies ni PII innecesaria. La futura foundation `audit_events` es requisito previo a mutaciones ML productivas.
+
+`Export Center` queda como capability futura, con Mercado Libre como primer provider considerado. Sus exportaciones deberán respetar RBAC y Store Scope y validarse individualmente contra la API oficial; no se implementa en 2.15.
+
+### Preparación requerida antes de OAuth real
+
+El checkpoint 2.16 deberá abordar OAuth attempt/state single-use, secret storage, refresh rotation, uniqueness y reactivation de Connection, transacciones de onboarding, concurrencia, Audit foundation y RBAC Owner + Manager + Client self-service. Este documento no implementa esos puntos.

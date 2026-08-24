@@ -33,7 +33,7 @@ Inventario remoto read-only confirmado: `stores = 0`. **EMPTY — STORE CREATION
 
 ## Real Store Creation Matrix
 
-Status: **DRAFT — USER APPROVAL REQUIRED**. No se creó ninguna Store en este checkpoint.
+Status: **DEFERRED**. La creación manual de Stores queda diferida; Store creation debe integrarse al onboarding del provider. El onboarding Client podrá requerir Store + Connection + `store_assignment` de forma transaccionalmente coherente. Primero deben resolverse identidad externa fuerte e idempotencia de Connection.
 
 ### Contrato real de `stores`
 
@@ -80,7 +80,7 @@ Flujo futuro: Owner persistente aprobado → crear Store con `organizationId` de
 ## Future write plan — not executed
 
 1. Provisionar el Current Clerk Admin como Owner persistente aprobado (CREATE); ejecución aún no autorizada.
-2. Crear Stores reales en un checkpoint separado.
+2. Crear o reutilizar Stores únicamente dentro del futuro onboarding de Mercado Libre, tras resolver `external_account_id` e idempotencia de Connection.
 3. Definir Managers, Employees y Clients con aprobación humana.
 4. Provisionar memberships aprobadas.
 5. Crear assignments únicamente para Employee/Client y Stores reales del mismo tenant.
