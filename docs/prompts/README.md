@@ -9,6 +9,12 @@ Cuando el texto literal no quedó guardado en el repositorio, la entrada se marc
 - [Fase 1 — cierre de seguridad](./phase-01/README.md)
 - [Fase 2 — planificación y decisiones](./phase-02/README.md)
 
+## Norma permanente de referencias
+
+**El repositorio Git es la Source of Truth.** Los documentos canónicos, código y tests versionados prevalecen sobre cualquier memoria o conversación. Obsidian es sólo memoria operativa resumida e índice; los prompts archivados son historial operativo.
+
+Esta convención se adopta en el estado actual y se aplica retrospectivamente al índice y documentación de Fase 2, sin reescribir la historia original de los prompts. No se duplica contenido completo entre prompts, documentos canónicos, handoff u Obsidian: las decisiones técnicas completas viven en su Markdown canónico; los prompts y Obsidian enlazan y resumen. El handoff permanece breve y enlaza a las fuentes canónicas. Los resultados de prompts son resúmenes estructurados, no transcripciones de respuestas de agentes.
+
 ## Regla operativa obligatoria
 
 Todo prompt operativo enviado a Codex durante el desarrollo debe archivarse dentro de `docs/prompts/` **antes de la primera acción operativa**. Incluye auditorías, diseño, implementación, decisiones, bloqueos, reintentos, correcciones, validaciones, checkpoints, cierres, commits, pushes y handoffs. Ningún mandato operativo debe depender solo del historial de conversación.

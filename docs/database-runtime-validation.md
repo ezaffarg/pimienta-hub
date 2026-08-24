@@ -1,5 +1,7 @@
 # Database Runtime Validation
 
+> **Schema/design:** [meli-database.md](./meli-database.md). **Tenant/security model:** [meli-multi-tenancy.md](./meli-multi-tenancy.md). **Operational checkpoints:** [índice de prompts de Fase 2](./prompts/phase-02/README.md). Este documento conserva evidencia de validación, no arquitectura.
+
 ## Checkpoint local — 2026-08-24
 
 **Estado:** LOCAL VALIDATED — 2026-08-24.

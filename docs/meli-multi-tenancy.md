@@ -2,6 +2,8 @@
 
 Modelo de tenant e identidad:
 
+> Gobierno: [plan-y-gobierno.md](./plan-y-gobierno.md). Persistencia: [meli-database.md](./meli-database.md). Historial operativo: [índice de prompts de Fase 2](./prompts/phase-02/README.md).
+
 ```text
 Clerk Organization/Tenant
   -> Client

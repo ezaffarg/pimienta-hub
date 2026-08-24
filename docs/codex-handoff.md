@@ -53,3 +53,11 @@ Para cualquier trabajo de proveedor, leer además [OAuth y API](./meli-mercadoli
 En caso de contradicción, prevalecen: código y tests vigentes; `REGLAS.md`/`AGENTS.md`; documentos vigentes de arquitectura, seguridad y gobierno; este handoff; historial de prompts; memoria externa; investigación externa. Una contradicción material se reporta como **DECISIÓN PENDIENTE**, no se resuelve por inferencia.
 
 Skills, agentes, Graphify y la memoria de Obsidian son ayudas opcionales. El repositorio Git permanece autosuficiente y es la autoridad técnica.
+
+## Canonical references
+
+- [Plan y gobierno](./plan-y-gobierno.md)
+- [Base de datos y migraciones](./meli-database.md)
+- [Multi-tenancy y autorización](./meli-multi-tenancy.md)
+- [Evidencia de validación runtime](./database-runtime-validation.md)
+- [Índice operativo de Fase 2](./prompts/phase-02/README.md)

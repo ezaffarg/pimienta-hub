@@ -2,6 +2,8 @@
 
 Supabase se usará únicamente como PostgreSQL; Supabase Auth queda fuera de la arquitectura. La autoridad de tenant llega al servidor desde Clerk y no desde parámetros controlados por el cliente.
 
+> **Validation evidence:** [database-runtime-validation.md](./database-runtime-validation.md). **Operational history:** [índice de prompts de Fase 2](./prompts/phase-02/README.md). Este documento conserva el diseño canónico, no transcripciones de prompts.
+
 ## Estado de la Subfase 2.1
 
 **Database Runtime Validation: LOCAL VALIDATED.** Docker y Supabase CLI ejecutaron localmente desde cero las migraciones 2.2 y 2.5 en dos resets reproducibles. La matriz runtime verificó schema, constraints, aislamiento por FKs compuestas, `ON DELETE RESTRICT` y semántica de Connections. No existe link remoto, no se ejecutó `db push` y OAuth permanece diferido. Este documento continúa siendo canónico; ver [checkpoint runtime](./database-runtime-validation.md) para la evidencia de ejecución. Connections no contiene tokens ni secretos.

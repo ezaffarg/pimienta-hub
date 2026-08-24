@@ -198,6 +198,8 @@ Antes de exponer funcionalidades públicas o productivas se revisarán explícit
 
 #### Fase 2 — Estado final
 
+Para evidencia detallada de ejecución consultar [database-runtime-validation.md](./database-runtime-validation.md); para schema, migraciones y estado DB consultar [meli-database.md](./meli-database.md).
+
 **Clasificación:** **FASE 2 ACTIVA — Checkpoint 2.10 en validación.** Las migraciones 2.2, 2.5 y 2.8 están validadas localmente y en el proyecto remoto enlazado `ffcudwwrzttkumbdvada`; no equivale a Production Ready. **Implementado/versionado:** tooling Supabase, migraciones, repositorios server-only, bootstrap First Owner, Store Scope y Connections provider-agnostic. **Autoridad de rol 2.10:** `hub_memberships` por `(Organization, Clerk user)` es primaria; Clerk sólo es fallback transitorio cuando la consulta exitosa no encuentra membership. Un error DB falla cerrado. **Diferido:** provisioning real de memberships/assignments, eliminación de fallback, RLS, rate limiting, OAuth, StoreIntegrationResolver y Fase 3. Owner cardinality es ONE OR MORE y bootstrap usa advisory lock transaccional. No se inicia Fase 3. **BLOCKER BEFORE REMOVING TRANSITIONAL ROLE FALLBACK:** provisioning persistente para usuarios activos, observación de fallback y aprobación explícita de cutover.
 
 **2.8:** Bootstrap First Owner está IMPLEMENTED + LOCAL VALIDATED: Owner cardinality es ONE OR MORE; Clerk server-side exige sesión, Organization activa y `org:admin`, mientras PostgreSQL proporciona advisory lock, re-check e insert atómico. Remote Supabase es el siguiente checkpoint controlado; fallback Clerk permanece TRANSITIONAL y Fase 3 no inició.

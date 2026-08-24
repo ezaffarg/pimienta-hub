@@ -4,6 +4,8 @@
 
 El repositorio Git es la fuente de verdad técnica. Skills, agentes externos, Graphify y una memoria Obsidian pueden acelerar el análisis, pero no sustituyen documentación, código, tests ni decisiones aprobadas dentro del repositorio.
 
+Los prompts archivados son historial operativo y deben enlazar a documentos canónicos relevantes en vez de duplicarlos. Obsidian es índice y memoria resumida: resume y enlaza al repositorio, nunca copia prompts, SQL, tests, logs o documentación canónica completa. Esta convención se aplica retrospectivamente al índice/documentación de Fase 2 sin reescribir el contenido histórico de los prompts.
+
 ## Flujo obligatorio por subfase
 
 1. Leer [el handoff](./codex-handoff.md), [el plan](./plan-y-gobierno.md), `AGENTS.md`, `REGLAS.md` y los documentos aplicables.
