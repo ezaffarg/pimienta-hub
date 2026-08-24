@@ -43,7 +43,7 @@ describe('MercadoLibreListingsClient', () => {
       total: 3,
       nextCursor: '2',
       items: [
-        { externalId: 'MLA1', sellerSku: 'SKU-1', sellerCustomField: null },
+        { externalId: 'MLA1', sellerSku: 'SKU-1' },
         { externalId: 'MLA2', price: null, sellerSku: null }
       ]
     });

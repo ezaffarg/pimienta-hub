@@ -40,7 +40,6 @@ export interface ExternalListingSummary {
   thumbnail: string | null;
   catalogProductId: string | null;
   sellerSku: string | null;
-  sellerCustomField: string | null;
   condition: string | null;
 }
 

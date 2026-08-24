@@ -189,7 +189,6 @@ function normalizeListing(item: z.infer<typeof itemSchema>): ExternalListingSumm
     thumbnail: item.thumbnail ?? null,
     catalogProductId: item.catalog_product_id ?? null,
     sellerSku: sellerSku ?? null,
-    sellerCustomField: item.seller_custom_field ?? null,
     condition: item.condition ?? null
   };
 }

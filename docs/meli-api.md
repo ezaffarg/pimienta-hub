@@ -33,3 +33,5 @@ La documentación oficial vigente para [búsquedas de ítems](https://developers
 La primera ejecución real se realizó una vez con límite 20 y devolvió una página de una publicación. La identidad de vendedor ya había sido verificada en 2.20A; la Connection activa y el secreto asociado siguieron siendo únicos. El access token permanecía vigente, por lo que no hubo refresh ni escritura de secretos. El resultado normalizado no contenía `SELLER_SKU`; ello representa ausencia del atributo en esa publicación, no una conversión desde `seller_custom_field`.
 
 No se crearon ni modificaron Stores, Connections, Assignments, secretos, publicaciones, stock, precio o datos de negocio. No se almacenaron listings ni se inició sincronización.
+
+La foundation 2.20C consume exclusivamente `ExternalListingSummary` ya normalizado. La persistencia no acepta respuestas crudas del provider ni convierte los campos opcionales ausentes en cero. Un item que no supera la normalización no llega al sync repository. `seller_custom_field` no cruza el contrato canónico; sólo `SELLER_SKU` puede aportar `sellerSku`.

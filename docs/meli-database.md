@@ -28,6 +28,18 @@ Supabase CLI `2.114.0` está instalada como `devDependency` exacta y se ejecuta 
 - Roles, estados y providers se representan como `text` con `CHECK`, no como PostgreSQL enums: cambian sin migraciones de tipo y son consistentes con los contratos TypeScript.
 - No se añade `deleted_at` por convención. Las conexiones usan estado controlado; el borrado de memberships y Stores se restringe mientras existan relaciones.
 
+## Subfase 2.20C — foundation de listings
+
+La migración forward-only `20260824223000_phase_2_listings_foundation.sql` incorpora `listings` como representación canónica y agnóstica de una publicación externa. La identidad idempotente es `unique(connection_id, external_listing_id)`: título, SKU y permalink son atributos mutables y no forman identidad.
+
+Cada fila conserva `organization_id`, `store_id` y `connection_id`. Una FK compuesta hacia `connections (id, store_id, organization_id)` impide asociar una listing a otra Store u Organization; la migración añade la clave única compuesta necesaria en `connections` sin alterar migrations previas. El repository comprueba el mismo scope antes del upsert y falla cerrado ante cualquier discrepancia.
+
+`price numeric(20,4)` evita `float`; TypeScript sólo recibe números normalizados válidos y el repository serializa el número a texto para el driver, preservando la escala que entrega el proveedor. `status` permanece `text` no vacío para no cerrar el modelo sobre estados de Mercado Libre. `seller_sku` es nullable y sólo puede provenir de `SELLER_SKU`; `seller_custom_field` no se persiste como fallback.
+
+El sync es idempotente por la constraint y el upsert: actualiza campos observables y `last_synced_at`, sin cambiar los bindings ni borrar listings ausentes de una página. No guarda payloads raw, no crea workers/cron/sync runs y no implementa reconciliación o borrado. RLS queda enabled sin policies browser-facing; `PUBLIC`, `anon` y `authenticated` no tienen acceso, y `service_role` conserva DML exclusivamente server-side.
+
+La migration y matriz se validaron desde cero únicamente en Supabase local. Las fixtures deterministas se ejecutaron dentro de una transacción terminada en `ROLLBACK`: primer insert, segundo sync idempotente, actualización de precio/stock/status/timestamp, SKU nulo, dos listings, mismo external ID en otra Connection, rechazo cross-store y DML de `service_role`. Las lecturas directas de `anon` y `authenticated` fueron denegadas. No se aplicó migration ni se persistió una listing en remoto.
+
 ## Subfase 2.16 — foundations OAuth, Connection y Audit
 
 La migración `20260824184934_oauth_security_foundations.sql` añade foundations locales para `oauth_attempts`, `integration_secrets` y `audit_events`. Los intentos almacenan sólo el digest de state, se atan a Organization y actor membership, expiran y se consumen una sola vez. Las credenciales se separan de `connections` y se almacenan como ciphertext autenticado application-level; la clave maestra server-only se identifica como `INTEGRATION_SECRETS_MASTER_KEY` y nunca se versiona.

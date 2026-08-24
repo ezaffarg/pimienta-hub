@@ -1,8 +1,9 @@
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 import type { ApprovedRole } from '@/lib/auth/authorization';
-import type { IntegrationProvider } from '@/integrations/core';
+import type { ExternalListingSummary, IntegrationProvider } from '@/integrations/core';
 import { getSupabaseServerClient } from './supabase-server';
 
 export interface HubMembership {
@@ -50,6 +51,30 @@ export interface CreateConnectionInput {
   status?: ConnectionRecord['status'];
   scopes?: string[];
   expiresAt?: string | null;
+}
+
+export interface ListingScope {
+  organizationId: string;
+  storeId: string;
+  connectionId: string;
+}
+
+export interface ListingRecord extends ListingScope {
+  id: string;
+  externalListingId: string;
+  title: string;
+  status: string;
+  price: string | null;
+  currencyId: string | null;
+  availableQuantity: number | null;
+  soldQuantity: number | null;
+  sellerSku: string | null;
+  listingTypeId: string | null;
+  condition: string | null;
+  permalink: string | null;
+  thumbnailUrl: string | null;
+  catalogProductId: string | null;
+  lastSyncedAt: string;
 }
 
 export class PersistenceError extends Error {
@@ -347,6 +372,170 @@ export class ConnectionRepository {
       .single();
     return connectionRecord(requireData(data, error));
   }
+}
+
+export class ListingRepository {
+  constructor(private readonly client: SupabaseClient = getSupabaseServerClient()) {}
+
+  async upsertMany(
+    scope: ListingScope,
+    listings: readonly ExternalListingSummary[],
+    lastSyncedAt: string
+  ): Promise<ListingRecord[]> {
+    const parsedScope = listingScopeSchema.parse(scope);
+    const syncedAt = z.iso.datetime().parse(lastSyncedAt);
+    if (listings.length === 0) return [];
+
+    const { data: connection, error: connectionError } = await this.client
+      .from('connections')
+      .select('id')
+      .eq('id', parsedScope.connectionId)
+      .eq('organization_id', parsedScope.organizationId)
+      .eq('store_id', parsedScope.storeId)
+      .maybeSingle();
+    throwOnError(connectionError);
+    if (!connection) throw new PersistenceError('Listing scope does not match a connection');
+
+    const rows = listings.map((listing) => listingRow(parsedScope, listing, syncedAt));
+    const { data, error } = await this.client
+      .from('listings')
+      .upsert(rows, { onConflict: 'connection_id,external_listing_id' })
+      .select(listingColumns);
+    return requireData(data, error).map(listingRecord);
+  }
+
+  async findByStore(organizationId: string, storeId: string): Promise<ListingRecord[]> {
+    const scope = z
+      .object({ organizationId: z.string().min(1).max(255), storeId: z.uuid() })
+      .parse({
+        organizationId,
+        storeId
+      });
+    const { data, error } = await this.client
+      .from('listings')
+      .select(listingColumns)
+      .eq('organization_id', scope.organizationId)
+      .eq('store_id', scope.storeId);
+    return requireData(data, error).map(listingRecord);
+  }
+
+  async findByConnection(scope: ListingScope): Promise<ListingRecord[]> {
+    const parsedScope = listingScopeSchema.parse(scope);
+    const { data, error } = await this.client
+      .from('listings')
+      .select(listingColumns)
+      .eq('organization_id', parsedScope.organizationId)
+      .eq('store_id', parsedScope.storeId)
+      .eq('connection_id', parsedScope.connectionId);
+    return requireData(data, error).map(listingRecord);
+  }
+
+  async countByStore(organizationId: string, storeId: string): Promise<number> {
+    const scope = z
+      .object({ organizationId: z.string().min(1).max(255), storeId: z.uuid() })
+      .parse({
+        organizationId,
+        storeId
+      });
+    const { count, error } = await this.client
+      .from('listings')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', scope.organizationId)
+      .eq('store_id', scope.storeId);
+    throwOnError(error);
+    return count ?? 0;
+  }
+}
+
+const listingScopeSchema = z.object({
+  organizationId: z.string().trim().min(1).max(255),
+  storeId: z.uuid(),
+  connectionId: z.uuid()
+});
+
+const listingColumns =
+  'id, organization_id, store_id, connection_id, external_listing_id, title, status, price, currency_id, available_quantity, sold_quantity, seller_sku, listing_type_id, condition, permalink, thumbnail_url, catalog_product_id, last_synced_at';
+
+function listingRow(scope: ListingScope, listing: ExternalListingSummary, lastSyncedAt: string) {
+  const value = z
+    .object({
+      externalId: z.string().trim().min(1).max(255),
+      title: z.string().trim().min(1).max(500),
+      status: z.string().trim().min(1).max(100),
+      price: z.number().finite().nonnegative().nullable(),
+      currency: z.string().trim().min(1).max(16).nullable(),
+      availableQuantity: z.number().int().nonnegative().nullable(),
+      soldQuantity: z.number().int().nonnegative().nullable(),
+      sellerSku: z.string().trim().min(1).max(255).nullable(),
+      listingType: z.string().trim().min(1).max(100).nullable(),
+      condition: z.string().trim().min(1).max(100).nullable(),
+      permalink: z.url().max(2048).nullable(),
+      thumbnail: z.url().max(2048).nullable(),
+      catalogProductId: z.string().trim().min(1).max(255).nullable()
+    })
+    .parse(listing);
+  return {
+    organization_id: scope.organizationId,
+    store_id: scope.storeId,
+    connection_id: scope.connectionId,
+    external_listing_id: value.externalId,
+    title: value.title,
+    status: value.status,
+    price: value.price === null ? null : String(value.price),
+    currency_id: value.currency,
+    available_quantity: value.availableQuantity,
+    sold_quantity: value.soldQuantity,
+    seller_sku: value.sellerSku,
+    listing_type_id: value.listingType,
+    condition: value.condition,
+    permalink: value.permalink,
+    thumbnail_url: value.thumbnail,
+    catalog_product_id: value.catalogProductId,
+    last_synced_at: lastSyncedAt,
+    updated_at: lastSyncedAt
+  };
+}
+
+function listingRecord(record: {
+  id: string;
+  organization_id: string;
+  store_id: string;
+  connection_id: string;
+  external_listing_id: string;
+  title: string;
+  status: string;
+  price: string | number | null;
+  currency_id: string | null;
+  available_quantity: number | null;
+  sold_quantity: number | null;
+  seller_sku: string | null;
+  listing_type_id: string | null;
+  condition: string | null;
+  permalink: string | null;
+  thumbnail_url: string | null;
+  catalog_product_id: string | null;
+  last_synced_at: string;
+}): ListingRecord {
+  return {
+    id: record.id,
+    organizationId: record.organization_id,
+    storeId: record.store_id,
+    connectionId: record.connection_id,
+    externalListingId: record.external_listing_id,
+    title: record.title,
+    status: record.status,
+    price: record.price === null ? null : String(record.price),
+    currencyId: record.currency_id,
+    availableQuantity: record.available_quantity,
+    soldQuantity: record.sold_quantity,
+    sellerSku: record.seller_sku,
+    listingTypeId: record.listing_type_id,
+    condition: record.condition,
+    permalink: record.permalink,
+    thumbnailUrl: record.thumbnail_url,
+    catalogProductId: record.catalog_product_id,
+    lastSyncedAt: record.last_synced_at
+  };
 }
 
 function connectionRecord(record: {
