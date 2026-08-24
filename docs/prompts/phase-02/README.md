@@ -44,3 +44,10 @@ Obsidian conserva índice y memoria resumida; el detalle vive en documentos y pr
 # 2.11 — Real Membership Provisioning + Store Assignment Preparation
 
 Prompt archivado: [2.11](2.11-real-membership-provisioning.md). Estado: ACTIVE / PENDING.
+# 2.12 — Real User Provisioning Plan + Fallback Cutover Preparation
+
+Prompt archivado: [2.12](2.12-real-user-provisioning-plan.md). Estado: ACTIVE / USER APPROVAL REQUIRED.
+
+# 2.13 — Provision Current Owner Persistently
+
+Prompt archivado: [2.13](2.13-provision-current-owner.md). Estado: COMPLETED.

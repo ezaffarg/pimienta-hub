@@ -8,7 +8,7 @@ e-ngenieria Hub es un SaaS B2B multi-tenant para centralizar la operación de cl
 
 **Estado actual:** Fase 0 completada; Fase 1 cerrada; Fase 2 sigue activa en el checkpoint 2.10. La **Database Runtime Validation** local y remota está validada: el proyecto remoto dedicado `ffcudwwrzttkumbdvada` tiene las tres migraciones aplicadas y las fixtures de validación fueron limpiadas. Production no está configurado, RLS permanece diferido y Fase 3 no está iniciada. El working tree debe verificarse antes de trabajar.
 
-Bootstrap First Owner está validado local, remoto y en aplicación: RPC con advisory lock por Organization, Owner cardinality ONE OR MORE y frontera Clerk server-only `org:admin`. `hub_memberships` es la autoridad primaria de roles por Organization y usuario Clerk; el fallback Clerk sigue transitorio y sólo se usa si una consulta exitosa no encuentra membership. Un error DB falla cerrado. Próximo paso: completar el checkpoint 2.10 y decidir el provisioning persistente antes de retirar ese fallback.
+Bootstrap First Owner está validado local, remoto y en aplicación: RPC con advisory lock por Organization, Owner cardinality ONE OR MORE y frontera Clerk server-only `org:admin`. El Current Owner ya está persistido en `hub_memberships`, que es la autoridad primaria de roles por Organization y usuario Clerk; el fallback Clerk sigue transitorio y sólo se usa si una consulta exitosa no encuentra membership. Un error DB falla cerrado. Próximo paso: planificación de creación de Stores reales y memberships adicionales antes de retirar ese fallback.
 
 ## Arquitectura vigente
 
@@ -64,3 +64,8 @@ Skills, agentes, Graphify y la memoria de Obsidian son ayudas opcionales. El rep
 # Actualización 2.11
 
 El estado pendiente de Fase 2 incluye provisioning persistente controlado y Store assignment preparation. La autoridad sigue siendo el contexto server-side y el repositorio Git; no hay cutover del fallback ni datos reales.
+# Checkpoint 2.12
+
+Real provisioning está en planificación y requiere aprobación humana. Current Clerk Admin fue confirmado como Current Real Owner y está aprobado sólo para provisioning futuro; el inventario remoto de memberships, Stores, assignments y connections está vacío. La matriz canónica vive en [docs/provisioning-plan.md](provisioning-plan.md); fallback Clerk sigue TRANSITIONAL y el cutover no está autorizado.
+
+La corrección 2.13 establece `bootstrap_first_owner` como el camino concurrente, idempotente y server-derived para el primer Owner. El Current Owner ya tiene una única membership persistente `Owner`; `provisionMembership()` se reserva para la autoridad persistente ya existente. La idempotencia quedó validada y la ruta temporal fue eliminada. Global fallback continúa TRANSITIONAL.

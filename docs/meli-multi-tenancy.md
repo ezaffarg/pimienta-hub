@@ -25,7 +25,7 @@ El único Resource Scope implementado es Organization. Los mocks tenantizados so
 
 ## Decisiones de diseño aprobadas para Fase 2
 
-`hub_memberships` será la autoridad de roles e-Hub por Organization; Clerk conserva AuthN e identidad. Owner y Manager tienen Store Scope implícito para todas las Stores de su Organization, sujeto a permissions. Employee y Client requieren `store_assignments` explícitos; sin membership o assignment aplicable, el resultado es deny. Mientras la migración no esté ejecutada, el mapping Clerk sigue como fallback transitorio y no inventa assignments. **BOOTSTRAP FIRST OWNER: DEFERRED** hasta decidir una constraint/estrategia segura frente a concurrencia.
+`hub_memberships` es la autoridad de roles e-Hub por Organization; Clerk conserva AuthN e identidad. Owner y Manager tienen Store Scope implícito para todas las Stores de su Organization, sujeto a permissions. Employee y Client requieren `store_assignments` explícitos; sin membership o assignment aplicable, el resultado es deny. El bootstrap del primer Owner está implementado con estrategia concurrente; el mapping Clerk sigue como fallback transitorio para usuarios aún no provisionados y no inventa assignments.
 
 `store_assignments` deberá relacionar membership, Store y `organization_id` con FKs compuestas, de modo que no pueda unir entidades de tenants distintos. `storeId` del request solo identifica el objetivo: el servidor comprueba Organization, membership, permiso y Store Scope antes de operar. La defensa primaria será server-only + queries tenant-scoped + constraints; RLS se difiere porque el service role actual la bypassa.
 
@@ -48,3 +48,10 @@ Permission y Store Scope continúan separados. Owner y Manager tienen todas las 
 # Subfase 2.11 — provisioning controlado
 
 Se preparan primitivas server-only para provisionar memberships persistentes y asignar/revocar Stores. La Organization se deriva exclusivamente del contexto de autorización; el navegador no puede fijarla. El provisioning inicial es Owner-only, valida que el target pertenezca a la Organization Clerk activa y devuelve duplicados controlados sin sobrescribir roles. Employee y Client pueden recibir assignments; Owner y Manager son rechazados. El fallback Clerk continúa vigente hasta una decisión posterior de cutover.
+# Checkpoint 2.12 — plan de provisioning real
+
+El provisioning de datos reales permanece bloqueado hasta aprobar la matriz canónica en [docs/provisioning-plan.md](provisioning-plan.md). El fallback Clerk es transicional; no se retira por la planificación. Employee y Client no reciben Store Scope sin assignments persistentes y auditados.
+
+Para la transición del primer Owner, `bootstrap_first_owner` es la única primitive canónica: deriva actor y Organization de Clerk, exige `org:admin`, y no acepta autoridad desde el navegador. El provisioning normal sigue requiriendo un Owner persistente.
+
+La ruta temporal de 2.13 fue retirada tras validar la idempotencia. No queda endpoint operativo de provisioning inicial; `bootstrap_first_owner` y `provisionMembership()` permanecen como primitivas server-only con responsabilidades separadas.

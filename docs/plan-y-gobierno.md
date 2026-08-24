@@ -178,7 +178,7 @@ Modelar `stores`, `external_connections`, `external_accounts` y `audit_log`, con
 
 #### Decisiones aprobadas después de la auditoría 2.0
 
-`hub_memberships` será la fuente server-side definitiva de los roles e-Hub por `Clerk userId + Organization`; el mapping Clerk de Fase 1 es solo transitorio. El primer Owner se inicializará mediante bootstrap server-side cerrado una vez que la Organization tenga Owner. Owner y Manager tienen scope implícito sobre todas las Stores de su Organization; Employee y Client requieren `store_assignments` explícitos y una membership inexistente se deniega.
+`hub_memberships` es la fuente server-side definitiva de los roles e-Hub por `Clerk userId + Organization`; el mapping Clerk es solo transitorio. El primer Owner se inicializa mediante `bootstrap_first_owner` server-side cerrado; Owners adicionales y otros memberships usan `provisionMembership()` con autoridad persistente. Owner y Manager tienen scope implícito sobre todas las Stores de su Organization; Employee y Client requieren `store_assignments` explícitos y una membership inexistente se deniega.
 
 La base conceptual aprobada es `hub_memberships`, `stores`, `store_assignments` y `connections`. Store tiene relación 1:N con Connections; `provider + external_account_id` debe ser único entre conexiones activas cuando exista cuenta externa. La transferencia de cuenta será un workflow explícito posterior, nunca un cambio arbitrario de `store_id` u `organization_id` de una Connection activa. Provider permanece como conjunto controlado, sin tabla propia.
 
@@ -186,7 +186,7 @@ Las migraciones usan SQL versionado con Supabase CLI `2.114.0`, instalada como `
 
 La secuencia aprobada es: 2.1 diseño final de schema y convención de migraciones; 2.1B instala la CLI exacta e inicializa configuración local; 2.2 crea la migración mínima sin ejecutarla; 2.3 repositories y fuente propia de roles; 2.4 Store Scope; 2.5 Connections sin OAuth; 2.6 checkpoint. La ejecución local de DDL requiere Docker y una aprobación operativa correspondiente.
 
-La 2.3 incorpora repositorios server-only tenant-scoped para `hub_memberships`, `stores` y `store_assignments`, y un resolver de rol persistente testeable. Mientras la migración no esté aplicada, los guards existentes conservan el mapping Clerk como fallback transitorio; no se persisten memberships durante login. **BOOTSTRAP FIRST OWNER: DEFERRED**: su seguridad concurrente requiere una decisión y una constraint/schema explícitos antes de implementarse.
+La 2.3 incorpora repositorios server-only tenant-scoped para `hub_memberships`, `stores` y `store_assignments`, y un resolver de rol persistente testeable. El bootstrap del primer Owner está implementado con advisory lock, re-check e insert atómico; los guards conservan el mapping Clerk como fallback transitorio solo cuando no existe membership persistente.
 
 La 2.4 incorpora Store Scope server-only: Owner y Manager resuelven `all-stores` dentro de la Organization activa; Employee y Client resuelven únicamente IDs provenientes de assignments tenant-scoped. Permission y Store Scope son controles independientes. El resolver no se integra aún con rutas de Store porque no existen, y la migración sigue sin ejecutarse.
 
@@ -200,7 +200,7 @@ Antes de exponer funcionalidades públicas o productivas se revisarán explícit
 
 Para evidencia detallada de ejecución consultar [database-runtime-validation.md](./database-runtime-validation.md); para schema, migraciones y estado DB consultar [meli-database.md](./meli-database.md).
 
-**Clasificación:** **FASE 2 ACTIVA — Checkpoint 2.10 en validación.** Las migraciones 2.2, 2.5 y 2.8 están validadas localmente y en el proyecto remoto enlazado `ffcudwwrzttkumbdvada`; no equivale a Production Ready. **Implementado/versionado:** tooling Supabase, migraciones, repositorios server-only, bootstrap First Owner, Store Scope y Connections provider-agnostic. **Autoridad de rol 2.10:** `hub_memberships` por `(Organization, Clerk user)` es primaria; Clerk sólo es fallback transitorio cuando la consulta exitosa no encuentra membership. Un error DB falla cerrado. **Diferido:** provisioning real de memberships/assignments, eliminación de fallback, RLS, rate limiting, OAuth, StoreIntegrationResolver y Fase 3. Owner cardinality es ONE OR MORE y bootstrap usa advisory lock transaccional. No se inicia Fase 3. **BLOCKER BEFORE REMOVING TRANSITIONAL ROLE FALLBACK:** provisioning persistente para usuarios activos, observación de fallback y aprobación explícita de cutover.
+**Clasificación:** **FASE 2 ACTIVA — Checkpoint 2.13 cerrado, planificación de Stores siguiente.** Las migraciones 2.2, 2.5 y 2.8 están validadas localmente y en el proyecto remoto enlazado `ffcudwwrzttkumbdvada`; no equivale a Production Ready. **Implementado/versionado:** tooling Supabase, migraciones, repositorios server-only, bootstrap First Owner, Current Owner persistente, Store Scope y Connections provider-agnostic. **Autoridad de rol:** `hub_memberships` por `(Organization, Clerk user)` es primaria; Clerk sólo es fallback transitorio cuando la consulta exitosa no encuentra membership. Un error DB falla cerrado. **Diferido:** Stores reales, memberships adicionales/assignments, eliminación de fallback, RLS, rate limiting, OAuth, StoreIntegrationResolver y Fase 3. Owner cardinality es ONE OR MORE y bootstrap usa advisory lock transaccional. **BLOCKER BEFORE REMOVING TRANSITIONAL ROLE FALLBACK:** provisioning de usuarios restantes, observación de fallback y aprobación explícita de cutover.
 
 **2.8:** Bootstrap First Owner está IMPLEMENTED + LOCAL VALIDATED: Owner cardinality es ONE OR MORE; Clerk server-side exige sesión, Organization activa y `org:admin`, mientras PostgreSQL proporciona advisory lock, re-check e insert atómico. Remote Supabase es el siguiente checkpoint controlado; fallback Clerk permanece TRANSITIONAL y Fase 3 no inició.
 
@@ -289,3 +289,12 @@ Antes de pasar de fase deben estar comprobados:
 # Subfase 2.11 — estado
 
 La preparación de provisioning de memberships y Store assignments queda limitada a código server-only y fixtures/tests deterministas. No se crean usuarios o Stores reales, no se retira el fallback Clerk, no se implementa OAuth ni se inicia Fase 3.
+# Checkpoint 2.12 — planificación, sin escrituras reales
+
+2.12 prepara el inventario y la aprobación humana de memberships y Store assignments reales. El inventario remoto read-only confirmó `hub_memberships = 0`, `stores = 0`, `store_assignments = 0` y `connections = 0`; Current Clerk Admin es el Current Real Owner y está aprobado sólo para provisioning futuro. No autoriza INSERT/UPDATE/DELETE remotos, cambios de schema, retiro de fallback, OAuth ni Fase 3. El plan canónico es [docs/provisioning-plan.md](provisioning-plan.md).
+
+**2.13 — corrección de bootstrap:** el primer Owner no puede invocar `provisionMembership()` directamente porque esa primitive exige un Owner resuelto. La ruta temporal, autenticada y sin parámetros usa el RPC `bootstrap_first_owner`; sólo Clerk `org:admin` con Organization activa puede auto-provisionarse como Owner inicial. No generaliza el fallback ni modifica la autorización persistente normal.
+
+**2.13 — postcheck provisional:** el RPC creó exactamente una membership persistente `Owner` para el Current Clerk Admin. No existen Stores, assignments ni connections. El resolver prioriza esa fila y, por contrato, pasa a `roleSource = persistent`; la verificación de idempotencia todavía requiere un retry manual autenticado. El fallback global no se retira.
+
+**2.13 — cierre:** la segunda invocación autenticada devolvió `already_exists`; el count final es una sola membership `Owner`. La ruta temporal fue eliminada. Fallback global continúa transicional; el siguiente paso es planificación de creación de Stores reales, sin iniciar OAuth ni Fase 3.
