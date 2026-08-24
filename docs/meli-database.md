@@ -46,6 +46,12 @@ Las migrations `20260824184934_oauth_security_foundations.sql` y `20260824191800
 
 La validación remota ejecutó lecturas y llamadas de RPC denegadas para `anon` y `authenticated`, y una primitive de `service_role` dentro de rollback. No quedaron fixtures: hay una única membership Owner persistente y cero Stores, assignments, Connections, OAuth attempts, secretos de integración y eventos de auditoría. OAuth real y runtime Mercado Libre permanecen sin iniciar.
 
+## Subfase 2.19B — autorización OAuth pendiente local
+
+La migration forward-only `20260824195457_oauth_pending_authorizations.sql` agrega una staging table server-only para una identidad OAuth ya verificada antes de crear una Connection. Está vinculada de forma compuesta al attempt que la originó —Organization, actor membership, provider y purpose— y permite como máximo una pending authorization por attempt. Conserva sólo la identidad externa normalizada, display opcional y tokens cifrados con la misma clave AES-256-GCM existente; su TTL de onboarding es de 20 minutos, independiente de la expiración del access token.
+
+La tabla tiene RLS sin policies browser-facing, grants sólo para `service_role` y no expone RPC pública. La transferencia definitiva hacia `integration_secrets` queda para una RPC transaccional de onboarding posterior: las RPCs actuales no aceptan un pending ID y no deben consumirla antes de crear/reutilizar Store y Connection atómicamente. La migration se validó únicamente mediante reset y fixtures revertidas locales; no fue aplicada remoto.
+
 ## DDL creado para Subfase 2.2
 
 Este bloque corresponde a la migración versionada, **aún no ejecutada**. La validación real contra una base local queda pendiente de Docker.

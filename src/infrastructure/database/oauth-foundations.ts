@@ -59,6 +59,19 @@ export interface OnboardingResult {
   connectionId: string | null;
 }
 
+export interface PendingOAuthAuthorization {
+  id: string;
+  oauthAttemptId: string;
+  organizationId: string;
+  actorMembershipId: string;
+  provider: IntegrationProvider;
+  purpose: OAuthPurpose;
+  externalAccountId: string;
+  displayName: string | null;
+  accessTokenExpiresAt: string;
+  expiresAt: string;
+}
+
 function stateDigest(state: string): string {
   return createHash('sha256').update(state).digest('hex');
 }
@@ -240,6 +253,131 @@ export class OAuthFoundationRepository {
     });
   }
 
+  async createPendingOAuthAuthorization(input: {
+    oauthAttemptId: string;
+    organizationId: string;
+    actorMembershipId: string;
+    provider: IntegrationProvider;
+    purpose: OAuthPurpose;
+    externalAccountId: string;
+    displayName?: string;
+    accessToken: string;
+    refreshToken?: string;
+    accessTokenExpiresAt: string;
+    expiresAt: string;
+  }): Promise<PendingOAuthAuthorization> {
+    const parsed = z
+      .object({
+        oauthAttemptId: uuidSchema,
+        organizationId: z.string().min(1).max(255),
+        actorMembershipId: uuidSchema,
+        provider: providerSchema,
+        purpose: oauthPurposeSchema,
+        externalAccountId: z.string().trim().min(1).max(255),
+        displayName: z.string().trim().min(1).max(255).optional(),
+        accessToken: z.string().min(1).max(8192),
+        refreshToken: z.string().min(1).max(8192).optional(),
+        accessTokenExpiresAt: z.iso.datetime(),
+        expiresAt: z.iso.datetime()
+      })
+      .strict()
+      .parse(input);
+    const access = encryptIntegrationSecret(parsed.accessToken);
+    const refresh = parsed.refreshToken ? encryptIntegrationSecret(parsed.refreshToken) : null;
+    const { data, error } = await this.client
+      .from('oauth_pending_authorizations')
+      .insert({
+        oauth_attempt_id: parsed.oauthAttemptId,
+        organization_id: parsed.organizationId,
+        actor_membership_id: parsed.actorMembershipId,
+        provider: parsed.provider,
+        purpose: parsed.purpose,
+        external_account_id: parsed.externalAccountId,
+        display_name: parsed.displayName ?? null,
+        encrypted_access_token: access.ciphertext,
+        encrypted_refresh_token: refresh?.ciphertext ?? null,
+        access_token_expires_at: parsed.accessTokenExpiresAt,
+        key_version: access.keyVersion,
+        expires_at: parsed.expiresAt
+      })
+      .select(
+        'id, oauth_attempt_id, organization_id, actor_membership_id, provider, purpose, external_account_id, display_name, access_token_expires_at, expires_at'
+      )
+      .single();
+    return pendingAuthorizationRecord(record(data, error));
+  }
+
+  async getPendingOAuthAuthorizationForActor(input: {
+    id: string;
+    organizationId: string;
+    actorMembershipId: string;
+    provider: IntegrationProvider;
+    purpose: OAuthPurpose;
+    now: string;
+  }): Promise<PendingOAuthAuthorization | null> {
+    const parsed = z
+      .object({
+        id: uuidSchema,
+        organizationId: z.string().min(1).max(255),
+        actorMembershipId: uuidSchema,
+        provider: providerSchema,
+        purpose: oauthPurposeSchema,
+        now: z.iso.datetime()
+      })
+      .strict()
+      .parse(input);
+    const { data, error } = await this.client
+      .from('oauth_pending_authorizations')
+      .select(
+        'id, oauth_attempt_id, organization_id, actor_membership_id, provider, purpose, external_account_id, display_name, access_token_expires_at, expires_at'
+      )
+      .eq('id', parsed.id)
+      .eq('organization_id', parsed.organizationId)
+      .eq('actor_membership_id', parsed.actorMembershipId)
+      .eq('provider', parsed.provider)
+      .eq('purpose', parsed.purpose)
+      .is('consumed_at', null)
+      .gt('expires_at', parsed.now)
+      .maybeSingle();
+    throwOnError(error);
+    return data ? pendingAuthorizationRecord(data) : null;
+  }
+
+  async consumePendingOAuthAuthorization(input: {
+    id: string;
+    organizationId: string;
+    actorMembershipId: string;
+    provider: IntegrationProvider;
+    purpose: OAuthPurpose;
+    now: string;
+  }): Promise<boolean> {
+    const parsed = z
+      .object({
+        id: uuidSchema,
+        organizationId: z.string().min(1).max(255),
+        actorMembershipId: uuidSchema,
+        provider: providerSchema,
+        purpose: oauthPurposeSchema,
+        now: z.iso.datetime()
+      })
+      .strict()
+      .parse(input);
+    const { data, error } = await this.client
+      .from('oauth_pending_authorizations')
+      .update({ consumed_at: parsed.now })
+      .eq('id', parsed.id)
+      .eq('organization_id', parsed.organizationId)
+      .eq('actor_membership_id', parsed.actorMembershipId)
+      .eq('provider', parsed.provider)
+      .eq('purpose', parsed.purpose)
+      .is('consumed_at', null)
+      .gt('expires_at', parsed.now)
+      .select('id')
+      .maybeSingle();
+    throwOnError(error);
+    return data !== null;
+  }
+
   async writeAuditEvent(input: {
     organizationId: string;
     actorMembershipId: string;
@@ -321,6 +459,32 @@ export class OAuthFoundationRepository {
       .parse(value.outcome);
     return { outcome, storeId: value.store_id, connectionId: value.connection_id };
   }
+}
+
+function pendingAuthorizationRecord(record: {
+  id: string;
+  oauth_attempt_id: string;
+  organization_id: string;
+  actor_membership_id: string;
+  provider: string;
+  purpose: string;
+  external_account_id: string;
+  display_name: string | null;
+  access_token_expires_at: string;
+  expires_at: string;
+}): PendingOAuthAuthorization {
+  return {
+    id: record.id,
+    oauthAttemptId: record.oauth_attempt_id,
+    organizationId: record.organization_id,
+    actorMembershipId: record.actor_membership_id,
+    provider: record.provider as IntegrationProvider,
+    purpose: record.purpose as OAuthPurpose,
+    externalAccountId: record.external_account_id,
+    displayName: record.display_name,
+    accessTokenExpiresAt: record.access_token_expires_at,
+    expiresAt: record.expires_at
+  };
 }
 
 export function newOAuthAttemptState(): string {

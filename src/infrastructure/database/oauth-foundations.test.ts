@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { auditMetadata, newOAuthAttemptState } from './oauth-foundations';
+import {
+  OAuthFoundationRepository,
+  auditMetadata,
+  newOAuthAttemptState
+} from './oauth-foundations';
 
 describe('OAuth foundation validation', () => {
   it('generates opaque state with sufficient entropy representation', () => {
@@ -14,5 +18,117 @@ describe('OAuth foundation validation', () => {
   it('allows small metadata and rejects secret-like fields', () => {
     expect(auditMetadata({ outcome: 'created' })).toEqual({ outcome: 'created' });
     expect(() => auditMetadata({ access_token: 'secret' })).toThrow();
+  });
+
+  it('encrypts pending OAuth tokens before persistence', async () => {
+    vi.stubEnv('INTEGRATION_SECRETS_MASTER_KEY', Buffer.alloc(32, 7).toString('base64url'));
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        id: '10000000-0000-4000-8000-000000000003',
+        oauth_attempt_id: '10000000-0000-4000-8000-000000000001',
+        organization_id: 'org_test',
+        actor_membership_id: '10000000-0000-4000-8000-000000000002',
+        provider: 'mercado-libre',
+        purpose: 'admin_connect',
+        external_account_id: '123',
+        display_name: 'ML_TEST',
+        access_token_expires_at: '2030-01-01T00:00:00.000Z',
+        expires_at: '2030-01-01T00:20:00.000Z'
+      },
+      error: null
+    });
+    const select = vi.fn(() => ({ single }));
+    const insert = vi.fn(
+      (_payload: { encrypted_access_token: string; encrypted_refresh_token: string | null }) => {
+        return { select };
+      }
+    );
+    const client = { from: vi.fn(() => ({ insert })) };
+    const repository = new OAuthFoundationRepository(client as never);
+
+    await repository.createPendingOAuthAuthorization({
+      oauthAttemptId: '10000000-0000-4000-8000-000000000001',
+      organizationId: 'org_test',
+      actorMembershipId: '10000000-0000-4000-8000-000000000002',
+      provider: 'mercado-libre',
+      purpose: 'admin_connect',
+      externalAccountId: '123',
+      displayName: 'ML_TEST',
+      accessToken: 'access-token-plaintext',
+      refreshToken: 'refresh-token-plaintext',
+      accessTokenExpiresAt: '2030-01-01T00:00:00.000Z',
+      expiresAt: '2030-01-01T00:20:00.000Z'
+    });
+
+    const payload = insert.mock.calls[0]?.[0];
+    if (!payload) throw new Error('Expected pending authorization insert');
+    expect(payload.encrypted_access_token).not.toContain('access-token-plaintext');
+    expect(payload.encrypted_refresh_token).not.toContain('refresh-token-plaintext');
+    vi.unstubAllEnvs();
+  });
+
+  it('filters pending previews by actor binding and expiration', async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const query = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      is: vi.fn(),
+      gt: vi.fn(),
+      maybeSingle
+    };
+    query.select.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    query.is.mockReturnValue(query);
+    query.gt.mockReturnValue(query);
+    const repository = new OAuthFoundationRepository({ from: vi.fn(() => query) } as never);
+
+    await expect(
+      repository.getPendingOAuthAuthorizationForActor({
+        id: '10000000-0000-4000-8000-000000000003',
+        organizationId: 'org_test',
+        actorMembershipId: '10000000-0000-4000-8000-000000000002',
+        provider: 'mercado-libre',
+        purpose: 'admin_connect',
+        now: '2030-01-01T00:00:00.000Z'
+      })
+    ).resolves.toBeNull();
+
+    expect(query.eq).toHaveBeenCalledWith(
+      'actor_membership_id',
+      '10000000-0000-4000-8000-000000000002'
+    );
+    expect(query.gt).toHaveBeenCalledWith('expires_at', '2030-01-01T00:00:00.000Z');
+  });
+
+  it('consumes a pending authorization only once', async () => {
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { id: '10000000-0000-4000-8000-000000000003' }, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+    const query = {
+      update: vi.fn(),
+      eq: vi.fn(),
+      is: vi.fn(),
+      gt: vi.fn(),
+      select: vi.fn(),
+      maybeSingle
+    };
+    query.update.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    query.is.mockReturnValue(query);
+    query.gt.mockReturnValue(query);
+    query.select.mockReturnValue(query);
+    const repository = new OAuthFoundationRepository({ from: vi.fn(() => query) } as never);
+    const input = {
+      id: '10000000-0000-4000-8000-000000000003',
+      organizationId: 'org_test',
+      actorMembershipId: '10000000-0000-4000-8000-000000000002',
+      provider: 'mercado-libre' as const,
+      purpose: 'admin_connect' as const,
+      now: '2030-01-01T00:00:00.000Z'
+    };
+
+    await expect(repository.consumePendingOAuthAuthorization(input)).resolves.toBe(true);
+    await expect(repository.consumePendingOAuthAuthorization(input)).resolves.toBe(false);
   });
 });

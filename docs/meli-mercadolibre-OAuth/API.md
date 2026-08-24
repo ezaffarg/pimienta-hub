@@ -101,6 +101,10 @@ La Organization, membership, permiso y Store Scope se derivan server-side. `orga
 
 La foundation 2.16 implementa localmente `oauth_attempts`, secretos cifrados separados, audit events, unicidad histórica de Connection y primitives transaccionales sin rutas OAuth. OAuth real, token exchange, `GET /users/me`, refresh y cualquier escritura remota siguen sin implementar.
 
+La foundation 2.19B añade localmente `oauth_pending_authorizations`: tras validar y consumir un OAuth attempt, un callback futuro podrá cifrar los tokens y guardar `String(/users/me.id)` junto con `nickname` opcional durante 20 minutos. La pending authorization está bound a Organization, actor, provider y purpose, es de uso único y no es una Connection ni un secreto definitivo. El callback, token exchange, `GET /users/me`, rutas HTTP y OAuth real siguen diferidos.
+
+El onboarding final deberá usar una nueva primitive SQL transaccional que reciba el pending ID y Store.name: crea o reactiva Connection, mueve los secretos a `integration_secrets`, registra auditoría y consume la pending en la misma transacción. No se reutilizan las RPCs 2.16 para ello porque aceptan una identidad externa sin el pending ID ni su transferencia cifrada.
+
 ## Permisos funcionales y capabilities futuras
 
 La Developers Application configura permisos funcionales de sólo lectura o lectura/escritura; la documentación oficial también expone `read`, `write` y `offline_access` en el flujo. Se solicitará el mínimo necesario y se decidirán los permisos cuando se aprueben capacidades concretas. Etiquetas de la pantalla de autorización son permiso funcional/UX, no equivalencia automática con scopes técnicos.
