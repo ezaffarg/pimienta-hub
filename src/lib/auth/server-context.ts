@@ -33,6 +33,8 @@ export interface ServerAuthorizationContext extends ServerTenantContext {
   role: ApprovedRole;
 }
 
+export interface ServerBootstrapContext extends ServerTenantContext {}
+
 type ServerAuthorizationHandler = (
   context: ServerAuthorizationContext
 ) => Promise<Response> | Response;
@@ -76,6 +78,24 @@ export async function requireServerAuthorizationContext(): Promise<ServerAuthori
     organizationId: session.orgId,
     role
   };
+}
+
+export async function requireServerBootstrapContext(): Promise<ServerBootstrapContext> {
+  const session = await auth();
+
+  if (!session.userId) {
+    throw new AuthenticationRequiredError();
+  }
+
+  if (!session.orgId) {
+    throw new OrganizationRequiredError();
+  }
+
+  if (session.orgRole !== 'org:admin') {
+    throw new AuthorizationDeniedError();
+  }
+
+  return { userId: session.userId, organizationId: session.orgId };
 }
 
 export async function withServerPermission(

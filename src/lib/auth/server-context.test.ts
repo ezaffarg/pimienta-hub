@@ -9,6 +9,7 @@ import {
   AuthenticationRequiredError,
   OrganizationRequiredError,
   requireServerAuthorizationContext,
+  requireServerBootstrapContext,
   requireServerTenantContext,
   withServerPermission
 } from './server-context';
@@ -125,5 +126,23 @@ describe('Server tenant context', () => {
 
     expect(response.status).toBe(403);
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('derives bootstrap authority exclusively from an org:admin Clerk session', async () => {
+    authMock.mockResolvedValue({ userId: 'user_123', orgId: 'org_123', orgRole: 'org:admin' });
+    await expect(requireServerBootstrapContext()).resolves.toEqual({
+      userId: 'user_123',
+      organizationId: 'org_123'
+    });
+  });
+
+  it.each([
+    { userId: null, orgId: 'org_123', orgRole: 'org:admin' },
+    { userId: 'user_123', orgId: null, orgRole: 'org:admin' },
+    { userId: 'user_123', orgId: 'org_123', orgRole: 'org:member' },
+    { userId: 'user_123', orgId: 'org_123', orgRole: 'unknown' }
+  ])('denies invalid bootstrap Clerk context', async (session) => {
+    authMock.mockResolvedValue(session);
+    await expect(requireServerBootstrapContext()).rejects.toBeInstanceOf(Error);
   });
 });

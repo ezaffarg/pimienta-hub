@@ -157,4 +157,35 @@ describe('server-only repositories', () => {
       repository.findByOrganizationAndClerkUser('org_a', 'user_a')
     ).rejects.toBeInstanceOf(PersistenceError);
   });
+
+  it.each(['created', 'already_bootstrapped', 'membership_exists_non_owner'] as const)(
+    'returns the controlled bootstrap outcome %s from the atomic RPC',
+    async (outcome) => {
+      const rpc = vi.fn().mockResolvedValue({
+        data: [{ outcome, membership_id: 'membership_a' }],
+        error: null
+      });
+      const repository = new HubMembershipRepository({ rpc } as unknown as SupabaseClient);
+
+      await expect(repository.bootstrapFirstOwner('org_a', 'user_a')).resolves.toEqual({
+        outcome,
+        membershipId: 'membership_a'
+      });
+      expect(rpc).toHaveBeenCalledWith('bootstrap_first_owner', {
+        p_organization_id: 'org_a',
+        p_clerk_user_id: 'user_a'
+      });
+    }
+  );
+
+  it('propagates RPC errors and has no caller-configurable role', async () => {
+    const repository = new HubMembershipRepository({
+      rpc: vi.fn().mockResolvedValue({ data: null, error: { message: 'db failed' } })
+    } as unknown as SupabaseClient);
+
+    await expect(repository.bootstrapFirstOwner('org_a', 'user_a')).rejects.toBeInstanceOf(
+      PersistenceError
+    );
+    expect(HubMembershipRepository.prototype.bootstrapFirstOwner.length).toBe(2);
+  });
 });

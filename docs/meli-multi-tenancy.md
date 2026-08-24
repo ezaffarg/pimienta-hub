@@ -32,3 +32,6 @@ La Subfase 2.1 documenta —sin aplicar todavía— las referencias compuestas `
 La 2.3 prepara repositorios que no exponen lookup global de Store ni membership por Clerk user sin Organization. La 2.4 añade un resolver explícito: `all-stores` para Owner/Manager y `assigned-stores` para Employee/Client; un scope vacío nunca equivale a todas las Stores. Listados por IDs siguen requiriendo `organization_id` y no hay aún rutas de Store ni DB ejecutada.
 
 La 2.5 agrega el modelo de Connection: Store 1:N Connections y FK compuesta `(store_id, organization_id)`. Provider es el conjunto canónico controlado por código; una cuenta externa solo se reserva globalmente cuando la Connection está `active`. Tokens, OAuth y StoreIntegrationResolver siguen diferidos.
+# Bootstrap First Owner
+
+Flujo validado: Usuario autenticado → Clerk → Organization activa → `org:admin` server-side → IDs confiables → RPC bootstrap → advisory transaction lock por Organization → membership Owner persistente. Browser, body, query y formularios no eligen Organization, usuario ni rol. Bootstrap sólo crea el primer Owner; una Organization puede tener uno o más Owners mediante un futuro flujo administrativo. Una membership no-Owner existente no se promociona automáticamente.

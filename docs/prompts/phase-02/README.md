@@ -18,3 +18,6 @@ La auditoría 2.0 y sus decisiones bloqueantes están archivadas; no autorizan i
 - [Database Runtime Validation — primer intento](./2.7-runtime-db-validation.md)
 - [Database Runtime Validation — retry](./2.7b-runtime-db-validation-retry.md)
 - [Cierre de Database Runtime Validation local](./2.7c-runtime-db-validation-close.md)
+- [2.8 — Bootstrap Owner + preparación remota](./2.8-bootstrap-owner-remote-prep.md)
+- [2.8B — validación de concurrencia](./2.8b-bootstrap-owner-concurrency-validation.md)
+- [2.8C — cierre Bootstrap Owner](./2.8c-bootstrap-owner-close.md)

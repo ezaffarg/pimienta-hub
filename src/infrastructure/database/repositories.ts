@@ -12,6 +12,11 @@ export interface HubMembership {
   role: ApprovedRole;
 }
 
+export type BootstrapFirstOwnerOutcome =
+  | 'created'
+  | 'already_bootstrapped'
+  | 'membership_exists_non_owner';
+
 export interface StoreRecord {
   id: string;
   organizationId: string;
@@ -123,6 +128,21 @@ export class HubMembershipRepository {
       organizationId: record.organization_id,
       clerkUserId: record.clerk_user_id,
       role: record.role as ApprovedRole
+    };
+  }
+
+  async bootstrapFirstOwner(
+    organizationId: string,
+    clerkUserId: string
+  ): Promise<{ outcome: BootstrapFirstOwnerOutcome; membershipId: string }> {
+    const { data, error } = await this.client.rpc('bootstrap_first_owner', {
+      p_organization_id: organizationId,
+      p_clerk_user_id: clerkUserId
+    });
+    const record = requireData(data?.[0] ?? null, error);
+    return {
+      outcome: record.outcome as BootstrapFirstOwnerOutcome,
+      membershipId: record.membership_id
     };
   }
 }

@@ -8,6 +8,8 @@ e-ngenieria Hub es un SaaS B2B multi-tenant para centralizar la operación de cl
 
 **Estado actual:** Fase 0 completada; Fase 1 cerrada; Fase 2 está CLOSED — CODE/DESIGN COMPLETE. La **Database Runtime Validation** local está validada: dos resets aplicaron las migraciones 2.2 y 2.5 desde una DB limpia y la matriz de constraints pasó. Remote Database permanece NOT LINKED / NOT VALIDATED y Production NOT CONFIGURED. No se usa `db push` y Fase 3 no está iniciada. Ver [checkpoint runtime](./database-runtime-validation.md). El working tree debe verificarse antes de trabajar.
 
+Bootstrap First Owner está validado local y en aplicación: RPC con advisory lock por Organization, Owner cardinality ONE OR MORE y frontera Clerk server-only `org:admin`. El fallback Clerk sigue transitorio. Próximo checkpoint: proyecto Supabase remoto dedicado y link controlado, antes de OAuth.
+
 ## Arquitectura vigente
 
 - **IMPLEMENTADO:** Clerk resuelve sesión e Organization en servidor. Las APIs demo tienen RBAC default-deny, permisos, scope por Organization, validación Zod, contrato de errores y privacidad Sentry. La suite de Fase 1 cerró con 31 tests.
