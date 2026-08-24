@@ -21,3 +21,5 @@ La auditoría 2.0 y sus decisiones bloqueantes están archivadas; no autorizan i
 - [2.8 — Bootstrap Owner + preparación remota](./2.8-bootstrap-owner-remote-prep.md)
 - [2.8B — validación de concurrencia](./2.8b-bootstrap-owner-concurrency-validation.md)
 - [2.8C — cierre Bootstrap Owner](./2.8c-bootstrap-owner-close.md)
+- [2.9 — link y validación remota de Supabase](./2.9-remote-supabase-link-validation.md)
+- [2.10 — activación de memberships persistentes](./2.10-persistent-membership-activation.md)

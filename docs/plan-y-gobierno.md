@@ -72,7 +72,7 @@ En todos los niveles se presenta el plan y se espera aprobación. En nivel 🔴 
 | --- | --- | --- |
 | 0. Decisiones y consolidación | Fuente de verdad, límites, decisiones pendientes y reglas de agentes | Completada |
 | 1. Seguridad base | Auth server-side, autorización, tenant resolution, validación, errores y privacidad Sentry | Cerrada — Checkpoint 1.6 |
-| 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | CODE/DESIGN COMPLETE — Database Runtime Validation local validada |
+| 2. Persistencia multi-tenant | Stores, conexiones, cuentas, auditoría, migraciones y repositorios | Activa — Checkpoint 2.10: autoridad primaria de memberships |
 | 3. OAuth Mercado Libre | Inicio, callback, state, replay protection, tokens cifrados, conexión y desconexión | Pendiente |
 | 4. UI de conexiones | Stores, estados, conectar, reautorizar y desconectar | Pendiente |
 | 5. Adapter y dominio inicial | Cliente server-only, DTOs, mappers y una capacidad inicial | Pendiente |
@@ -198,9 +198,11 @@ Antes de exponer funcionalidades públicas o productivas se revisarán explícit
 
 #### Fase 2 — Estado final
 
-**Clasificación:** **FASE 2 CLOSED — CODE/DESIGN COMPLETE; LOCAL DATABASE RUNTIME VALIDATED.** Dos `bunx supabase db reset` locales aplicaron las migraciones 2.2 y 2.5 desde una DB limpia y la matriz real verificó constraints, FKs compuestas, aislamiento tenant y la semántica de Connections. **Remote Database:** NOT LINKED / NOT VALIDATED. **Production:** NOT CONFIGURED. **Implementado/versionado:** tooling Supabase, migraciones, memberships/Stores/assignments, repositorios server-only, resolver de rol persistente, Store Scope y Connections provider-agnostic. **Transitorio:** `org:admin → Owner` y `org:member → Employee`. **Diferido:** Bootstrap First Owner, RLS, rate limiting, hardening completo y StoreIntegrationResolver. Owner cardinality permanece UNDECIDED; la recomendación es advisory lock transaccional por Organization, re-check e insert controlado sin imponer un único Owner permanente. No se inicia Fase 3. Ver [checkpoint runtime](./database-runtime-validation.md). **BLOCKER BEFORE REMOVING TRANSITIONAL ROLE FALLBACK:** bootstrap seguro, memberships persistentes operativas y transición/auth flow validado siguen pendientes.
+**Clasificación:** **FASE 2 ACTIVA — Checkpoint 2.10 en validación.** Las migraciones 2.2, 2.5 y 2.8 están validadas localmente y en el proyecto remoto enlazado `ffcudwwrzttkumbdvada`; no equivale a Production Ready. **Implementado/versionado:** tooling Supabase, migraciones, repositorios server-only, bootstrap First Owner, Store Scope y Connections provider-agnostic. **Autoridad de rol 2.10:** `hub_memberships` por `(Organization, Clerk user)` es primaria; Clerk sólo es fallback transitorio cuando la consulta exitosa no encuentra membership. Un error DB falla cerrado. **Diferido:** provisioning real de memberships/assignments, eliminación de fallback, RLS, rate limiting, OAuth, StoreIntegrationResolver y Fase 3. Owner cardinality es ONE OR MORE y bootstrap usa advisory lock transaccional. No se inicia Fase 3. **BLOCKER BEFORE REMOVING TRANSITIONAL ROLE FALLBACK:** provisioning persistente para usuarios activos, observación de fallback y aprobación explícita de cutover.
 
 **2.8:** Bootstrap First Owner está IMPLEMENTED + LOCAL VALIDATED: Owner cardinality es ONE OR MORE; Clerk server-side exige sesión, Organization activa y `org:admin`, mientras PostgreSQL proporciona advisory lock, re-check e insert atómico. Remote Supabase es el siguiente checkpoint controlado; fallback Clerk permanece TRANSITIONAL y Fase 3 no inició.
+
+**2.10:** `hub_memberships` queda activada como autoridad primaria de roles e-Hub en servidor. La resolución consulta siempre `(organizationId, clerkUserId)` derivados de Clerk; una membership válida usa source interno `persistent`. Sólo una consulta exitosa sin fila puede usar el fallback transitorio `org:admin → Owner` o `org:member → Employee` con source `clerk-fallback`. Error DB, Organization mismatch o rol desconocido deniegan; no existe fallback ante error. No se crean memberships ni assignments reales, no se agrega migration y el retiro del fallback sigue pendiente de provisioning, observación y aprobación de cutover.
 
 ### Fase 3 — MVP OAuth de Mercado Libre
 

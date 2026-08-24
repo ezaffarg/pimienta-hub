@@ -6,9 +6,10 @@ import {
   type ApprovedRole,
   type Permission,
   AuthorizationDeniedError,
-  requirePermission,
-  resolveApprovedRole
+  requirePermission
 } from './authorization';
+import { HubMembershipRepository } from '@/infrastructure/database/repositories';
+import { resolveHubRole, type HubRoleSource } from './persistent-role';
 
 export class AuthenticationRequiredError extends Error {
   constructor() {
@@ -31,6 +32,7 @@ export interface ServerTenantContext {
 
 export interface ServerAuthorizationContext extends ServerTenantContext {
   role: ApprovedRole;
+  roleSource: HubRoleSource;
 }
 
 export interface ServerBootstrapContext extends ServerTenantContext {}
@@ -67,16 +69,27 @@ export async function requireServerAuthorizationContext(): Promise<ServerAuthori
     throw new OrganizationRequiredError();
   }
 
-  const role = resolveApprovedRole(session.orgRole);
+  let resolvedRole;
+  try {
+    resolvedRole = await resolveHubRole(
+      new HubMembershipRepository(),
+      session.orgId,
+      session.userId,
+      session.orgRole
+    );
+  } catch {
+    throw new AuthorizationDeniedError();
+  }
 
-  if (!role) {
+  if (!resolvedRole) {
     throw new AuthorizationDeniedError();
   }
 
   return {
     userId: session.userId,
     organizationId: session.orgId,
-    role
+    role: resolvedRole.role,
+    roleSource: resolvedRole.source
   };
 }
 

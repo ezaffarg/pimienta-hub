@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { authMock } = vi.hoisted(() => ({ authMock: vi.fn() }));
+const { authMock, membershipLookupMock } = vi.hoisted(() => ({
+  authMock: vi.fn(),
+  membershipLookupMock: vi.fn()
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@clerk/nextjs/server', () => ({ auth: authMock }));
+vi.mock('@/infrastructure/database/repositories', () => ({
+  HubMembershipRepository: class {
+    findByOrganizationAndClerkUser = membershipLookupMock;
+  }
+}));
 
 import { GET as getProduct } from './products/[id]/route';
 import { GET as getProducts, POST as createProduct } from './products/route';
@@ -40,6 +48,8 @@ function productRequest(body?: unknown): NextRequest {
 describe('protected product route handlers', () => {
   beforeEach(() => {
     authMock.mockReset();
+    membershipLookupMock.mockReset();
+    membershipLookupMock.mockResolvedValue(null);
     fakeProducts.records = [{ ...productOrgA }, { ...productOrgB }];
   });
 

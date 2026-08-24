@@ -6,9 +6,9 @@ Este es el punto de entrada para una nueva sesión de agente. Resume el estado s
 
 e-ngenieria Hub es un SaaS B2B multi-tenant para centralizar la operación de clientes, Stores y cuentas ecommerce desde una plataforma. La relación objetivo es `Organization -> Store -> Connection -> Provider`; Mercado Libre será el primer provider y otros adapters podrán incorporarse después.
 
-**Estado actual:** Fase 0 completada; Fase 1 cerrada; Fase 2 está CLOSED — CODE/DESIGN COMPLETE. La **Database Runtime Validation** local está validada: dos resets aplicaron las migraciones 2.2 y 2.5 desde una DB limpia y la matriz de constraints pasó. Remote Database permanece NOT LINKED / NOT VALIDATED y Production NOT CONFIGURED. No se usa `db push` y Fase 3 no está iniciada. Ver [checkpoint runtime](./database-runtime-validation.md). El working tree debe verificarse antes de trabajar.
+**Estado actual:** Fase 0 completada; Fase 1 cerrada; Fase 2 sigue activa en el checkpoint 2.10. La **Database Runtime Validation** local y remota está validada: el proyecto remoto dedicado `ffcudwwrzttkumbdvada` tiene las tres migraciones aplicadas y las fixtures de validación fueron limpiadas. Production no está configurado, RLS permanece diferido y Fase 3 no está iniciada. El working tree debe verificarse antes de trabajar.
 
-Bootstrap First Owner está validado local y en aplicación: RPC con advisory lock por Organization, Owner cardinality ONE OR MORE y frontera Clerk server-only `org:admin`. El fallback Clerk sigue transitorio. Próximo checkpoint: proyecto Supabase remoto dedicado y link controlado, antes de OAuth.
+Bootstrap First Owner está validado local, remoto y en aplicación: RPC con advisory lock por Organization, Owner cardinality ONE OR MORE y frontera Clerk server-only `org:admin`. `hub_memberships` es la autoridad primaria de roles por Organization y usuario Clerk; el fallback Clerk sigue transitorio y sólo se usa si una consulta exitosa no encuentra membership. Un error DB falla cerrado. Próximo paso: completar el checkpoint 2.10 y decidir el provisioning persistente antes de retirar ese fallback.
 
 ## Arquitectura vigente
 
@@ -39,7 +39,7 @@ MercadoCuentas es referencia funcional/producto. La investigación incluyó nave
 
 ## Siguiente paso y lectura mínima
 
-El siguiente checkpoint requiere decidir Bootstrap First Owner y preparar, con autorización independiente, el entorno remoto de Supabase. No inicia OAuth ni Fase 3. Antes de operar, leer:
+El checkpoint activo completa la activación de memberships persistentes y su fallback transitorio. No inicia OAuth ni Fase 3. Antes de operar, leer:
 
 1. [Plan y gobierno](./plan-y-gobierno.md).
 2. [Workflow de agentes](./agent-workflow.md).

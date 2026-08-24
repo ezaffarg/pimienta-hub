@@ -35,3 +35,11 @@ La 2.5 agrega el modelo de Connection: Store 1:N Connections y FK compuesta `(st
 # Bootstrap First Owner
 
 Flujo validado: Usuario autenticado → Clerk → Organization activa → `org:admin` server-side → IDs confiables → RPC bootstrap → advisory transaction lock por Organization → membership Owner persistente. Browser, body, query y formularios no eligen Organization, usuario ni rol. Bootstrap sólo crea el primer Owner; una Organization puede tener uno o más Owners mediante un futuro flujo administrativo. Una membership no-Owner existente no se promociona automáticamente.
+
+## 2.10 — Autoridad primaria de roles persistentes
+
+El flujo canónico de autorización es `usuario autenticado → Organization activa de Clerk → consulta tenant-scoped de hub_memberships(organizationId, clerkUserId) → rol e-Hub → permission → Store Scope`. `hub_memberships` es la autoridad primaria: una membership válida devuelve Owner, Manager, Employee o Client y Clerk no puede sobrescribirla.
+
+El mapping `org:admin → Owner` y `org:member → Employee` permanece sólo como fallback transitorio cuando la consulta de membership terminó correctamente y no encontró fila. Un error de persistencia no equivale a membership ausente: falla cerrado y no intenta fallback. Un rol persistente o Clerk desconocido se deniega. La fuente interna de rol es `persistent` o `clerk-fallback`; no constituye un input ni un dato controlable por el navegador.
+
+Permission y Store Scope continúan separados. Owner y Manager tienen todas las Stores de su Organization; Employee y Client sólo sus assignments explícitos, y un conjunto vacío no concede acceso. La eliminación del fallback requiere provisioning persistente de memberships para los usuarios activos, observación operativa de consultas exitosas sin fallback y una aprobación de cutover; todavía no se cumplen esas condiciones.

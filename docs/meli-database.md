@@ -10,6 +10,10 @@ Bootstrap First Owner está validado localmente por una RPC transaccional con ad
 
 **Remote Supabase: LINKED + VALIDATED.** El proyecto remoto `ffcudwwrzttkumbdvada` tiene las tres migrations aplicadas; schema, constraints y bootstrap funcional fueron validados con fixtures limpiados. Concurrencia se validó localmente; no se repitió en remoto. Fallback Clerk sigue TRANSITIONAL, RLS DEFERRED, OAuth NOT STARTED y Production Ready NO.
 
+## 2.10 — Activación de autoridad de membership
+
+La consulta `hub_memberships` se ejecuta por `(organization_id, clerk_user_id)` y es la autoridad primaria del rol de negocio. Una fila válida se usa tal cual; la ausencia tras una consulta exitosa habilita de manera temporal el mapping de Clerk. Los errores de Supabase se propagan desde el repository como error de persistencia y el boundary de autorización responde fail-closed, sin asignar un rol Clerk como sustituto. No se añadió migration ni se creó ninguna membership, Store o assignment real durante este checkpoint.
+
 Supabase CLI `2.114.0` está instalada como `devDependency` exacta y se ejecuta con `bunx supabase`; `bunfig.toml` mantiene su política de antigüedad mínima de siete días. El intento documentado de `2.115.0` fue bloqueado por esa política y no se la desactivó. `supabase init` creó la configuración local versionable en `supabase/config.toml`, sin link remoto, credenciales ni schema funcional.
 
 ## Convenciones

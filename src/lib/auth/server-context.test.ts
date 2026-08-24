@@ -1,9 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { authMock } = vi.hoisted(() => ({ authMock: vi.fn() }));
+const { authMock, resolveHubRoleMock } = vi.hoisted(() => ({
+  authMock: vi.fn(),
+  resolveHubRoleMock: vi.fn()
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@clerk/nextjs/server', () => ({ auth: authMock }));
+vi.mock('@/infrastructure/database/repositories', () => ({
+  HubMembershipRepository: class {
+    findByOrganizationAndClerkUser = vi.fn();
+  }
+}));
+vi.mock('./persistent-role', () => ({ resolveHubRole: resolveHubRoleMock }));
 
 import {
   AuthenticationRequiredError,
@@ -17,6 +26,7 @@ import {
 describe('Server tenant context', () => {
   beforeEach(() => {
     authMock.mockReset();
+    resolveHubRoleMock.mockReset();
   });
 
   it('rejects an unauthenticated request', async () => {
@@ -40,17 +50,20 @@ describe('Server tenant context', () => {
     });
   });
 
-  it('resolves the approved role from Clerk server-side membership', async () => {
+  it('uses the resolved server-side role and retains its internal source', async () => {
     authMock.mockResolvedValue({
       userId: 'user_123',
       orgId: 'org_123',
       orgRole: 'org:admin'
     });
 
+    resolveHubRoleMock.mockResolvedValue({ role: 'Manager', source: 'persistent' });
+
     await expect(requireServerAuthorizationContext()).resolves.toEqual({
       userId: 'user_123',
       organizationId: 'org_123',
-      role: 'Owner'
+      role: 'Manager',
+      roleSource: 'persistent'
     });
   });
 
@@ -88,6 +101,7 @@ describe('Server tenant context', () => {
       orgId: 'org_123',
       orgRole: 'org:member'
     });
+    resolveHubRoleMock.mockResolvedValue({ role: 'Employee', source: 'clerk-fallback' });
     const handler = vi.fn();
 
     const response = await withServerPermission('products.write', handler);
@@ -102,6 +116,7 @@ describe('Server tenant context', () => {
       orgId: 'org_123',
       orgRole: 'org:admin'
     });
+    resolveHubRoleMock.mockResolvedValue({ role: 'Owner', source: 'persistent' });
     const handler = vi.fn(() => new Response(null, { status: 204 }));
 
     const response = await withServerPermission('users.write', handler);
@@ -110,7 +125,8 @@ describe('Server tenant context', () => {
     expect(handler).toHaveBeenCalledWith({
       userId: 'user_123',
       organizationId: 'org_123',
-      role: 'Owner'
+      role: 'Owner',
+      roleSource: 'persistent'
     });
   });
 
@@ -120,6 +136,22 @@ describe('Server tenant context', () => {
       orgId: 'org_123',
       orgRole: 'role-sent-by-client'
     });
+    resolveHubRoleMock.mockResolvedValue(null);
+    const handler = vi.fn();
+
+    const response = await withServerPermission('products.read', handler);
+
+    expect(response.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('fails closed with 403 when persistent role resolution fails', async () => {
+    authMock.mockResolvedValue({
+      userId: 'user_123',
+      orgId: 'org_123',
+      orgRole: 'org:admin'
+    });
+    resolveHubRoleMock.mockRejectedValue(new Error('database unavailable'));
     const handler = vi.fn();
 
     const response = await withServerPermission('products.read', handler);
