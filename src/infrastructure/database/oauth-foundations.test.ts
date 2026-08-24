@@ -155,4 +155,38 @@ describe('OAuth foundation validation', () => {
     await expect(repository.consumePendingOAuthAuthorization(input)).resolves.toBe(true);
     await expect(repository.consumePendingOAuthAuthorization(input)).resolves.toBe(false);
   });
+
+  it('finalizes admin onboarding from an opaque pending handle without caller-supplied credentials', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          outcome: 'created',
+          store_id: '10000000-0000-4000-8000-000000000004',
+          connection_id: '10000000-0000-4000-8000-000000000005'
+        }
+      ],
+      error: null
+    });
+    const repository = new OAuthFoundationRepository({ rpc } as never);
+
+    await expect(
+      repository.finalizeAdminPendingOnboarding({
+        organizationId: 'org_test',
+        actorMembershipId: '10000000-0000-4000-8000-000000000002',
+        pendingAuthorizationId: '10000000-0000-4000-8000-000000000003',
+        storeName: 'ML Test'
+      })
+    ).resolves.toEqual({
+      outcome: 'created',
+      storeId: '10000000-0000-4000-8000-000000000004',
+      connectionId: '10000000-0000-4000-8000-000000000005'
+    });
+
+    expect(rpc).toHaveBeenCalledWith('finalize_admin_pending_integration_onboarding', {
+      p_organization_id: 'org_test',
+      p_actor_membership_id: '10000000-0000-4000-8000-000000000002',
+      p_pending_authorization_id: '10000000-0000-4000-8000-000000000003',
+      p_store_name: 'ML Test'
+    });
+  });
 });

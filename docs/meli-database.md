@@ -50,7 +50,13 @@ La validación remota ejecutó lecturas y llamadas de RPC denegadas para `anon` 
 
 La migration forward-only `20260824195457_oauth_pending_authorizations.sql` agrega una staging table server-only para una identidad OAuth ya verificada antes de crear una Connection. Está vinculada de forma compuesta al attempt que la originó —Organization, actor membership, provider y purpose— y permite como máximo una pending authorization por attempt. Conserva sólo la identidad externa normalizada, display opcional y tokens cifrados con la misma clave AES-256-GCM existente; su TTL de onboarding es de 20 minutos, independiente de la expiración del access token.
 
-La tabla tiene RLS sin policies browser-facing, grants sólo para `service_role` y no expone RPC pública. La transferencia definitiva hacia `integration_secrets` queda para una RPC transaccional de onboarding posterior: las RPCs actuales no aceptan un pending ID y no deben consumirla antes de crear/reutilizar Store y Connection atómicamente.
+La tabla tiene RLS sin policies browser-facing, grants sólo para `service_role` y no expone RPC pública.
+
+## Subfase 2.19G — finalización atómica de pending local
+
+La migration forward-only `20260824210000_finalize_pending_oauth_onboarding.sql` añade `finalize_admin_pending_integration_onboarding`. La RPC recibe sólo Organization, actor membership, pending ID opaco y nombre visible de Store; vuelve a validar binding, purpose, estado y expiración server-side. Dentro de una transacción bloquea la identidad `(provider, external_account_id)`, crea o reactiva la Connection, transfiere los envelopes cifrados directamente a `integration_secrets`, registra auditoría allowlisted y consume la pending. No descifra tokens ni requiere la master key en PostgreSQL.
+
+El path inicial administrativo cubre `admin_connect` y `reconnect`: una Connection activa devuelve `already_connected`, una disabled se reactiva y un conflicto cross-tenant devuelve `conflict` sin crear Store ni transferir secretos. No crea `store_assignment`. La migration y el caso `created` se validaron localmente dentro de una transacción revertida; no se aplicó al proyecto remoto ni se ejecutó onboarding real.
 
 ## Subfase 2.19C — aplicación y validación remota
 

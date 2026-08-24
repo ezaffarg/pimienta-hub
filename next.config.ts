@@ -4,6 +4,7 @@ import { withSentryConfig } from '@sentry/nextjs';
 // Define the base Next.js configuration
 const baseConfig: NextConfig = {
   output: process.env.BUILD_STANDALONE === 'true' ? 'standalone' : undefined,
+  allowedDevOrigins: ['key-rides-happy-revealed.trycloudflare.com'],
   images: {
     remotePatterns: [
       {

@@ -460,6 +460,20 @@ export class OAuthFoundationRepository {
     });
   }
 
+  async finalizeAdminPendingOnboarding(input: {
+    organizationId: string;
+    actorMembershipId: string;
+    pendingAuthorizationId: string;
+    storeName: string;
+  }): Promise<OnboardingResult> {
+    return this.onboardingRpc('finalize_admin_pending_integration_onboarding', {
+      p_organization_id: z.string().min(1).max(255).parse(input.organizationId),
+      p_actor_membership_id: uuidSchema.parse(input.actorMembershipId),
+      p_pending_authorization_id: uuidSchema.parse(input.pendingAuthorizationId),
+      p_store_name: z.string().trim().min(1).max(160).parse(input.storeName)
+    });
+  }
+
   async createClientOnboarding(input: {
     organizationId: string;
     actorMembershipId: string;

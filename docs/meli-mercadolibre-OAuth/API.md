@@ -103,7 +103,7 @@ La foundation 2.16 implementa localmente `oauth_attempts`, secretos cifrados sep
 
 La foundation 2.19B añade `oauth_pending_authorizations`: tras validar y consumir un OAuth attempt, el callback 2.19D cifra los tokens y guarda `String(/users/me.id)` junto con `nickname` opcional durante 20 minutos. La pending authorization está bound a Organization, actor, provider y purpose, es de uso único y no es una Connection ni un secreto definitivo.
 
-El onboarding final deberá usar una nueva primitive SQL transaccional que reciba el pending ID y Store.name: crea o reactiva Connection, mueve los secretos a `integration_secrets`, registra auditoría y consume la pending en la misma transacción. No se reutilizan las RPCs 2.16 para ello porque aceptan una identidad externa sin el pending ID ni su transferencia cifrada.
+La foundation 2.19G incorpora localmente `finalize_admin_pending_integration_onboarding`, una primitive SQL transaccional que recibe el pending ID y Store.name: crea o reactiva Connection, copia los envelopes cifrados a `integration_secrets`, registra auditoría allowlisted y consume la pending en la misma transacción. No descifra tokens ni exige la master key a PostgreSQL. No se reutilizan las RPCs 2.16 porque aceptan una identidad externa sin pending ID ni transferencia cifrada. La migration sigue sin aplicar en remoto y no se ejecutó onboarding real.
 
 ## Runtime OAuth 2.19D
 
