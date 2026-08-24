@@ -50,7 +50,13 @@ La validación remota ejecutó lecturas y llamadas de RPC denegadas para `anon` 
 
 La migration forward-only `20260824195457_oauth_pending_authorizations.sql` agrega una staging table server-only para una identidad OAuth ya verificada antes de crear una Connection. Está vinculada de forma compuesta al attempt que la originó —Organization, actor membership, provider y purpose— y permite como máximo una pending authorization por attempt. Conserva sólo la identidad externa normalizada, display opcional y tokens cifrados con la misma clave AES-256-GCM existente; su TTL de onboarding es de 20 minutos, independiente de la expiración del access token.
 
-La tabla tiene RLS sin policies browser-facing, grants sólo para `service_role` y no expone RPC pública. La transferencia definitiva hacia `integration_secrets` queda para una RPC transaccional de onboarding posterior: las RPCs actuales no aceptan un pending ID y no deben consumirla antes de crear/reutilizar Store y Connection atómicamente. La migration se validó únicamente mediante reset y fixtures revertidas locales; no fue aplicada remoto.
+La tabla tiene RLS sin policies browser-facing, grants sólo para `service_role` y no expone RPC pública. La transferencia definitiva hacia `integration_secrets` queda para una RPC transaccional de onboarding posterior: las RPCs actuales no aceptan un pending ID y no deben consumirla antes de crear/reutilizar Store y Connection atómicamente.
+
+## Subfase 2.19C — aplicación y validación remota
+
+La migration `20260824195457_oauth_pending_authorizations.sql` fue aplicada exclusivamente al proyecto remoto dedicado `ffcudwwrzttkumbdvada` después de un dry-run que listó sólo esa migration. El schema remoto conserva la FK compuesta de attempt/Organization/actor/provider/purpose, la unicidad por `oauth_attempt_id`, los campos cifrados y el TTL de 20 minutos.
+
+La tabla tiene RLS habilitado y cero policies browser-facing. `PUBLIC`, `anon` y `authenticated` no tienen SELECT ni DML; las pruebas reales de lectura con `anon` y `authenticated` fueron denegadas. `service_role` conserva DML server-only, validado dentro de una transacción revertida que comprobó creación y consumo único. No quedaron fixtures: `oauth_pending_authorizations`, OAuth attempts, secretos, auditoría, Stores, assignments y Connections permanecen en cero; se conserva una única membership Owner persistente. OAuth real y rutas runtime siguen sin iniciar.
 
 ## DDL creado para Subfase 2.2
 
