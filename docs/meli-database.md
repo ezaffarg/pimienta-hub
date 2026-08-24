@@ -8,6 +8,8 @@ Supabase se usará únicamente como PostgreSQL; Supabase Auth queda fuera de la 
 
 Bootstrap First Owner está validado localmente por una RPC transaccional con advisory lock por Organization. Una Organization puede tener **uno o más Owners**: el lock serializa únicamente el primer bootstrap y no introduce unicidad permanente. Una membership existente no-Owner no se promociona automáticamente. Remote execution sigue pendiente.
 
+**Remote Supabase: LINKED + VALIDATED.** El proyecto remoto `ffcudwwrzttkumbdvada` tiene las tres migrations aplicadas; schema, constraints y bootstrap funcional fueron validados con fixtures limpiados. Concurrencia se validó localmente; no se repitió en remoto. Fallback Clerk sigue TRANSITIONAL, RLS DEFERRED, OAuth NOT STARTED y Production Ready NO.
+
 Supabase CLI `2.114.0` está instalada como `devDependency` exacta y se ejecuta con `bunx supabase`; `bunfig.toml` mantiene su política de antigüedad mínima de siete días. El intento documentado de `2.115.0` fue bloqueado por esa política y no se la desactivó. `supabase init` creó la configuración local versionable en `supabase/config.toml`, sin link remoto, credenciales ni schema funcional.
 
 ## Convenciones

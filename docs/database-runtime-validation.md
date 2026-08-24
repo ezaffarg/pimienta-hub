@@ -17,6 +17,10 @@ Las migraciones versionadas se mantuvieron sin cambios. Bootstrap First Owner si
 
 Fase 3 no está iniciada.
 
+## Remote validation
+
+Proyecto `ffcudwwrzttkumbdvada` linkeado. Las tres migrations están aplicadas. Roles, unicidad, Stores, assignments, delete restrict, Connections, providers, status/defaults, unicidad activa, disabled release, NULL, scopes y bootstrap funcional pasaron con fixtures ficticios limpiados; conteos finales: 0/0/0/0. Concurrencia: LOCAL VALIDATED; REMOTE NOT REPEATED.
+
 ## Bootstrap First Owner — validación local
 
 La migration `20260824120039_phase_2_bootstrap_first_owner.sql` usa `pg_advisory_xact_lock(hashtextextended(organization_id, 0))` dentro de una transacción. Dos carreras independientes sobre una Organization produjeron exactamente un `created`, un `already_bootstrapped` y un Owner. Organizations distintas se inicializaron en paralelo. Una membership Employee existente devolvió `membership_exists_non_owner`, sin promoción. El schema permite un segundo Owner administrativo: el lock protege sólo bootstrap. Un reset final reaplicó las tres migrations desde cero. Remote permanece no enlazado.
