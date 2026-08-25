@@ -48,6 +48,14 @@ La matriz remota se ejecutó con `service_role` dentro de una transacción rever
 
 El postcheck mantiene Listings 0, Stores 1, Connection 1 activa, Assignments 0, `integration_secrets` 1 y Owner persistente 1. No se persistió la publicación real de E.A.ZOCOOL, no hubo sync real ni mutaciones de Mercado Libre.
 
+## Subfase 2.20F — rotación segura local de credenciales
+
+La migración forward-only `20260825100000_safe_integration_secret_refresh_rotation.sql` prepara la rotación concurrente de `integration_secrets` sin retener una transacción de PostgreSQL durante HTTP. Cada secreto tiene `credential_version` monotónica y un lease efímero (`refresh_lease_id`, `refresh_lease_expires_at`). Tres RPCs `SECURITY DEFINER`, con `search_path=pg_catalog` y ejecución exclusiva de `service_role`, reclaman, completan con compare-and-swap y liberan el refresh. RLS queda enabled, sin policies browser-facing; `PUBLIC`, `anon` y `authenticated` no reciben acceso.
+
+El lease dura 60 segundos. El provider request se limita a 15 segundos y la actualización acepta únicamente la versión y lease owner originales; un writer stale no puede sobrescribir credenciales nuevas. Un trigger incrementa la versión y limpia el lease cuando otro flujo autorizado —como reconnect— cambia el material de credenciales, de modo que tampoco puede dejar vigente un CAS de refresh anterior. Una vez reclamado el lease, el servidor relee antes de llamar al provider. Si otro request ya actualizó el token, reutiliza el valor actual; si el refresh falla o la respuesta está incompleta, no se persiste nada y se liberan las credenciales para un retry posterior/reconexión aprobada.
+
+Esta foundation es local: no se aplicó la migration remota, no se ejecutó refresh real ni se persistieron listings reales.
+
 ## Subfase 2.16 — foundations OAuth, Connection y Audit
 
 La migración `20260824184934_oauth_security_foundations.sql` añade foundations locales para `oauth_attempts`, `integration_secrets` y `audit_events`. Los intentos almacenan sólo el digest de state, se atan a Organization y actor membership, expiran y se consumen una sola vez. Las credenciales se separan de `connections` y se almacenan como ciphertext autenticado application-level; la clave maestra server-only se identifica como `INTEGRATION_SECRETS_MASTER_KEY` y nunca se versiona.

@@ -2,8 +2,8 @@ import 'server-only';
 
 import { z } from 'zod';
 import type { ExternalListingSummary, IntegrationPage } from '@/integrations/core';
-import { OAuthFoundationRepository } from '@/infrastructure/database/oauth-foundations';
 import { ConnectionRepository } from '@/infrastructure/database/repositories';
+import { MercadoLibreCredentialService } from '../auth';
 import { MercadoLibreListingsClient } from './client';
 
 export class MercadoLibreListingsServiceError extends Error {
@@ -13,7 +13,6 @@ export class MercadoLibreListingsServiceError extends Error {
       | 'connection_not_active'
       | 'connection_binding_invalid'
       | 'credentials_not_found'
-      | 'access_token_expired'
   ) {
     super(kind);
     this.name = 'MercadoLibreListingsServiceError';
@@ -23,7 +22,7 @@ export class MercadoLibreListingsServiceError extends Error {
 export class MercadoLibreListingsService {
   constructor(
     private readonly connections = new ConnectionRepository(),
-    private readonly oauth = new OAuthFoundationRepository(),
+    private readonly credentials = new MercadoLibreCredentialService(),
     private readonly listings = new MercadoLibreListingsClient()
   ) {}
 
@@ -56,17 +55,13 @@ export class MercadoLibreListingsService {
       throw new MercadoLibreListingsServiceError('connection_binding_invalid');
     }
 
-    const credentials = await this.oauth.readDecryptedCredentials(
-      parsed.organizationId,
-      parsed.connectionId
-    );
-    if (!credentials) throw new MercadoLibreListingsServiceError('credentials_not_found');
-    if (Date.parse(credentials.accessTokenExpiresAt) <= Date.now()) {
-      throw new MercadoLibreListingsServiceError('access_token_expired');
-    }
+    const accessToken = await this.credentials.getValidAccessToken({
+      organizationId: parsed.organizationId,
+      connectionId: parsed.connectionId
+    });
 
     return this.listings.listSellerListings({
-      accessToken: credentials.accessToken,
+      accessToken,
       sellerId: connection.externalAccountId,
       limit: parsed.limit ?? 20
     });

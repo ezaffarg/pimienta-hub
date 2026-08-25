@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import { MercadoLibreListingsClient, MercadoLibreListingsError } from './client';
-import { MercadoLibreListingsService, MercadoLibreListingsServiceError } from './service';
+import { MercadoLibreListingsService } from './service';
 
 describe('MercadoLibreListingsClient', () => {
   it('uses seller search pagination and a bounded multiget detail request', async () => {
@@ -109,23 +109,18 @@ describe('MercadoLibreListingsService', () => {
       scopes: [],
       expiresAt: null
     });
-    const readDecryptedCredentials = vi.fn().mockResolvedValue({
-      accessToken: 'test-access-token',
-      refreshToken: 'test-refresh-token',
-      accessTokenExpiresAt: new Date(Date.now() + 60_000).toISOString(),
-      tokenMetadata: {}
-    });
+    const getValidAccessToken = vi.fn().mockResolvedValue('test-access-token');
     const listSellerListings = vi.fn().mockResolvedValue({ items: [], total: 0, nextCursor: null });
     const service = new MercadoLibreListingsService(
       { getById } as never,
-      { readDecryptedCredentials } as never,
+      { getValidAccessToken } as never,
       { listSellerListings } as never
     );
 
     await expect(
       service.listActiveConnectionListings({ organizationId, storeId, connectionId })
     ).resolves.toEqual({ items: [], total: 0, nextCursor: null });
-    expect(readDecryptedCredentials).toHaveBeenCalledWith(organizationId, connectionId);
+    expect(getValidAccessToken).toHaveBeenCalledWith({ organizationId, connectionId });
     expect(listSellerListings).toHaveBeenCalledWith(
       expect.objectContaining({ sellerId: '123', limit: 20 })
     );
@@ -140,20 +135,20 @@ describe('MercadoLibreListingsService', () => {
       status: 'active',
       externalAccountId: '123'
     });
-    const readDecryptedCredentials = vi.fn();
+    const getValidAccessToken = vi.fn();
     const service = new MercadoLibreListingsService(
       { getById } as never,
-      { readDecryptedCredentials } as never,
+      { getValidAccessToken } as never,
       {} as never
     );
 
     await expect(
       service.listActiveConnectionListings({ organizationId, storeId, connectionId })
     ).rejects.toEqual(expect.objectContaining({ kind: 'connection_binding_invalid' }));
-    expect(readDecryptedCredentials).not.toHaveBeenCalled();
+    expect(getValidAccessToken).not.toHaveBeenCalled();
   });
 
-  it('stops before a provider call when the persisted access token is expired', async () => {
+  it('stops before a provider call when credential rotation cannot provide an access token', async () => {
     const getById = vi.fn().mockResolvedValue({
       id: connectionId,
       organizationId,
@@ -166,19 +161,14 @@ describe('MercadoLibreListingsService', () => {
     const service = new MercadoLibreListingsService(
       { getById } as never,
       {
-        readDecryptedCredentials: vi.fn().mockResolvedValue({
-          accessToken: 'test-access-token',
-          refreshToken: 'test-refresh-token',
-          accessTokenExpiresAt: new Date(Date.now() - 60_000).toISOString(),
-          tokenMetadata: {}
-        })
+        getValidAccessToken: vi.fn().mockRejectedValue(new Error('token_refresh_failed'))
       } as never,
       { listSellerListings } as never
     );
 
     await expect(
       service.listActiveConnectionListings({ organizationId, storeId, connectionId })
-    ).rejects.toBeInstanceOf(MercadoLibreListingsServiceError);
+    ).rejects.toEqual(expect.objectContaining({ message: 'token_refresh_failed' }));
     expect(listSellerListings).not.toHaveBeenCalled();
   });
 });

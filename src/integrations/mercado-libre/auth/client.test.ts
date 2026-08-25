@@ -65,6 +65,48 @@ describe('MercadoLibreOAuthClient', () => {
     ).rejects.toThrow('invalid_provider_response');
   });
 
+  it('refreshes only server-side with a rotated refresh token', async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          access_token: 'test-access-token-v2',
+          refresh_token: 'test-refresh-token-v2',
+          expires_in: 3600,
+          token_type: 'bearer'
+        })
+      )
+    );
+    const client = new MercadoLibreOAuthClient(config, fetcher);
+
+    await expect(client.refreshAccessToken('test-refresh-token-v1')).resolves.toMatchObject({
+      refreshToken: 'test-refresh-token-v2'
+    });
+    const [, request] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(String(request.body)).toContain('grant_type=refresh_token');
+    expect(String(request.body)).toContain('refresh_token=test-refresh-token-v1');
+  });
+
+  it('rejects a refresh response that omits the rotated refresh token', async () => {
+    const client = new MercadoLibreOAuthClient(
+      config,
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              access_token: 'test-access-token',
+              expires_in: 3600,
+              token_type: 'bearer'
+            })
+          )
+        )
+    );
+
+    await expect(client.refreshAccessToken('test-refresh-token')).rejects.toEqual(
+      expect.objectContaining({ kind: 'invalid_provider_response' })
+    );
+  });
+
   it('normalizes the current user identity and rejects malformed provider responses', async () => {
     const fetcher = vi
       .fn()

@@ -53,6 +53,14 @@ export interface DecryptedCredentials {
   refreshToken: string;
   accessTokenExpiresAt: string;
   tokenMetadata: Record<string, string>;
+  credentialVersion: number;
+}
+
+export type CredentialRefreshClaimOutcome = 'claimed' | 'already_refreshed' | 'busy' | 'not_found';
+
+export interface CredentialRefreshClaim {
+  outcome: CredentialRefreshClaimOutcome;
+  credentialVersion: number | null;
 }
 
 export interface OnboardingResult {
@@ -256,7 +264,7 @@ export class OAuthFoundationRepository {
     const { data, error } = await this.client
       .from('integration_secrets')
       .select(
-        'encrypted_access_token, encrypted_refresh_token, access_token_expires_at, token_metadata, key_version'
+        'encrypted_access_token, encrypted_refresh_token, access_token_expires_at, token_metadata, key_version, credential_version'
       )
       .eq('organization_id', z.string().min(1).max(255).parse(organizationId))
       .eq('connection_id', uuidSchema.parse(connectionId))
@@ -271,8 +279,107 @@ export class OAuthFoundationRepository {
       accessToken: decryptIntegrationSecret(encrypted(data.encrypted_access_token)),
       refreshToken: decryptIntegrationSecret(encrypted(data.encrypted_refresh_token)),
       accessTokenExpiresAt: data.access_token_expires_at,
-      tokenMetadata: data.token_metadata as Record<string, string>
+      tokenMetadata: data.token_metadata as Record<string, string>,
+      credentialVersion: data.credential_version
     };
+  }
+
+  async claimCredentialRefresh(input: {
+    organizationId: string;
+    connectionId: string;
+    expectedVersion: number;
+    refreshBefore: string;
+    leaseId: string;
+  }): Promise<CredentialRefreshClaim> {
+    const parsed = z
+      .object({
+        organizationId: z.string().min(1).max(255),
+        connectionId: uuidSchema,
+        expectedVersion: z.number().int().positive(),
+        refreshBefore: z.iso.datetime(),
+        leaseId: uuidSchema
+      })
+      .strict()
+      .parse(input);
+    const { data, error } = await this.client.rpc('claim_integration_secret_refresh', {
+      p_organization_id: parsed.organizationId,
+      p_connection_id: parsed.connectionId,
+      p_expected_version: parsed.expectedVersion,
+      p_refresh_before: parsed.refreshBefore,
+      p_lease_id: parsed.leaseId
+    });
+    const value = record(data?.[0] ?? null, error);
+    return {
+      outcome: z.enum(['claimed', 'already_refreshed', 'busy', 'not_found']).parse(value.outcome),
+      credentialVersion:
+        value.credential_version === null
+          ? null
+          : z.number().int().positive().parse(value.credential_version)
+    };
+  }
+
+  async completeCredentialRefresh(input: {
+    organizationId: string;
+    connectionId: string;
+    expectedVersion: number;
+    leaseId: string;
+    credentials: DecryptedCredentials;
+  }): Promise<boolean> {
+    const parsed = z
+      .object({
+        organizationId: z.string().min(1).max(255),
+        connectionId: uuidSchema,
+        expectedVersion: z.number().int().positive(),
+        leaseId: uuidSchema,
+        credentials: z
+          .object({
+            accessToken: z.string().min(1).max(8192),
+            refreshToken: z.string().min(1).max(8192),
+            accessTokenExpiresAt: z.iso.datetime(),
+            tokenMetadata: auditMetadataSchema,
+            credentialVersion: z.number().int().positive()
+          })
+          .strict()
+      })
+      .strict()
+      .parse(input);
+    const access = encryptIntegrationSecret(parsed.credentials.accessToken);
+    const refresh = encryptIntegrationSecret(parsed.credentials.refreshToken);
+    const { data, error } = await this.client.rpc('complete_integration_secret_refresh', {
+      p_organization_id: parsed.organizationId,
+      p_connection_id: parsed.connectionId,
+      p_expected_version: parsed.expectedVersion,
+      p_lease_id: parsed.leaseId,
+      p_encrypted_access_token: access.ciphertext,
+      p_encrypted_refresh_token: refresh.ciphertext,
+      p_access_token_expires_at: parsed.credentials.accessTokenExpiresAt,
+      p_token_metadata: parsed.credentials.tokenMetadata,
+      p_key_version: access.keyVersion
+    });
+    throwOnError(error);
+    return z.boolean().parse(data);
+  }
+
+  async releaseCredentialRefresh(input: {
+    organizationId: string;
+    connectionId: string;
+    leaseId: string;
+  }): Promise<boolean> {
+    const parsed = z
+      .object({
+        organizationId: z.string().min(1).max(255),
+        connectionId: uuidSchema,
+        leaseId: uuidSchema
+      })
+      .strict()
+      .parse(input);
+    const { data, error } = await this.client.rpc('release_integration_secret_refresh', {
+      p_organization_id: parsed.organizationId,
+      p_connection_id: parsed.connectionId,
+      p_lease_id: parsed.leaseId
+    });
+    throwOnError(error);
+    return z.boolean().parse(data);
   }
 
   decryptCodeVerifier(attempt: OAuthAttemptRecord): string | null {

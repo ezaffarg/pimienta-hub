@@ -67,6 +67,33 @@ describe('OAuth foundation validation', () => {
     vi.unstubAllEnvs();
   });
 
+  it('encrypts both rotated credentials before the compare-and-swap RPC', async () => {
+    vi.stubEnv('INTEGRATION_SECRETS_MASTER_KEY', Buffer.alloc(32, 7).toString('base64url'));
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null });
+    const repository = new OAuthFoundationRepository({ rpc } as never);
+
+    await expect(
+      repository.completeCredentialRefresh({
+        organizationId: 'org_test',
+        connectionId: '10000000-0000-4000-8000-000000000001',
+        expectedVersion: 1,
+        leaseId: '10000000-0000-4000-8000-000000000002',
+        credentials: {
+          accessToken: 'rotated-access-token-plaintext',
+          refreshToken: 'rotated-refresh-token-plaintext',
+          accessTokenExpiresAt: '2030-01-01T00:00:00.000Z',
+          tokenMetadata: { token_type: 'bearer' },
+          credentialVersion: 2
+        }
+      })
+    ).resolves.toBe(true);
+
+    const payload = rpc.mock.calls[0]?.[1] as Record<string, string>;
+    expect(payload.p_encrypted_access_token).not.toContain('rotated-access-token-plaintext');
+    expect(payload.p_encrypted_refresh_token).not.toContain('rotated-refresh-token-plaintext');
+    vi.unstubAllEnvs();
+  });
+
   it('filters pending previews by actor binding and expiration', async () => {
     const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
     const query = {

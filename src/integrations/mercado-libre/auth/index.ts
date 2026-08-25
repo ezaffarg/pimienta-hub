@@ -5,4 +5,9 @@ export {
   type MercadoLibreCurrentUser,
   type MercadoLibreTokenResponse
 } from './client';
+export {
+  MercadoLibreCredentialError,
+  MercadoLibreCredentialService,
+  type MercadoLibreCredentialStore
+} from './credentials';
 export { createCodeChallenge, createCodeVerifier, createOAuthState } from './pkce';

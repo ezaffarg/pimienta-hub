@@ -89,6 +89,14 @@ La Organization, membership, permiso y Store Scope se derivan server-side. `orga
 - La desconexión futura intenta la revocación oficial `DELETE /users/{user_id}/applications/{app_id}` con Bearer token cuando aún sea posible; elimina/inhabilita el secreto local y marca la Connection `disabled`. No borra automáticamente la Store. Si la revocación remota falla, se registra server-side y no se afirma éxito remoto.
 - La reconexión de la misma cuenta deshabilitada reactiva la Connection existente y actualiza secretos mediante el almacenamiento seguro futuro.
 
+### Rotación segura de refresh (2.20F)
+
+La primitive server-only `MercadoLibreCredentialService.getValidAccessToken()` reutiliza tokens que exceden una ventana de seguridad de 120 segundos. Cuando debe rotar, reclama un lease de 60 segundos por Connection mediante PostgreSQL, relee las credenciales y recién entonces llama `POST /oauth/token` con `grant_type=refresh_token`. No mantiene una transacción de base durante la llamada HTTP; el request se aborta a los 15 segundos y no tiene retry ciego.
+
+Mercado Libre requiere que se conserve el último refresh token y devuelve uno nuevo en cada rotación. La respuesta de refresh sin refresh token se rechaza sin escribir nada. La persistencia cifra access y refresh token antes del RPC y usa `credential_version` + lease owner como compare-and-swap: un resultado stale se descarta y se relee, nunca sobrescribe una rotación ganadora. Un fallo no borra ni desactiva la Connection automáticamente; el límite público comunica un error normalizado de refresh/reconexión sin secretos.
+
+La migration sigue sólo local en este checkpoint. No se ejecutó refresh real ni listing sync real.
+
 ## Persistencia y trabajo pendiente
 
 `StoreRepository.create()` y `ConnectionRepository.create()` no ofrecen una transacción conjunta ni idempotencia de onboarding. Para el flujo real se requiere diseño/implementación aprobados de:

@@ -86,6 +86,24 @@ export class MercadoLibreOAuthClient {
       body.set('code_verifier', input.codeVerifier);
     }
 
+    return this.exchangeToken(body);
+  }
+
+  async refreshAccessToken(refreshToken: string): Promise<MercadoLibreTokenResponse> {
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: this.config.clientId,
+      client_secret: this.config.clientSecret,
+      refresh_token: z.string().min(1).max(8192).parse(refreshToken)
+    });
+    const result = await this.exchangeToken(body);
+    if (!result.refreshToken) throw new MercadoLibreProviderError('invalid_provider_response');
+    return result;
+  }
+
+  private async exchangeToken(body: URLSearchParams): Promise<MercadoLibreTokenResponse> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
     let response: Response;
     try {
       response = await this.fetcher(this.config.tokenUrl, {
@@ -95,10 +113,13 @@ export class MercadoLibreOAuthClient {
           'content-type': 'application/x-www-form-urlencoded'
         },
         body,
+        signal: controller.signal,
         cache: 'no-store'
       });
     } catch {
       throw new MercadoLibreProviderError('token_exchange_failed');
+    } finally {
+      clearTimeout(timeout);
     }
 
     if (!response.ok) throw new MercadoLibreProviderError('token_exchange_failed');
