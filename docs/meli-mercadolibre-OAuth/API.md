@@ -182,3 +182,9 @@ El futuro Audit Log será server-side: `audit:read` permitido a Owner y Manager,
 ### Preparación restante antes de OAuth real
 
 2.16 deja foundations locales, pero todavía faltan secret storage de producción, refresh rotation real, servicio que derive el contexto Clerk para las primitives, rutas OAuth, UI, token exchange y validación remota separada. Ninguno se habilita por esta subfase.
+
+## 2.20J — observabilidad segura del refresh
+
+El refresh server-side conserva una taxonomía interna por etapa (`READ`, `DECRYPT`, `CLAIM`, `DOUBLE_CHECK`, `PROVIDER_REQUEST`, `PROVIDER_RESPONSE`, `ENCRYPT`, `CAS_COMPLETE`, `RELEASE`). Distingue configuración, lectura/descifrado, claim/busy, red, timeout, HTTP, `invalid_grant`, respuesta inválida, cifrado, CAS y release.
+
+El cliente público continúa recibiendo errores normalizados y genéricos. Sólo se conservan server-side un código seguro, stage, status HTTP y códigos allowlisted del proveedor. Nunca se registran tokens, ciphertext, secretos, bodies ni headers sensibles. No existe retry automático del refresh token; cualquier retry real requiere autorización explícita y será único.

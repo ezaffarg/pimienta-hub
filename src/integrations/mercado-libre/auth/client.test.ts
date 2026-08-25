@@ -62,7 +62,7 @@ describe('MercadoLibreOAuthClient', () => {
 
     await expect(
       client.exchangeAuthorizationCode({ code: 'test-code', codeVerifier: 'test-verifier' })
-    ).rejects.toThrow('invalid_provider_response');
+    ).rejects.toThrow('provider_response_invalid');
   });
 
   it('refreshes only server-side with a rotated refresh token', async () => {
@@ -89,22 +89,87 @@ describe('MercadoLibreOAuthClient', () => {
   it('rejects a refresh response that omits the rotated refresh token', async () => {
     const client = new MercadoLibreOAuthClient(
       config,
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(
-            JSON.stringify({
-              access_token: 'test-access-token',
-              expires_in: 3600,
-              token_type: 'bearer'
-            })
-          )
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            access_token: 'test-access-token',
+            expires_in: 3600,
+            token_type: 'bearer'
+          })
         )
+      )
     );
 
     await expect(client.refreshAccessToken('test-refresh-token')).rejects.toEqual(
-      expect.objectContaining({ kind: 'invalid_provider_response' })
+      expect.objectContaining({ kind: 'provider_response_invalid' })
     );
+  });
+
+  it('classifies provider HTTP errors without retaining the response body', async () => {
+    const client = new MercadoLibreOAuthClient(
+      config,
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'invalid_grant', access_token: 'must-not-leak' }), {
+          status: 400
+        })
+      )
+    );
+
+    await expect(client.refreshAccessToken('test-refresh-token')).rejects.toMatchObject({
+      kind: 'invalid_refresh_token',
+      details: { httpStatus: 400, providerCode: 'invalid_grant' }
+    });
+  });
+
+  it('retains only status for a non-JSON provider 5xx response', async () => {
+    const client = new MercadoLibreOAuthClient(
+      config,
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response('provider failure with secret-looking text', { status: 503 })
+        )
+    );
+
+    await expect(client.refreshAccessToken('test-refresh-token')).rejects.toMatchObject({
+      kind: 'provider_http_error',
+      details: { httpStatus: 503 }
+    });
+  });
+
+  it('distinguishes network failures and timeouts', async () => {
+    const network = new MercadoLibreOAuthClient(
+      config,
+      vi.fn().mockRejectedValue(new Error('offline'))
+    );
+    await expect(network.refreshAccessToken('test-refresh-token')).rejects.toMatchObject({
+      kind: 'provider_network_error'
+    });
+
+    vi.useFakeTimers();
+    try {
+      const timeout = new MercadoLibreOAuthClient(
+        config,
+        vi.fn().mockImplementation(
+          (_url, init: RequestInit) =>
+            new Promise((_resolve, reject) => {
+              init.signal?.addEventListener('abort', () => {
+                const error = new Error('aborted');
+                error.name = 'AbortError';
+                reject(error);
+              });
+            })
+        )
+      );
+      const timeoutPromise = timeout.refreshAccessToken('test-refresh-token');
+      const timeoutExpectation = expect(timeoutPromise).rejects.toMatchObject({
+        kind: 'provider_timeout'
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+      await timeoutExpectation;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('normalizes the current user identity and rejects malformed provider responses', async () => {

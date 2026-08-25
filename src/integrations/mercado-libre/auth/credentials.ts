@@ -7,22 +7,55 @@ import type {
   DecryptedCredentials
 } from '@/infrastructure/database/oauth-foundations';
 import { OAuthFoundationRepository } from '@/infrastructure/database/oauth-foundations';
+import { SecretCipherError } from '@/lib/crypto/integration-secrets';
 import { MercadoLibreOAuthClient, MercadoLibreProviderError } from './client';
 
 const EXPIRY_SAFETY_WINDOW_MS = 120_000;
 
 export class MercadoLibreCredentialError extends Error {
   constructor(
-    public readonly kind:
-      | 'credentials_not_found'
-      | 'refresh_in_progress'
-      | 'credential_refresh_conflict'
-      | 'token_refresh_failed'
+    public readonly code: RefreshErrorCode,
+    public readonly stage: RefreshStage,
+    public readonly details: { httpStatus?: number; providerCode?: string } = {}
   ) {
-    super(kind);
+    super(code);
     this.name = 'MercadoLibreCredentialError';
   }
+
+  get kind(): RefreshErrorCode {
+    return this.code;
+  }
 }
+
+export type RefreshStage =
+  | 'READ'
+  | 'DECRYPT'
+  | 'EXPIRY_CHECK'
+  | 'CLAIM'
+  | 'DOUBLE_CHECK'
+  | 'PROVIDER_REQUEST'
+  | 'PROVIDER_RESPONSE'
+  | 'ENCRYPT'
+  | 'CAS_COMPLETE'
+  | 'RELEASE';
+
+export type RefreshErrorCode =
+  | 'CONFIGURATION_ERROR'
+  | 'CREDENTIAL_READ_FAILED'
+  | 'CREDENTIAL_DECRYPT_FAILED'
+  | 'CREDENTIALS_NOT_FOUND'
+  | 'REFRESH_CLAIM_FAILED'
+  | 'REFRESH_BUSY'
+  | 'REFRESH_DOUBLE_CHECK_FAILED'
+  | 'PROVIDER_NETWORK_ERROR'
+  | 'PROVIDER_TIMEOUT'
+  | 'PROVIDER_HTTP_ERROR'
+  | 'PROVIDER_INVALID_REFRESH_TOKEN'
+  | 'PROVIDER_RESPONSE_INVALID'
+  | 'CREDENTIAL_ENCRYPTION_FAILED'
+  | 'REFRESH_CAS_FAILED'
+  | 'REFRESH_RELEASE_FAILED'
+  | 'REFRESH_UNKNOWN_ERROR';
 
 export interface MercadoLibreCredentialStore {
   readDecryptedCredentials(
@@ -53,7 +86,7 @@ export interface MercadoLibreCredentialStore {
 export class MercadoLibreCredentialService {
   constructor(
     private readonly secrets: MercadoLibreCredentialStore = new OAuthFoundationRepository(),
-    private readonly oauth = new MercadoLibreOAuthClient(),
+    private readonly oauth?: MercadoLibreOAuthClient,
     private readonly now: () => Date = () => new Date(),
     private readonly newLeaseId: () => string = randomUUID
   ) {}
@@ -67,20 +100,29 @@ export class MercadoLibreCredentialService {
       .strict()
       .parse(input);
     const refreshBefore = new Date(this.now().getTime() + EXPIRY_SAFETY_WINDOW_MS);
-    const current = await this.requireCredentials(parsed.organizationId, parsed.connectionId);
+    const current = await this.requireCredentials(
+      parsed.organizationId,
+      parsed.connectionId,
+      'READ'
+    );
     if (isCurrent(current, refreshBefore)) return current.accessToken;
 
     const leaseId = this.newLeaseId();
-    const claim = await this.secrets.claimCredentialRefresh({
-      organizationId: parsed.organizationId,
-      connectionId: parsed.connectionId,
-      expectedVersion: current.credentialVersion,
-      refreshBefore: refreshBefore.toISOString(),
-      leaseId
-    });
+    let claim: CredentialRefreshClaim;
+    try {
+      claim = await this.secrets.claimCredentialRefresh({
+        organizationId: parsed.organizationId,
+        connectionId: parsed.connectionId,
+        expectedVersion: current.credentialVersion,
+        refreshBefore: refreshBefore.toISOString(),
+        leaseId
+      });
+    } catch {
+      throw new MercadoLibreCredentialError('REFRESH_CLAIM_FAILED', 'CLAIM');
+    }
 
     if (claim.outcome === 'not_found')
-      throw new MercadoLibreCredentialError('credentials_not_found');
+      throw new MercadoLibreCredentialError('CREDENTIALS_NOT_FOUND', 'CLAIM');
     if (claim.outcome === 'busy') {
       const refreshedByPeer = await this.waitForPeerRefresh(
         parsed.organizationId,
@@ -88,25 +130,40 @@ export class MercadoLibreCredentialService {
         refreshBefore
       );
       if (refreshedByPeer) return refreshedByPeer.accessToken;
-      throw new MercadoLibreCredentialError('refresh_in_progress');
+      throw new MercadoLibreCredentialError('REFRESH_BUSY', 'CLAIM');
     }
     if (claim.outcome === 'already_refreshed') {
-      const latest = await this.requireCredentials(parsed.organizationId, parsed.connectionId);
+      const latest = await this.requireCredentials(
+        parsed.organizationId,
+        parsed.connectionId,
+        'DOUBLE_CHECK'
+      );
       if (isCurrent(latest, refreshBefore)) return latest.accessToken;
-      throw new MercadoLibreCredentialError('credential_refresh_conflict');
+      throw new MercadoLibreCredentialError('REFRESH_DOUBLE_CHECK_FAILED', 'DOUBLE_CHECK');
     }
 
     let completed = false;
     try {
       // A different process may have persisted a token immediately before our short claim transaction.
-      const afterClaim = await this.requireCredentials(parsed.organizationId, parsed.connectionId);
+      const afterClaim = await this.requireCredentials(
+        parsed.organizationId,
+        parsed.connectionId,
+        'DOUBLE_CHECK'
+      );
       if (isCurrent(afterClaim, refreshBefore)) return afterClaim.accessToken;
 
-      let refreshed;
+      let refreshed: Awaited<ReturnType<MercadoLibreOAuthClient['refreshAccessToken']>>;
+      let oauth: MercadoLibreOAuthClient;
       try {
-        refreshed = await this.oauth.refreshAccessToken(afterClaim.refreshToken);
+        oauth = this.oauth ?? new MercadoLibreOAuthClient();
       } catch {
-        throw new MercadoLibreCredentialError('token_refresh_failed');
+        throw new MercadoLibreCredentialError('CONFIGURATION_ERROR', 'PROVIDER_REQUEST');
+      }
+      try {
+        refreshed = await oauth.refreshAccessToken(afterClaim.refreshToken);
+      } catch (error) {
+        if (error instanceof MercadoLibreProviderError) throw providerRefreshError(error);
+        throw new MercadoLibreCredentialError('PROVIDER_NETWORK_ERROR', 'PROVIDER_REQUEST');
       }
       const expiresAt = new Date(this.now().getTime() + refreshed.expiresInSeconds * 1000);
       const credentials: DecryptedCredentials = {
@@ -116,42 +173,70 @@ export class MercadoLibreCredentialService {
         tokenMetadata: refreshedTokenMetadata(afterClaim.tokenMetadata, refreshed),
         credentialVersion: afterClaim.credentialVersion + 1
       };
-      completed = await this.secrets.completeCredentialRefresh({
-        organizationId: parsed.organizationId,
-        connectionId: parsed.connectionId,
-        expectedVersion: afterClaim.credentialVersion,
-        leaseId,
-        credentials
-      });
-      if (completed) return credentials.accessToken;
-
-      const latest = await this.requireCredentials(parsed.organizationId, parsed.connectionId);
-      if (isCurrent(latest, refreshBefore)) return latest.accessToken;
-      throw new MercadoLibreCredentialError('credential_refresh_conflict');
-    } catch (error) {
-      if (error instanceof MercadoLibreCredentialError) throw error;
-      if (error instanceof MercadoLibreProviderError) {
-        throw new MercadoLibreCredentialError('token_refresh_failed');
-      }
-      throw error;
-    } finally {
-      if (!completed) {
-        await this.secrets.releaseCredentialRefresh({
+      try {
+        completed = await this.secrets.completeCredentialRefresh({
           organizationId: parsed.organizationId,
           connectionId: parsed.connectionId,
-          leaseId
+          expectedVersion: afterClaim.credentialVersion,
+          leaseId,
+          credentials
         });
+      } catch (error) {
+        if (error instanceof SecretCipherError) {
+          throw new MercadoLibreCredentialError('CREDENTIAL_ENCRYPTION_FAILED', 'ENCRYPT');
+        }
+        throw new MercadoLibreCredentialError('REFRESH_CAS_FAILED', 'CAS_COMPLETE');
+      }
+      if (completed) return credentials.accessToken;
+
+      const latest = await this.requireCredentials(
+        parsed.organizationId,
+        parsed.connectionId,
+        'CAS_COMPLETE'
+      );
+      if (isCurrent(latest, refreshBefore)) return latest.accessToken;
+      throw new MercadoLibreCredentialError('REFRESH_CAS_FAILED', 'CAS_COMPLETE');
+    } catch (error) {
+      if (error instanceof MercadoLibreCredentialError) throw error;
+      throw new MercadoLibreCredentialError('REFRESH_UNKNOWN_ERROR', 'PROVIDER_RESPONSE');
+    } finally {
+      if (!completed) {
+        try {
+          await this.secrets.releaseCredentialRefresh({
+            organizationId: parsed.organizationId,
+            connectionId: parsed.connectionId,
+            leaseId
+          });
+        } catch {
+          console.error('[meli-refresh]', {
+            stage: 'RELEASE',
+            code: 'REFRESH_RELEASE_FAILED',
+            connectionId: parsed.connectionId
+          });
+        }
       }
     }
   }
 
   private async requireCredentials(
     organizationId: string,
-    connectionId: string
+    connectionId: string,
+    stage: Extract<RefreshStage, 'READ' | 'DOUBLE_CHECK' | 'CAS_COMPLETE'>
   ): Promise<DecryptedCredentials> {
-    const credentials = await this.secrets.readDecryptedCredentials(organizationId, connectionId);
-    if (!credentials) throw new MercadoLibreCredentialError('credentials_not_found');
-    return credentials;
+    try {
+      const credentials = await this.secrets.readDecryptedCredentials(organizationId, connectionId);
+      if (!credentials) throw new MercadoLibreCredentialError('CREDENTIALS_NOT_FOUND', stage);
+      return credentials;
+    } catch (error) {
+      if (error instanceof MercadoLibreCredentialError) throw error;
+      if (error instanceof SecretCipherError) {
+        throw new MercadoLibreCredentialError('CREDENTIAL_DECRYPT_FAILED', 'DECRYPT');
+      }
+      throw new MercadoLibreCredentialError(
+        stage === 'DOUBLE_CHECK' ? 'REFRESH_DOUBLE_CHECK_FAILED' : 'CREDENTIAL_READ_FAILED',
+        stage
+      );
+    }
   }
 
   private async waitForPeerRefresh(
@@ -160,7 +245,7 @@ export class MercadoLibreCredentialService {
     refreshBefore: Date
   ): Promise<DecryptedCredentials | null> {
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const latest = await this.requireCredentials(organizationId, connectionId);
+      const latest = await this.requireCredentials(organizationId, connectionId, 'DOUBLE_CHECK');
       if (isCurrent(latest, refreshBefore)) return latest;
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
@@ -170,6 +255,24 @@ export class MercadoLibreCredentialService {
 
 function isCurrent(credentials: DecryptedCredentials, refreshBefore: Date): boolean {
   return Date.parse(credentials.accessTokenExpiresAt) > refreshBefore.getTime();
+}
+
+function providerRefreshError(error: MercadoLibreProviderError): MercadoLibreCredentialError {
+  const code: RefreshErrorCode =
+    error.kind === 'provider_network_error'
+      ? 'PROVIDER_NETWORK_ERROR'
+      : error.kind === 'provider_timeout'
+        ? 'PROVIDER_TIMEOUT'
+        : error.kind === 'provider_http_error'
+          ? 'PROVIDER_HTTP_ERROR'
+          : error.kind === 'invalid_refresh_token'
+            ? 'PROVIDER_INVALID_REFRESH_TOKEN'
+            : 'PROVIDER_RESPONSE_INVALID';
+  const stage: RefreshStage =
+    error.kind === 'provider_http_error' || error.kind === 'invalid_refresh_token'
+      ? 'PROVIDER_RESPONSE'
+      : 'PROVIDER_REQUEST';
+  return new MercadoLibreCredentialError(code, stage, error.details);
 }
 
 function refreshedTokenMetadata(

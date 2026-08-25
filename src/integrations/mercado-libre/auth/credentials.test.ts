@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { DecryptedCredentials } from '@/infrastructure/database/oauth-foundations';
+import { SecretCipherError } from '@/lib/crypto/integration-secrets';
 import { MercadoLibreCredentialError, MercadoLibreCredentialService } from './credentials';
 
 const organizationId = 'org_test';
@@ -32,14 +33,12 @@ function refreshResult(overrides = {}) {
 
 describe('MercadoLibreCredentialService', () => {
   it('reuses a token outside the safety window without refresh', async () => {
-    const readDecryptedCredentials = vi
-      .fn()
-      .mockResolvedValue(
-        credentials({
-          accessToken: 'current-access-token',
-          accessTokenExpiresAt: '2030-01-01T00:10:00.000Z'
-        })
-      );
+    const readDecryptedCredentials = vi.fn().mockResolvedValue(
+      credentials({
+        accessToken: 'current-access-token',
+        accessTokenExpiresAt: '2030-01-01T00:10:00.000Z'
+      })
+    );
     const refreshAccessToken = vi.fn();
     const service = new MercadoLibreCredentialService(
       { readDecryptedCredentials } as never,
@@ -102,9 +101,12 @@ describe('MercadoLibreCredentialService', () => {
       () => connectionId
     );
 
-    await expect(service.getValidAccessToken({ organizationId, connectionId })).rejects.toThrow(
-      'token_refresh_failed'
-    );
+    await expect(
+      service.getValidAccessToken({ organizationId, connectionId })
+    ).rejects.toMatchObject({
+      code: 'PROVIDER_NETWORK_ERROR',
+      stage: 'PROVIDER_REQUEST'
+    });
     expect(completeCredentialRefresh).not.toHaveBeenCalled();
     expect(releaseCredentialRefresh).toHaveBeenCalledOnce();
   });
@@ -189,15 +191,131 @@ describe('MercadoLibreCredentialService', () => {
       {
         refreshAccessToken: vi
           .fn()
-          .mockRejectedValue(new MercadoLibreCredentialError('token_refresh_failed'))
+          .mockRejectedValue(
+            new MercadoLibreCredentialError('PROVIDER_NETWORK_ERROR', 'PROVIDER_REQUEST')
+          )
       } as never,
       () => now,
       () => connectionId
     );
 
     await expect(service.getValidAccessToken({ organizationId, connectionId })).rejects.toEqual(
-      expect.objectContaining({ kind: 'token_refresh_failed', message: 'token_refresh_failed' })
+      expect.objectContaining({ kind: 'PROVIDER_NETWORK_ERROR', message: 'PROVIDER_NETWORK_ERROR' })
     );
     expect(completeCredentialRefresh).not.toHaveBeenCalled();
+  });
+
+  it('classifies claim, decrypt, and CAS failures', async () => {
+    const claimFailure = new MercadoLibreCredentialService(
+      {
+        readDecryptedCredentials: vi.fn().mockResolvedValue(credentials()),
+        claimCredentialRefresh: vi.fn().mockRejectedValue(new Error('db unavailable'))
+      } as never,
+      { refreshAccessToken: vi.fn() } as never,
+      () => now,
+      () => connectionId
+    );
+    await expect(
+      claimFailure.getValidAccessToken({ organizationId, connectionId })
+    ).rejects.toMatchObject({
+      code: 'REFRESH_CLAIM_FAILED',
+      stage: 'CLAIM'
+    });
+
+    const decryptFailure = new MercadoLibreCredentialService(
+      { readDecryptedCredentials: vi.fn().mockRejectedValue(new SecretCipherError()) } as never,
+      { refreshAccessToken: vi.fn() } as never,
+      () => now,
+      () => connectionId
+    );
+    await expect(
+      decryptFailure.getValidAccessToken({ organizationId, connectionId })
+    ).rejects.toMatchObject({
+      code: 'CREDENTIAL_DECRYPT_FAILED',
+      stage: 'DECRYPT'
+    });
+
+    const casFailure = new MercadoLibreCredentialService(
+      {
+        readDecryptedCredentials: vi
+          .fn()
+          .mockResolvedValueOnce(credentials())
+          .mockResolvedValueOnce(credentials())
+          .mockResolvedValueOnce(credentials()),
+        claimCredentialRefresh: vi
+          .fn()
+          .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
+        completeCredentialRefresh: vi.fn().mockResolvedValue(false),
+        releaseCredentialRefresh: vi.fn().mockResolvedValue(true)
+      } as never,
+      { refreshAccessToken: vi.fn().mockResolvedValue(refreshResult()) } as never,
+      () => now,
+      () => connectionId
+    );
+    await expect(
+      casFailure.getValidAccessToken({ organizationId, connectionId })
+    ).rejects.toMatchObject({
+      code: 'REFRESH_CAS_FAILED',
+      stage: 'CAS_COMPLETE'
+    });
+  });
+
+  it('preserves the primary error when release also fails', async () => {
+    const release = vi.fn().mockRejectedValue(new Error('release unavailable'));
+    const service = new MercadoLibreCredentialService(
+      {
+        readDecryptedCredentials: vi.fn().mockResolvedValue(credentials()),
+        claimCredentialRefresh: vi
+          .fn()
+          .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
+        releaseCredentialRefresh: release
+      } as never,
+      { refreshAccessToken: vi.fn().mockRejectedValue(new Error('network unavailable')) } as never,
+      () => now,
+      () => connectionId
+    );
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await expect(
+        service.getValidAccessToken({ organizationId, connectionId })
+      ).rejects.toMatchObject({
+        code: 'PROVIDER_NETWORK_ERROR',
+        stage: 'PROVIDER_REQUEST'
+      });
+      expect(log).toHaveBeenCalledWith(
+        '[meli-refresh]',
+        expect.objectContaining({ code: 'REFRESH_RELEASE_FAILED', stage: 'RELEASE' })
+      );
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('classifies encryption failure and redacts credential values', async () => {
+    const service = new MercadoLibreCredentialService(
+      {
+        readDecryptedCredentials: vi.fn().mockResolvedValue(credentials()),
+        claimCredentialRefresh: vi
+          .fn()
+          .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
+        completeCredentialRefresh: vi.fn().mockRejectedValue(new SecretCipherError()),
+        releaseCredentialRefresh: vi.fn().mockResolvedValue(true)
+      } as never,
+      { refreshAccessToken: vi.fn().mockResolvedValue(refreshResult()) } as never,
+      () => now,
+      () => connectionId
+    );
+
+    const promise = service.getValidAccessToken({ organizationId, connectionId });
+    await expect(promise).rejects.toMatchObject({
+      code: 'CREDENTIAL_ENCRYPTION_FAILED',
+      stage: 'ENCRYPT'
+    });
+    try {
+      await promise;
+    } catch (error) {
+      expect(JSON.stringify(error)).not.toContain('refresh-token-v1');
+      expect(JSON.stringify(error)).not.toContain('rotated-access-token');
+    }
   });
 });

@@ -133,7 +133,15 @@ async function requirePersistentContext(
 }
 
 function mapProviderError(error: unknown): OAuthRuntimeError {
-  if (error instanceof MercadoLibreProviderError) return new OAuthRuntimeError(error.kind);
+  if (error instanceof MercadoLibreProviderError) {
+    if (error.kind === 'provider_response_invalid') {
+      return new OAuthRuntimeError('invalid_provider_response');
+    }
+    if (error.kind === 'identity_lookup_failed') {
+      return new OAuthRuntimeError('identity_lookup_failed');
+    }
+    return new OAuthRuntimeError('token_exchange_failed');
+  }
   return new OAuthRuntimeError('configuration_error');
 }
 

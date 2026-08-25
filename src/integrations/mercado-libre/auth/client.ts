@@ -24,9 +24,13 @@ const currentUserSchema = z
 export class MercadoLibreProviderError extends Error {
   constructor(
     public readonly kind:
-      | 'token_exchange_failed'
-      | 'invalid_provider_response'
-      | 'identity_lookup_failed'
+      | 'provider_network_error'
+      | 'provider_timeout'
+      | 'provider_http_error'
+      | 'invalid_refresh_token'
+      | 'provider_response_invalid'
+      | 'identity_lookup_failed',
+    public readonly details: { httpStatus?: number; providerCode?: string } = {}
   ) {
     super(kind);
     this.name = 'MercadoLibreProviderError';
@@ -97,7 +101,7 @@ export class MercadoLibreOAuthClient {
       refresh_token: z.string().min(1).max(8192).parse(refreshToken)
     });
     const result = await this.exchangeToken(body);
-    if (!result.refreshToken) throw new MercadoLibreProviderError('invalid_provider_response');
+    if (!result.refreshToken) throw new MercadoLibreProviderError('provider_response_invalid');
     return result;
   }
 
@@ -116,23 +120,42 @@ export class MercadoLibreOAuthClient {
         signal: controller.signal,
         cache: 'no-store'
       });
-    } catch {
-      throw new MercadoLibreProviderError('token_exchange_failed');
+    } catch (error) {
+      throw new MercadoLibreProviderError(
+        error instanceof Error && error.name === 'AbortError'
+          ? 'provider_timeout'
+          : 'provider_network_error'
+      );
     } finally {
       clearTimeout(timeout);
     }
 
-    if (!response.ok) throw new MercadoLibreProviderError('token_exchange_failed');
+    if (!response.ok) {
+      let providerCode: string | undefined;
+      try {
+        const payload = (await response.clone().json()) as unknown;
+        if (payload && typeof payload === 'object' && 'error' in payload) {
+          const code = (payload as { error?: unknown }).error;
+          if (typeof code === 'string' && code.length <= 100) providerCode = code;
+        }
+      } catch {
+        // The status is sufficient when the provider body is not JSON.
+      }
+      throw new MercadoLibreProviderError(
+        providerCode === 'invalid_grant' ? 'invalid_refresh_token' : 'provider_http_error',
+        { httpStatus: response.status, providerCode }
+      );
+    }
 
     let payload: unknown;
     try {
       payload = await response.json();
     } catch {
-      throw new MercadoLibreProviderError('invalid_provider_response');
+      throw new MercadoLibreProviderError('provider_response_invalid');
     }
 
     const parsed = tokenSchema.safeParse(payload);
-    if (!parsed.success) throw new MercadoLibreProviderError('invalid_provider_response');
+    if (!parsed.success) throw new MercadoLibreProviderError('provider_response_invalid');
 
     return {
       accessToken: parsed.data.access_token,
@@ -161,11 +184,11 @@ export class MercadoLibreOAuthClient {
     try {
       payload = await response.json();
     } catch {
-      throw new MercadoLibreProviderError('invalid_provider_response');
+      throw new MercadoLibreProviderError('provider_response_invalid');
     }
 
     const parsed = currentUserSchema.safeParse(payload);
-    if (!parsed.success) throw new MercadoLibreProviderError('invalid_provider_response');
+    if (!parsed.success) throw new MercadoLibreProviderError('provider_response_invalid');
 
     return {
       externalAccountId: String(parsed.data.id),

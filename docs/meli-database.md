@@ -64,6 +64,10 @@ Las RPC de claim, complete CAS y release son `SECURITY DEFINER`, fijan `search_p
 
 La matriz remota se ejecutó con fixtures deterministas dentro de una subtransacción deliberadamente revertida: versión inicial, claim, claim concurrente `busy`, lease activo, recuperación de lease vencido, complete CAS, rechazo stale, release y version bump por reconnect pasaron. El postcheck confirmó cero fixtures residuales, Owner persistente 1, Store 1, Connection activa 1, Assignments 0, `integration_secrets` 1 y listings 0. No se leyó material de credenciales, no se ejecutó refresh real ni sync real.
 
+## Subfase 2.20H — primer refresh real: STOP sin escritura confirmada
+
+La invocación controlada del runner server-only terminó con un error normalizado antes de poder confirmar la rotación. El postcheck remoto read-only confirmó `credential_version=1`, access token aún expirado, lease limpio, envelope de refresh presente, Connection activa, Store 1, Connection 1, Assignments 0, `integration_secrets` 1 y listings 0. No se confirmó POST `/oauth/token`, no hubo escritura de credenciales y no se reintentó. El refresh real queda pendiente hasta resolver el fallo del runner y obtener una nueva autorización explícita.
+
 ## Subfase 2.16 — foundations OAuth, Connection y Audit
 
 La migración `20260824184934_oauth_security_foundations.sql` añade foundations locales para `oauth_attempts`, `integration_secrets` y `audit_events`. Los intentos almacenan sólo el digest de state, se atan a Organization y actor membership, expiran y se consumen una sola vez. Las credenciales se separan de `connections` y se almacenan como ciphertext autenticado application-level; la clave maestra server-only se identifica como `INTEGRATION_SECRETS_MASTER_KEY` y nunca se versiona.
@@ -187,3 +191,15 @@ En este equipo no se detectó Docker, por lo que la validación local no puede p
 # Subfase 2.11
 
 No se requieren migraciones nuevas ni cambios remotos. Las primitivas usan las tablas existentes, verifican pertenencia por Organization y mantienen la invariante de último Owner en el servicio. La revocación elimina únicamente la tupla `(organization_id, membership_id, store_id)` exacta.
+
+## Subfase 2.20I — diagnóstico no destructivo del refresh real
+
+El único intento real de 2.20H terminó en `real_refresh_failed`. La auditoría no volvió a invocar Mercado Libre, no reclamó el lease real y no confirmó una escritura: el estado remoto permanece en `credential_version=1`, access expirado, refresh cifrado presente y lease libre.
+
+La configuración requerida está presente (`MERCADO_LIBRE_CLIENT_ID`, `MERCADO_LIBRE_CLIENT_SECRET`, redirect HTTPS exacta y PKCE deshabilitado). La master key es válida (32 bytes Base64URL) y el descifrado server-side de access y refresh pasó sin mostrar plaintext. El contrato estático construye un POST form-urlencoded al endpoint oficial con `grant_type=refresh_token`, client id, client secret y refresh token, con timeout de 15 s.
+
+No se conservó HTTP status, código del proveedor ni una traza segura que confirme si se alcanzó `/oauth/token`; por ello la etapa exacta es desconocida y la clasificación es **C — observabilidad insuficiente**. Antes de un único retry futuro se requiere instrumentación server-side mínima que distinga configuración, descifrado, claim, red/timeout, HTTP, respuesta inválida, cifrado, CAS y release, sin secretos. No se modificó código ni migration.
+
+## Subfase 2.20J — observabilidad segura del refresh
+
+La instrumentación local clasifica el refresh por etapa y código seguro, separa timeout de red, conserva status HTTP y sólo un código allowlisted (`invalid_grant`) del proveedor. El error público permanece genérico; el release secundario no reemplaza el fallo primario. No se modificaron lease, `credential_version`, CAS, cifrado, schema, RLS ni grants. No hubo refresh real, escritura remota ni migration nueva.
