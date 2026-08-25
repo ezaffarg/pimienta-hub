@@ -94,6 +94,29 @@ describe('OAuth foundation validation', () => {
     vi.unstubAllEnvs();
   });
 
+  it('returns only safe CAS state metadata', async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        credential_version: 2,
+        refresh_lease_id: '10000000-0000-4000-8000-000000000002'
+      },
+      error: null
+    });
+    const query = { select: vi.fn(), eq: vi.fn(), maybeSingle };
+    query.select.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    const repository = new OAuthFoundationRepository({ from: vi.fn(() => query) } as never);
+
+    await expect(
+      repository.getCredentialRefreshState({
+        organizationId: 'org_test',
+        connectionId: '10000000-0000-4000-8000-000000000001',
+        leaseId: '10000000-0000-4000-8000-000000000002'
+      })
+    ).resolves.toEqual({ credentialVersion: 2, leasePresent: true, leaseMatches: true });
+    expect(query.select).toHaveBeenCalledWith('credential_version, refresh_lease_id');
+  });
+
   it('filters pending previews by actor binding and expiration', async () => {
     const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
     const query = {

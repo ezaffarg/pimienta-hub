@@ -205,7 +205,7 @@ describe('MercadoLibreCredentialService', () => {
     expect(completeCredentialRefresh).not.toHaveBeenCalled();
   });
 
-  it('classifies claim, decrypt, and CAS failures', async () => {
+  it('classifies claim, decrypt, RPC complete, and CAS rejection failures', async () => {
     const claimFailure = new MercadoLibreCredentialService(
       {
         readDecryptedCredentials: vi.fn().mockResolvedValue(credentials()),
@@ -255,9 +255,79 @@ describe('MercadoLibreCredentialService', () => {
     await expect(
       casFailure.getValidAccessToken({ organizationId, connectionId })
     ).rejects.toMatchObject({
-      code: 'REFRESH_CAS_FAILED',
+      code: 'REFRESH_CAS_REJECTED',
+      stage: 'CAS_COMPLETE',
+      details: {
+        expectedVersion: 1,
+        actualVersion: null,
+        leasePresent: false,
+        leaseMatches: false
+      }
+    });
+
+    const rpcFailure = new MercadoLibreCredentialService(
+      {
+        readDecryptedCredentials: vi.fn().mockResolvedValue(credentials()),
+        claimCredentialRefresh: vi
+          .fn()
+          .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
+        completeCredentialRefresh: vi.fn().mockRejectedValue(new Error('rpc unavailable')),
+        releaseCredentialRefresh: vi.fn().mockResolvedValue(true)
+      } as never,
+      { refreshAccessToken: vi.fn().mockResolvedValue(refreshResult()) } as never,
+      () => now,
+      () => connectionId
+    );
+    await expect(
+      rpcFailure.getValidAccessToken({ organizationId, connectionId })
+    ).rejects.toMatchObject({
+      code: 'REFRESH_COMPLETE_RPC_FAILED',
       stage: 'CAS_COMPLETE'
     });
+  });
+
+  it('reports version, lease mismatch, and missing lease as safe CAS diagnostics', async () => {
+    const cases = [
+      {
+        state: { credentialVersion: 2, leasePresent: true, leaseMatches: true },
+        expected: { actualVersion: 2, leasePresent: true, leaseMatches: true }
+      },
+      {
+        state: { credentialVersion: 1, leasePresent: true, leaseMatches: false },
+        expected: { actualVersion: 1, leasePresent: true, leaseMatches: false }
+      },
+      {
+        state: { credentialVersion: 1, leasePresent: false, leaseMatches: false },
+        expected: { actualVersion: 1, leasePresent: false, leaseMatches: false }
+      }
+    ];
+
+    for (const testCase of cases) {
+      const service = new MercadoLibreCredentialService(
+        {
+          readDecryptedCredentials: vi.fn().mockResolvedValue(credentials()),
+          claimCredentialRefresh: vi
+            .fn()
+            .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
+          completeCredentialRefresh: vi.fn().mockResolvedValue(false),
+          getCredentialRefreshState: vi.fn().mockResolvedValue(testCase.state),
+          releaseCredentialRefresh: vi.fn().mockResolvedValue(true)
+        } as never,
+        { refreshAccessToken: vi.fn().mockResolvedValue(refreshResult()) } as never,
+        () => now,
+        () => connectionId
+      );
+      const error = await service
+        .getValidAccessToken({ organizationId, connectionId })
+        .catch((caught: unknown) => caught);
+      expect(error).toMatchObject({
+        code: 'REFRESH_CAS_REJECTED',
+        details: { expectedVersion: 1, ...testCase.expected }
+      });
+      expect(JSON.stringify(error)).not.toContain('refresh-token-v1');
+      expect(JSON.stringify(error)).not.toContain('rotated-access-token');
+      expect(JSON.stringify(error)).not.toContain(connectionId);
+    }
   });
 
   it('preserves the primary error when release also fails', async () => {

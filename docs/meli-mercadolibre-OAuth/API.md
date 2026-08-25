@@ -192,3 +192,12 @@ El cliente público continúa recibiendo errores normalizados y genéricos. Sól
 ## 2.20K — resultado del segundo refresh real
 
 El único intento autorizado finalizó en `CAS_COMPLETE / REFRESH_CAS_FAILED`. Mercado Libre aceptó el refresh y devolvió credenciales rotadas válidas, pero la rotación no quedó confirmada en persistencia: `credential_version` permaneció en 1, el access token siguió vencido y el lease quedó libre. Las credenciales nuevas existieron sólo en memoria; el refresh token persistido debe tratarse como potencialmente consumido y no reutilizable. No se ejecutó `GET /users/me`, listing sync ni una segunda llamada. Antes de cualquier reconnect debe diagnosticarse y corregirse el CAS; un tercer refresh no está autorizado.
+
+## 2.20M — diagnóstico de finalización CAS
+
+La finalización distingue server-side un fallo de transporte/DB de la RPC
+(`REFRESH_COMPLETE_RPC_FAILED`) de un rechazo CAS confirmado
+(`REFRESH_CAS_REJECTED`). Para el segundo caso conserva sólo versión esperada y
+actual, presencia del lease y si coincide con el lease esperado; no expone el
+UUID del lease ni material de credenciales. El resultado histórico de 2.20K
+permanece **STILL_UNKNOWN**: no había evidencia suficiente para reclasificarlo.

@@ -63,6 +63,12 @@ export interface CredentialRefreshClaim {
   credentialVersion: number | null;
 }
 
+export interface CredentialRefreshState {
+  credentialVersion: number;
+  leasePresent: boolean;
+  leaseMatches: boolean;
+}
+
 export interface OnboardingResult {
   outcome: OnboardingOutcome;
   storeId: string | null;
@@ -358,6 +364,34 @@ export class OAuthFoundationRepository {
     });
     throwOnError(error);
     return z.boolean().parse(data);
+  }
+
+  async getCredentialRefreshState(input: {
+    organizationId: string;
+    connectionId: string;
+    leaseId: string;
+  }): Promise<CredentialRefreshState | null> {
+    const parsed = z
+      .object({
+        organizationId: z.string().min(1).max(255),
+        connectionId: uuidSchema,
+        leaseId: uuidSchema
+      })
+      .strict()
+      .parse(input);
+    const { data, error } = await this.client
+      .from('integration_secrets')
+      .select('credential_version, refresh_lease_id')
+      .eq('organization_id', parsed.organizationId)
+      .eq('connection_id', parsed.connectionId)
+      .maybeSingle();
+    throwOnError(error);
+    if (!data) return null;
+    return {
+      credentialVersion: z.number().int().positive().parse(data.credential_version),
+      leasePresent: data.refresh_lease_id !== null,
+      leaseMatches: data.refresh_lease_id === parsed.leaseId
+    };
   }
 
   async releaseCredentialRefresh(input: {

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type {
   CredentialRefreshClaim,
+  CredentialRefreshState,
   DecryptedCredentials
 } from '@/infrastructure/database/oauth-foundations';
 import { OAuthFoundationRepository } from '@/infrastructure/database/oauth-foundations';
@@ -16,7 +17,7 @@ export class MercadoLibreCredentialError extends Error {
   constructor(
     public readonly code: RefreshErrorCode,
     public readonly stage: RefreshStage,
-    public readonly details: { httpStatus?: number; providerCode?: string } = {}
+    public readonly details: RefreshErrorDetails = {}
   ) {
     super(code);
     this.name = 'MercadoLibreCredentialError';
@@ -25,6 +26,15 @@ export class MercadoLibreCredentialError extends Error {
   get kind(): RefreshErrorCode {
     return this.code;
   }
+}
+
+export interface RefreshErrorDetails {
+  httpStatus?: number;
+  providerCode?: string;
+  expectedVersion?: number;
+  actualVersion?: number | null;
+  leasePresent?: boolean;
+  leaseMatches?: boolean;
 }
 
 export type RefreshStage =
@@ -53,7 +63,8 @@ export type RefreshErrorCode =
   | 'PROVIDER_INVALID_REFRESH_TOKEN'
   | 'PROVIDER_RESPONSE_INVALID'
   | 'CREDENTIAL_ENCRYPTION_FAILED'
-  | 'REFRESH_CAS_FAILED'
+  | 'REFRESH_COMPLETE_RPC_FAILED'
+  | 'REFRESH_CAS_REJECTED'
   | 'REFRESH_RELEASE_FAILED'
   | 'REFRESH_UNKNOWN_ERROR';
 
@@ -76,6 +87,11 @@ export interface MercadoLibreCredentialStore {
     leaseId: string;
     credentials: DecryptedCredentials;
   }): Promise<boolean>;
+  getCredentialRefreshState(input: {
+    organizationId: string;
+    connectionId: string;
+    leaseId: string;
+  }): Promise<CredentialRefreshState | null>;
   releaseCredentialRefresh(input: {
     organizationId: string;
     connectionId: string;
@@ -185,17 +201,24 @@ export class MercadoLibreCredentialService {
         if (error instanceof SecretCipherError) {
           throw new MercadoLibreCredentialError('CREDENTIAL_ENCRYPTION_FAILED', 'ENCRYPT');
         }
-        throw new MercadoLibreCredentialError('REFRESH_CAS_FAILED', 'CAS_COMPLETE');
+        throw new MercadoLibreCredentialError('REFRESH_COMPLETE_RPC_FAILED', 'CAS_COMPLETE');
       }
       if (completed) return credentials.accessToken;
 
-      const latest = await this.requireCredentials(
-        parsed.organizationId,
-        parsed.connectionId,
-        'CAS_COMPLETE'
+      const latest = await this.getRefreshCompletionState({
+        organizationId: parsed.organizationId,
+        connectionId: parsed.connectionId,
+        leaseId,
+        expectedVersion: afterClaim.credentialVersion
+      });
+      if (latest.credentials && isCurrent(latest.credentials, refreshBefore)) {
+        return latest.credentials.accessToken;
+      }
+      throw new MercadoLibreCredentialError(
+        'REFRESH_CAS_REJECTED',
+        'CAS_COMPLETE',
+        latest.diagnostics
       );
-      if (isCurrent(latest, refreshBefore)) return latest.accessToken;
-      throw new MercadoLibreCredentialError('REFRESH_CAS_FAILED', 'CAS_COMPLETE');
     } catch (error) {
       if (error instanceof MercadoLibreCredentialError) throw error;
       throw new MercadoLibreCredentialError('REFRESH_UNKNOWN_ERROR', 'PROVIDER_RESPONSE');
@@ -237,6 +260,42 @@ export class MercadoLibreCredentialService {
         stage
       );
     }
+  }
+
+  private async getRefreshCompletionState(input: {
+    organizationId: string;
+    connectionId: string;
+    leaseId: string;
+    expectedVersion: number;
+  }): Promise<{
+    credentials: DecryptedCredentials | null;
+    diagnostics: RefreshErrorDetails;
+  }> {
+    let state: CredentialRefreshState | null = null;
+    try {
+      state = await this.secrets.getCredentialRefreshState(input);
+    } catch {
+      // A diagnostic read must not turn a confirmed CAS rejection into an RPC failure.
+    }
+    let credentials: DecryptedCredentials | null = null;
+    try {
+      credentials = await this.requireCredentials(
+        input.organizationId,
+        input.connectionId,
+        'CAS_COMPLETE'
+      );
+    } catch {
+      // The safe metadata below is sufficient to classify the rejected CAS.
+    }
+    return {
+      credentials,
+      diagnostics: {
+        expectedVersion: input.expectedVersion,
+        actualVersion: state?.credentialVersion ?? null,
+        leasePresent: state?.leasePresent ?? false,
+        leaseMatches: state?.leaseMatches ?? false
+      }
+    };
   }
 
   private async waitForPeerRefresh(
