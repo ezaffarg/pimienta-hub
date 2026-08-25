@@ -56,6 +56,14 @@ El lease dura 60 segundos. El provider request se limita a 15 segundos y la actu
 
 Esta foundation es local: no se aplicó la migration remota, no se ejecutó refresh real ni se persistieron listings reales.
 
+## Subfase 2.20G — validación remota de rotación segura
+
+La migration `20260825100000_safe_integration_secret_refresh_rotation.sql` fue aplicada únicamente al proyecto remoto dedicado `ffcudwwrzttkumbdvada` tras un dry-run que listó sólo esa migration. Local y remoto quedaron alineados. `integration_secrets` contiene `credential_version bigint not null default 1`, `refresh_lease_id uuid` y `refresh_lease_expires_at timestamptz` nullable.
+
+Las RPC de claim, complete CAS y release son `SECURITY DEFINER`, fijan `search_path=pg_catalog` y sólo `service_role` puede ejecutarlas. RLS sigue enabled sin policies browser-facing; `PUBLIC`, `anon` y `authenticated` no tienen acceso a la tabla ni ejecución de las RPC.
+
+La matriz remota se ejecutó con fixtures deterministas dentro de una subtransacción deliberadamente revertida: versión inicial, claim, claim concurrente `busy`, lease activo, recuperación de lease vencido, complete CAS, rechazo stale, release y version bump por reconnect pasaron. El postcheck confirmó cero fixtures residuales, Owner persistente 1, Store 1, Connection activa 1, Assignments 0, `integration_secrets` 1 y listings 0. No se leyó material de credenciales, no se ejecutó refresh real ni sync real.
+
 ## Subfase 2.16 — foundations OAuth, Connection y Audit
 
 La migración `20260824184934_oauth_security_foundations.sql` añade foundations locales para `oauth_attempts`, `integration_secrets` y `audit_events`. Los intentos almacenan sólo el digest de state, se atan a Organization y actor membership, expiran y se consumen una sola vez. Las credenciales se separan de `connections` y se almacenan como ciphertext autenticado application-level; la clave maestra server-only se identifica como `INTEGRATION_SECRETS_MASTER_KEY` y nunca se versiona.
