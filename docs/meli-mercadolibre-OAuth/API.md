@@ -227,3 +227,17 @@ La implementación target-bound quedó aplicada y validada en el proyecto remoto
 dedicado mediante fixtures sintéticos con rollback. La matriz reducida pasó 8/8
 sin modificar Store, Connection, secreto, versión, lease, listings ni pending
 legacy reales. No se ejecutó OAuth, refresh ni finalización real.
+
+## 2.20R — reconnect real target-bound
+
+Una única autorización reconnect nueva produjo una pending activa y
+target-bound para la Connection real existente. Tras validar tenant, Store,
+provider e identidad, la finalización canónica devolvió `reconnected`: conservó
+una Store, una Connection activa y un secreto, incrementó
+`credential_version` de 1 a 2, dejó el lease libre, registró
+`integration.reconnected` y consumió la pending. Listings permaneció en 0.
+
+La verificación posterior hizo una sola lectura `GET /users/me` con el access
+token persistido todavía vigente, sin refresh. La llamada pasó, la identidad
+coincidió y el display name fue E.A.ZOCOOL. No hubo OAuth adicional, listing
+sync, migration ni cierre Git.

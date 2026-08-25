@@ -4,7 +4,8 @@ import { withSentryConfig } from '@sentry/nextjs';
 // Define the base Next.js configuration
 const baseConfig: NextConfig = {
   output: process.env.BUILD_STANDALONE === 'true' ? 'standalone' : undefined,
-  allowedDevOrigins: ['pic-benefit-limits-packaging.trycloudflare.com'],
+  // Temporary development tunnel origin; replace when the tunnel hostname changes.
+  allowedDevOrigins: ['southern-bufing-convert-mae.trycloudflare.com'],
   images: {
     remotePatterns: [
       {
