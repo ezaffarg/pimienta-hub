@@ -1,10 +1,19 @@
 import 'server-only';
 
 import { z } from 'zod';
-import type { ExternalListingSummary, IntegrationPage } from '@/integrations/core';
-import { ConnectionRepository } from '@/infrastructure/database/repositories';
+import { ListingSyncService } from '@/infrastructure/database/listing-sync-service';
+import { ConnectionRepository, type ListingScope } from '@/infrastructure/database/repositories';
 import { MercadoLibreCredentialService } from '../auth';
-import { MercadoLibreListingsClient } from './client';
+import {
+  MercadoLibreListingsClient,
+  MercadoLibreListingsError,
+  type MercadoLibreListingDiscoveryCursor,
+  type MercadoLibreListingFailure,
+  type MercadoLibreListingPage
+} from './client';
+
+const DETAIL_CHUNK_SIZE = 20;
+const MAX_DISCOVERY_PAGES = 10_000;
 
 export class MercadoLibreListingsServiceError extends Error {
   constructor(
@@ -19,11 +28,21 @@ export class MercadoLibreListingsServiceError extends Error {
   }
 }
 
+export interface MercadoLibreListingBackfillResult {
+  discovered: number;
+  requested: number;
+  fetched: number;
+  persisted: number;
+  failed: number;
+  failures: readonly MercadoLibreListingFailure[];
+}
+
 export class MercadoLibreListingsService {
   constructor(
     private readonly connections = new ConnectionRepository(),
     private readonly credentials = new MercadoLibreCredentialService(),
-    private readonly listings = new MercadoLibreListingsClient()
+    private readonly listings = new MercadoLibreListingsClient(),
+    private readonly sync?: ListingSyncService
   ) {}
 
   async listActiveConnectionListings(input: {
@@ -31,24 +50,116 @@ export class MercadoLibreListingsService {
     storeId: string;
     connectionId: string;
     limit?: number;
-  }): Promise<IntegrationPage<ExternalListingSummary> & { total: number | null }> {
-    const parsed = z
-      .object({
-        organizationId: z.string().trim().min(1).max(255),
-        storeId: z.uuid(),
-        connectionId: z.uuid(),
-        limit: z.number().int().min(1).max(20).optional()
-      })
-      .strict()
-      .parse(input);
-    const connection = await this.connections.getById(parsed.organizationId, parsed.connectionId);
+  }): Promise<MercadoLibreListingPage> {
+    const parsed = listingInputSchema.parse(input);
+    const runtime = await this.getRuntime(parsed);
+    return this.listings.listSellerListings({
+      accessToken: runtime.accessToken,
+      sellerId: runtime.externalAccountId,
+      limit: parsed.limit ?? 20
+    });
+  }
+
+  async syncAllActiveConnectionListings(input: {
+    organizationId: string;
+    storeId: string;
+    connectionId: string;
+  }): Promise<MercadoLibreListingBackfillResult> {
+    const parsed = listingInputSchema.omit({ limit: true }).parse(input);
+    const runtime = await this.getRuntime(parsed);
+    const accessToken = runtime.accessToken;
+    const sync = this.sync ?? new ListingSyncService();
+    const scope: ListingScope = parsed;
+    const discoveredIds = new Set<string>();
+    const seenCursors = new Set<string>();
+    const failures: MercadoLibreListingFailure[] = [];
+    let cursor: MercadoLibreListingDiscoveryCursor | null = null;
+    let requested = 0;
+    let fetched = 0;
+    let persisted = 0;
+    let pages = 0;
+
+    do {
+      pages += 1;
+      if (pages > MAX_DISCOVERY_PAGES) {
+        throw new MercadoLibreListingsError('invalid_provider_response', 'discovery', false);
+      }
+      const page = await this.listings.discoverSellerListingIds({
+        accessToken,
+        sellerId: runtime.externalAccountId,
+        cursor
+      });
+      const newIds = page.itemIds.filter((itemId) => {
+        if (discoveredIds.has(itemId)) return false;
+        discoveredIds.add(itemId);
+        return true;
+      });
+
+      for (let start = 0; start < newIds.length; start += DETAIL_CHUNK_SIZE) {
+        const itemIds = newIds.slice(start, start + DETAIL_CHUNK_SIZE);
+        requested += itemIds.length;
+        let details;
+        try {
+          details = await this.listings.getListingDetails({
+            accessToken,
+            itemIds
+          });
+        } catch (error) {
+          if (!(error instanceof MercadoLibreListingsError)) throw error;
+          failures.push(
+            ...itemIds.map((externalListingId) => ({
+              externalListingId,
+              kind: error.kind,
+              retryable: error.retryable,
+              status: error.status
+            }))
+          );
+          continue;
+        }
+
+        fetched += details.items.length;
+        failures.push(...details.failures);
+        if (details.items.length > 0) {
+          const records = await sync.syncAuthorizedConnection({
+            scope,
+            summaries: details.items
+          });
+          persisted += records.length;
+        }
+      }
+
+      cursor = page.nextCursor;
+      if (cursor?.mode === 'offset') {
+        const cursorKey = JSON.stringify(cursor);
+        if (seenCursors.has(cursorKey)) {
+          throw new MercadoLibreListingsError('invalid_provider_response', 'discovery', false);
+        }
+        seenCursors.add(cursorKey);
+      }
+    } while (cursor);
+
+    return {
+      discovered: discoveredIds.size,
+      requested,
+      fetched,
+      persisted,
+      failed: failures.length,
+      failures
+    };
+  }
+
+  private async getRuntime(input: ListingScope): Promise<{
+    accessToken: string;
+    externalAccountId: string;
+  }> {
+    const connection = await this.connections.getById(input.organizationId, input.connectionId);
     if (!connection) throw new MercadoLibreListingsServiceError('connection_not_found');
     if (connection.status !== 'active') {
       throw new MercadoLibreListingsServiceError('connection_not_active');
     }
     if (
-      connection.organizationId !== parsed.organizationId ||
-      connection.storeId !== parsed.storeId ||
+      connection.organizationId !== input.organizationId ||
+      connection.storeId !== input.storeId ||
       connection.provider !== 'mercado-libre' ||
       !connection.externalAccountId
     ) {
@@ -56,14 +167,18 @@ export class MercadoLibreListingsService {
     }
 
     const accessToken = await this.credentials.getValidAccessToken({
-      organizationId: parsed.organizationId,
-      connectionId: parsed.connectionId
+      organizationId: input.organizationId,
+      connectionId: input.connectionId
     });
-
-    return this.listings.listSellerListings({
-      accessToken,
-      sellerId: connection.externalAccountId,
-      limit: parsed.limit ?? 20
-    });
+    return { accessToken, externalAccountId: connection.externalAccountId };
   }
 }
+
+const listingInputSchema = z
+  .object({
+    organizationId: z.string().trim().min(1).max(255),
+    storeId: z.uuid(),
+    connectionId: z.uuid(),
+    limit: z.number().int().min(1).max(20).optional()
+  })
+  .strict();

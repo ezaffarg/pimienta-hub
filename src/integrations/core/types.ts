@@ -41,6 +41,8 @@ export interface ExternalListingSummary {
   catalogProductId: string | null;
   sellerSku: string | null;
   condition: string | null;
+  providerCreatedAt: string | null;
+  providerUpdatedAt: string | null;
 }
 
 export interface CanonicalOrder {

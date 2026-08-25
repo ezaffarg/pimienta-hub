@@ -24,7 +24,9 @@ const summary = {
   thumbnail: null,
   catalogProductId: null,
   sellerSku: null,
-  condition: 'used'
+  condition: 'used',
+  providerCreatedAt: '2026-08-23T00:00:00.000Z',
+  providerUpdatedAt: '2026-08-24T00:00:00.000Z'
 };
 
 describe('ListingRepository', () => {
@@ -58,7 +60,9 @@ describe('ListingRepository', () => {
           connection_id: scope.connectionId,
           external_listing_id: summary.externalId,
           seller_sku: null,
-          price: '123.45'
+          price: '123.45',
+          provider_created_at: summary.providerCreatedAt,
+          provider_updated_at: summary.providerUpdatedAt
         })
       ],
       { onConflict: 'connection_id,external_listing_id' }

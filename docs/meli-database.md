@@ -245,3 +245,18 @@ postcheck confirmó Store y Connection correctas, provider Mercado Libre, datos
 esenciales completos y 0 duplicados. `integration_secrets` permaneció en 1,
 `credential_version` en 2 y el lease libre: no se ejecutó refresh. No hubo
 escrituras en Mercado Libre, OAuth, reconnect, migration ni cambios de schema.
+
+## Subfase 2.20S — hardening local del listing backfill
+
+El contrato canónico y `ListingRepository` pasan a escribir y leer
+`provider_created_at` y `provider_updated_at`, columnas nullable que ya existían
+en `public.listings`. Los valores proceden exclusivamente de `date_created` y
+`last_updated` oficiales; no se sustituyen por el reloj local. El upsert por
+`(connection_id, external_listing_id)`, los bindings compuestos y
+`last_synced_at` permanecen sin cambios.
+
+El backfill persiste cada batch válido mediante `ListingSyncService` y devuelve
+conteos agregados de discovery, requests, details, persistencia y fallos. Un
+item inválido o fallido no bloquea otros batches, pero una falla DB continúa
+fallando cerrado. No se agregan tablas, columnas, sync runs, métricas, audit,
+missing detection, soft-delete ni migration.

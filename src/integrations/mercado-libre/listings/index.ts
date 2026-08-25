@@ -1,6 +1,15 @@
 export {
   MercadoLibreListingsClient,
   MercadoLibreListingsError,
-  type MercadoLibreListingPage
+  type MercadoLibreListingDetailsResult,
+  type MercadoLibreListingDiscoveryCursor,
+  type MercadoLibreListingDiscoveryPage,
+  type MercadoLibreListingFailure,
+  type MercadoLibreListingPage,
+  type MercadoLibreListingsErrorKind
 } from './client';
-export { MercadoLibreListingsService, MercadoLibreListingsServiceError } from './service';
+export {
+  MercadoLibreListingsService,
+  MercadoLibreListingsServiceError,
+  type MercadoLibreListingBackfillResult
+} from './service';

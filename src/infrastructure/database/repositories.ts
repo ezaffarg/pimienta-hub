@@ -74,6 +74,8 @@ export interface ListingRecord extends ListingScope {
   permalink: string | null;
   thumbnailUrl: string | null;
   catalogProductId: string | null;
+  providerCreatedAt: string | null;
+  providerUpdatedAt: string | null;
   lastSyncedAt: string;
 }
 
@@ -454,7 +456,7 @@ const listingScopeSchema = z.object({
 });
 
 const listingColumns =
-  'id, organization_id, store_id, connection_id, external_listing_id, title, status, price, currency_id, available_quantity, sold_quantity, seller_sku, listing_type_id, condition, permalink, thumbnail_url, catalog_product_id, last_synced_at';
+  'id, organization_id, store_id, connection_id, external_listing_id, title, status, price, currency_id, available_quantity, sold_quantity, seller_sku, listing_type_id, condition, permalink, thumbnail_url, catalog_product_id, provider_created_at, provider_updated_at, last_synced_at';
 
 function listingRow(scope: ListingScope, listing: ExternalListingSummary, lastSyncedAt: string) {
   const value = z
@@ -471,7 +473,9 @@ function listingRow(scope: ListingScope, listing: ExternalListingSummary, lastSy
       condition: z.string().trim().min(1).max(100).nullable(),
       permalink: z.url().max(2048).nullable(),
       thumbnail: z.url().max(2048).nullable(),
-      catalogProductId: z.string().trim().min(1).max(255).nullable()
+      catalogProductId: z.string().trim().min(1).max(255).nullable(),
+      providerCreatedAt: z.iso.datetime().nullable(),
+      providerUpdatedAt: z.iso.datetime().nullable()
     })
     .parse(listing);
   return {
@@ -491,6 +495,8 @@ function listingRow(scope: ListingScope, listing: ExternalListingSummary, lastSy
     permalink: value.permalink,
     thumbnail_url: value.thumbnail,
     catalog_product_id: value.catalogProductId,
+    provider_created_at: value.providerCreatedAt,
+    provider_updated_at: value.providerUpdatedAt,
     last_synced_at: lastSyncedAt,
     updated_at: lastSyncedAt
   };
@@ -514,6 +520,8 @@ function listingRecord(record: {
   permalink: string | null;
   thumbnail_url: string | null;
   catalog_product_id: string | null;
+  provider_created_at: string | null;
+  provider_updated_at: string | null;
   last_synced_at: string;
 }): ListingRecord {
   return {
@@ -534,6 +542,8 @@ function listingRecord(record: {
     permalink: record.permalink,
     thumbnailUrl: record.thumbnail_url,
     catalogProductId: record.catalog_product_id,
+    providerCreatedAt: record.provider_created_at,
+    providerUpdatedAt: record.provider_updated_at,
     lastSyncedAt: record.last_synced_at
   };
 }
