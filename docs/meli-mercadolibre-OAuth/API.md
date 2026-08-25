@@ -201,3 +201,14 @@ La finalización distingue server-side un fallo de transporte/DB de la RPC
 actual, presencia del lease y si coincide con el lease esperado; no expone el
 UUID del lease ni material de credenciales. El resultado histórico de 2.20K
 permanece **STILL_UNKNOWN**: no había evidencia suficiente para reclasificarlo.
+
+## 2.20O — reconnect explícito sobre Connection activa
+
+Una reautorización requiere `purpose=reconnect` explícito. Puede continuar sobre
+una Connection Mercado Libre existente, activa o disabled, sólo si pertenece a
+la Organization server-side y su provider e identidad externa coinciden con
+`/users/me`. Connect normal conserva el rechazo de cualquier Connection
+existente; reconnect sin target falla cerrado. La preparación sólo crea la
+pending authorization: no duplica Store ni Connection. El finalizador existente
+reutiliza la Connection y conserva su semántica de versión de credencial y
+`integration.reconnected`.

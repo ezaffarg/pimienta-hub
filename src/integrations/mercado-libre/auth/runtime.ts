@@ -46,7 +46,8 @@ export type OAuthRuntimeErrorCode =
   | 'identity_lookup_failed'
   | 'invalid_provider_response'
   | 'already_connected'
-  | 'connection_conflict';
+  | 'connection_conflict'
+  | 'reconnect_target_not_found';
 
 export class OAuthRuntimeError extends Error {
   constructor(public readonly code: OAuthRuntimeErrorCode) {
@@ -250,12 +251,20 @@ export async function completeMercadoLibreOAuth(
     'mercado-libre',
     currentUser.externalAccountId
   );
-  if (existing?.status === 'active') {
-    throw new OAuthRuntimeError(
-      existing.organizationId === context.organizationId
-        ? 'already_connected'
-        : 'connection_conflict'
-    );
+  if (existing && existing.provider !== 'mercado-libre') {
+    throw new OAuthRuntimeError('connection_conflict');
+  }
+  if (existing && existing.externalAccountId !== currentUser.externalAccountId) {
+    throw new OAuthRuntimeError('connection_conflict');
+  }
+  if (existing && existing.organizationId !== context.organizationId) {
+    throw new OAuthRuntimeError('connection_conflict');
+  }
+  if (attempt.purpose === 'reconnect' && !existing) {
+    throw new OAuthRuntimeError('reconnect_target_not_found');
+  }
+  if (attempt.purpose !== 'reconnect' && existing) {
+    throw new OAuthRuntimeError('already_connected');
   }
 
   await foundations.createPendingOAuthAuthorization({
@@ -272,7 +281,7 @@ export async function completeMercadoLibreOAuth(
     expiresAt: toIso(addMinutes(now, 20))
   });
 
-  return existing?.status === 'disabled'
+  return attempt.purpose === 'reconnect'
     ? { status: 'READY_FOR_RECONNECT', displayName: currentUser.displayName }
     : { status: 'READY_FOR_ONBOARDING', displayName: currentUser.displayName };
 }

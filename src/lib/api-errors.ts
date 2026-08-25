@@ -16,7 +16,8 @@ export type ApiErrorCode =
   | 'IDENTITY_LOOKUP_FAILED'
   | 'INVALID_PROVIDER_RESPONSE'
   | 'ALREADY_CONNECTED'
-  | 'CONNECTION_CONFLICT';
+  | 'CONNECTION_CONFLICT'
+  | 'RECONNECT_TARGET_NOT_FOUND';
 
 export function apiErrorResponse(code: ApiErrorCode, status: number): NextResponse {
   const messages: Record<ApiErrorCode, string> = {
@@ -35,7 +36,8 @@ export function apiErrorResponse(code: ApiErrorCode, status: number): NextRespon
     IDENTITY_LOOKUP_FAILED: 'OAuth identity lookup failed',
     INVALID_PROVIDER_RESPONSE: 'OAuth provider response is invalid',
     ALREADY_CONNECTED: 'This account is already connected',
-    CONNECTION_CONFLICT: 'This account cannot be connected here'
+    CONNECTION_CONFLICT: 'This account cannot be connected here',
+    RECONNECT_TARGET_NOT_FOUND: 'The reconnect target was not found'
   };
 
   return NextResponse.json(

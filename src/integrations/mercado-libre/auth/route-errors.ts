@@ -16,7 +16,8 @@ const codes: Record<OAuthRuntimeErrorCode, ApiErrorCode> = {
   identity_lookup_failed: 'IDENTITY_LOOKUP_FAILED',
   invalid_provider_response: 'INVALID_PROVIDER_RESPONSE',
   already_connected: 'ALREADY_CONNECTED',
-  connection_conflict: 'CONNECTION_CONFLICT'
+  connection_conflict: 'CONNECTION_CONFLICT',
+  reconnect_target_not_found: 'RECONNECT_TARGET_NOT_FOUND'
 };
 
 const statuses: Record<OAuthRuntimeErrorCode, number> = {
@@ -30,7 +31,8 @@ const statuses: Record<OAuthRuntimeErrorCode, number> = {
   identity_lookup_failed: 502,
   invalid_provider_response: 502,
   already_connected: 409,
-  connection_conflict: 409
+  connection_conflict: 409,
+  reconnect_target_not_found: 404
 };
 
 export function oauthRouteErrorResponse(error: unknown): Response {

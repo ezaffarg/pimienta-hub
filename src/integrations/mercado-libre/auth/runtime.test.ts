@@ -171,4 +171,112 @@ describe('Mercado Libre OAuth runtime', () => {
     ).rejects.toThrow('connection_conflict');
     expect(setup.test.foundations.createPendingOAuthAuthorization).not.toHaveBeenCalled();
   });
+
+  it('keeps normal connect blocked for an existing active connection', async () => {
+    const setup = dependencies();
+    setup.connections.findByProviderAndExternalAccount.mockResolvedValue({
+      organizationId: 'org_test',
+      provider: 'mercado-libre',
+      externalAccountId: '123',
+      status: 'active'
+    });
+
+    await expect(
+      completeMercadoLibreOAuth({ code: 'test-code', state: 'a'.repeat(32) }, setup)
+    ).rejects.toThrow('already_connected');
+    expect(setup.test.foundations.createPendingOAuthAuthorization).not.toHaveBeenCalled();
+  });
+
+  it.each(['active', 'disabled'] as const)(
+    'allows explicit reconnect for a same-tenant %s connection without creating it',
+    async (status) => {
+      const setup = dependencies();
+      setup.test.foundations.consumeOAuthAttempt.mockResolvedValue({
+        id: '10000000-0000-4000-8000-000000000002',
+        organizationId: 'org_test',
+        actorMembershipId: membership.id,
+        provider: 'mercado-libre',
+        purpose: 'reconnect',
+        encryptedCodeVerifier: 'ciphertext',
+        keyVersion: 1,
+        expiresAt: '2030-01-01T00:10:00.000Z'
+      });
+      setup.connections.findByProviderAndExternalAccount.mockResolvedValue({
+        organizationId: 'org_test',
+        provider: 'mercado-libre',
+        externalAccountId: '123',
+        status
+      });
+
+      await expect(
+        completeMercadoLibreOAuth({ code: 'test-code', state: 'a'.repeat(32) }, setup)
+      ).resolves.toEqual({ status: 'READY_FOR_RECONNECT', displayName: 'ML Test' });
+      expect(setup.test.foundations.createPendingOAuthAuthorization).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('fails closed for reconnect without a same-tenant Mercado Libre target', async () => {
+    const missing = dependencies();
+    missing.test.foundations.consumeOAuthAttempt.mockResolvedValue({
+      id: '10000000-0000-4000-8000-000000000002',
+      organizationId: 'org_test',
+      actorMembershipId: membership.id,
+      provider: 'mercado-libre',
+      purpose: 'reconnect',
+      encryptedCodeVerifier: 'ciphertext',
+      keyVersion: 1,
+      expiresAt: '2030-01-01T00:10:00.000Z'
+    });
+    await expect(
+      completeMercadoLibreOAuth({ code: 'test-code', state: 'a'.repeat(32) }, missing)
+    ).rejects.toThrow('reconnect_target_not_found');
+    expect(missing.test.foundations.createPendingOAuthAuthorization).not.toHaveBeenCalled();
+
+    const wrongProvider = dependencies();
+    wrongProvider.test.foundations.consumeOAuthAttempt.mockResolvedValue({
+      id: '10000000-0000-4000-8000-000000000002',
+      organizationId: 'org_test',
+      actorMembershipId: membership.id,
+      provider: 'mercado-libre',
+      purpose: 'reconnect',
+      encryptedCodeVerifier: 'ciphertext',
+      keyVersion: 1,
+      expiresAt: '2030-01-01T00:10:00.000Z'
+    });
+    wrongProvider.connections.findByProviderAndExternalAccount.mockResolvedValue({
+      organizationId: 'org_test',
+      provider: 'shopify',
+      externalAccountId: '123',
+      status: 'active'
+    });
+    await expect(
+      completeMercadoLibreOAuth({ code: 'test-code', state: 'a'.repeat(32) }, wrongProvider)
+    ).rejects.toThrow('connection_conflict');
+    expect(wrongProvider.test.foundations.createPendingOAuthAuthorization).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the resolved connection identity differs from /users/me', async () => {
+    const setup = dependencies();
+    setup.test.foundations.consumeOAuthAttempt.mockResolvedValue({
+      id: '10000000-0000-4000-8000-000000000002',
+      organizationId: 'org_test',
+      actorMembershipId: membership.id,
+      provider: 'mercado-libre',
+      purpose: 'reconnect',
+      encryptedCodeVerifier: 'ciphertext',
+      keyVersion: 1,
+      expiresAt: '2030-01-01T00:10:00.000Z'
+    });
+    setup.connections.findByProviderAndExternalAccount.mockResolvedValue({
+      organizationId: 'org_test',
+      provider: 'mercado-libre',
+      externalAccountId: 'different-account',
+      status: 'active'
+    });
+
+    await expect(
+      completeMercadoLibreOAuth({ code: 'test-code', state: 'a'.repeat(32) }, setup)
+    ).rejects.toThrow('connection_conflict');
+    expect(setup.test.foundations.createPendingOAuthAuthorization).not.toHaveBeenCalled();
+  });
 });
