@@ -203,3 +203,9 @@ No se conservó HTTP status, código del proveedor ni una traza segura que confi
 ## Subfase 2.20J — observabilidad segura del refresh
 
 La instrumentación local clasifica el refresh por etapa y código seguro, separa timeout de red, conserva status HTTP y sólo un código allowlisted (`invalid_grant`) del proveedor. El error público permanece genérico; el release secundario no reemplaza el fallo primario. No se modificaron lease, `credential_version`, CAS, cifrado, schema, RLS ni grants. No hubo refresh real, escritura remota ni migration nueva.
+
+## Subfase 2.20K — segundo refresh real detenido en CAS
+
+Se ejecutó una única vez la primitive real para la Connection activa de E.A.ZOCOOL. La configuración y el descifrado server-side pasaron; la ejecución terminó de forma segura en `stage=CAS_COMPLETE`, `safeCode=REFRESH_CAS_FAILED`. No se reintentó y no se ejecutó `GET /users/me`.
+
+El postcheck remoto read-only confirmó `credential_version=1`, access expirado, refresh cifrado presente, lease libre, Store 1, Connection 1, Assignments 0, `integration_secrets` 1 y listings 0. Las credenciales persistidas anteriores permanecen sin cambios. Como el fallo ocurrió después de una respuesta válida del provider que incluyó refresh rotado, pero antes de un CAS confirmado, el refresh persistido debe considerarse potencialmente consumido y **no reutilizable**. La Connection queda en estado **RECONNECT_REQUIRED** antes de cualquier nueva operación; no se ejecutó reconnect en esta subfase ni se autoriza un tercer refresh.

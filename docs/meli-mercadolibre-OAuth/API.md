@@ -188,3 +188,7 @@ El futuro Audit Log será server-side: `audit:read` permitido a Owner y Manager,
 El refresh server-side conserva una taxonomía interna por etapa (`READ`, `DECRYPT`, `CLAIM`, `DOUBLE_CHECK`, `PROVIDER_REQUEST`, `PROVIDER_RESPONSE`, `ENCRYPT`, `CAS_COMPLETE`, `RELEASE`). Distingue configuración, lectura/descifrado, claim/busy, red, timeout, HTTP, `invalid_grant`, respuesta inválida, cifrado, CAS y release.
 
 El cliente público continúa recibiendo errores normalizados y genéricos. Sólo se conservan server-side un código seguro, stage, status HTTP y códigos allowlisted del proveedor. Nunca se registran tokens, ciphertext, secretos, bodies ni headers sensibles. No existe retry automático del refresh token; cualquier retry real requiere autorización explícita y será único.
+
+## 2.20K — resultado del segundo refresh real
+
+El único intento autorizado finalizó en `CAS_COMPLETE / REFRESH_CAS_FAILED`. Mercado Libre aceptó el refresh y devolvió credenciales rotadas válidas, pero la rotación no quedó confirmada en persistencia: `credential_version` permaneció en 1, el access token siguió vencido y el lease quedó libre. Las credenciales nuevas existieron sólo en memoria; el refresh token persistido debe tratarse como potencialmente consumido y no reutilizable. No se ejecutó `GET /users/me`, listing sync ni una segunda llamada. Antes de cualquier reconnect debe diagnosticarse y corregirse el CAS; un tercer refresh no está autorizado.
