@@ -20,7 +20,7 @@ describe('OAuth foundation validation', () => {
     expect(() => auditMetadata({ access_token: 'secret' })).toThrow();
   });
 
-  it('encrypts pending OAuth tokens before persistence', async () => {
+  it('encrypts pending OAuth tokens and binds a reconnect target before persistence', async () => {
     vi.stubEnv('INTEGRATION_SECRETS_MASTER_KEY', Buffer.alloc(32, 7).toString('base64url'));
     const single = vi.fn().mockResolvedValue({
       data: {
@@ -29,7 +29,8 @@ describe('OAuth foundation validation', () => {
         organization_id: 'org_test',
         actor_membership_id: '10000000-0000-4000-8000-000000000002',
         provider: 'mercado-libre',
-        purpose: 'admin_connect',
+        purpose: 'reconnect',
+        target_connection_id: '10000000-0000-4000-8000-000000000004',
         external_account_id: '123',
         display_name: 'ML_TEST',
         access_token_expires_at: '2030-01-01T00:00:00.000Z',
@@ -39,7 +40,11 @@ describe('OAuth foundation validation', () => {
     });
     const select = vi.fn(() => ({ single }));
     const insert = vi.fn(
-      (_payload: { encrypted_access_token: string; encrypted_refresh_token: string | null }) => {
+      (_payload: {
+        target_connection_id: string | null;
+        encrypted_access_token: string;
+        encrypted_refresh_token: string | null;
+      }) => {
         return { select };
       }
     );
@@ -51,7 +56,8 @@ describe('OAuth foundation validation', () => {
       organizationId: 'org_test',
       actorMembershipId: '10000000-0000-4000-8000-000000000002',
       provider: 'mercado-libre',
-      purpose: 'admin_connect',
+      purpose: 'reconnect',
+      targetConnectionId: '10000000-0000-4000-8000-000000000004',
       externalAccountId: '123',
       displayName: 'ML_TEST',
       accessToken: 'access-token-plaintext',
@@ -62,6 +68,7 @@ describe('OAuth foundation validation', () => {
 
     const payload = insert.mock.calls[0]?.[0];
     if (!payload) throw new Error('Expected pending authorization insert');
+    expect(payload.target_connection_id).toBe('10000000-0000-4000-8000-000000000004');
     expect(payload.encrypted_access_token).not.toContain('access-token-plaintext');
     expect(payload.encrypted_refresh_token).not.toContain('refresh-token-plaintext');
     vi.unstubAllEnvs();
@@ -238,5 +245,28 @@ describe('OAuth foundation validation', () => {
       p_pending_authorization_id: '10000000-0000-4000-8000-000000000003',
       p_store_name: 'ML Test'
     });
+  });
+
+  it('accepts the reconnected outcome without exposing credentials', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          outcome: 'reconnected',
+          store_id: '10000000-0000-4000-8000-000000000004',
+          connection_id: '10000000-0000-4000-8000-000000000005'
+        }
+      ],
+      error: null
+    });
+    const repository = new OAuthFoundationRepository({ rpc } as never);
+
+    await expect(
+      repository.finalizeAdminPendingOnboarding({
+        organizationId: 'org_test',
+        actorMembershipId: '10000000-0000-4000-8000-000000000002',
+        pendingAuthorizationId: '10000000-0000-4000-8000-000000000003',
+        storeName: 'ML Test'
+      })
+    ).resolves.toMatchObject({ outcome: 'reconnected' });
   });
 });

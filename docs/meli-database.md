@@ -209,3 +209,25 @@ La instrumentación local clasifica el refresh por etapa y código seguro, separ
 Se ejecutó una única vez la primitive real para la Connection activa de E.A.ZOCOOL. La configuración y el descifrado server-side pasaron; la ejecución terminó de forma segura en `stage=CAS_COMPLETE`, `safeCode=REFRESH_CAS_FAILED`. No se reintentó y no se ejecutó `GET /users/me`.
 
 El postcheck remoto read-only confirmó `credential_version=1`, access expirado, refresh cifrado presente, lease libre, Store 1, Connection 1, Assignments 0, `integration_secrets` 1 y listings 0. Las credenciales persistidas anteriores permanecen sin cambios. Como el fallo ocurrió después de una respuesta válida del provider que incluyó refresh rotado, pero antes de un CAS confirmado, el refresh persistido debe considerarse potencialmente consumido y **no reutilizable**. La Connection queda en estado **RECONNECT_REQUIRED** antes de cualquier nueva operación; no se ejecutó reconnect en esta subfase ni se autoriza un tercer refresh.
+
+## Subfase 2.20Q — finalización de reconnect target-bound
+
+La migration append-only `20260825160000_bind_reconnect_finalization_target.sql`
+hace que `finalize_admin_pending_integration_onboarding` use exclusivamente el
+`target_connection_id` server-resolved para `purpose=reconnect`. La RPC bloquea
+y valida Connection, Store, Organization, provider, identidad externa y estado;
+no usa fallback por provider/identidad ni puede crear Store o Connection.
+
+Un reconnect válido actualiza el secreto existente, deja estable su cardinalidad,
+incrementa `credential_version` mediante el trigger canónico, limpia el lease,
+activa la Connection, audita `integration.reconnected` y consume la pending al
+final de la misma transacción. Fallos revierten estado, credenciales, versión,
+lease, auditoría y consumo. Reset y matriz SQL local 13/13 pasaron con cero
+duplicados y cero fixtures persistidos; remoto y datos reales no se tocaron.
+
+Las migrations `20260825143100`, `20260825150000` y `20260825160000` fueron
+aplicadas al proyecto remoto dedicado. La inspección confirmó columna UUID, FK
+restrictiva, CHECK, RPC target-bound, `SECURITY DEFINER`, `search_path` seguro,
+grant exclusivo de backend y RLS sin policies browser-facing. La matriz remota
+sintética pasó 8/8 con rollback y cero residuos; los conteos reales, versión de
+credencial, lease, listings y pending legacy permanecieron sin cambios.

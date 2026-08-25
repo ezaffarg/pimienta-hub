@@ -273,6 +273,7 @@ export async function completeMercadoLibreOAuth(
     actorMembershipId: context.membershipId,
     provider: 'mercado-libre',
     purpose: attempt.purpose,
+    targetConnectionId: existing?.id ?? null,
     externalAccountId: currentUser.externalAccountId,
     displayName: currentUser.displayName,
     accessToken: token.accessToken,

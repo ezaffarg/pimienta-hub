@@ -212,3 +212,18 @@ existente; reconnect sin target falla cerrado. La preparación sólo crea la
 pending authorization: no duplica Store ni Connection. El finalizador existente
 reutiliza la Connection y conserva su semántica de versión de credencial y
 `integration.reconnected`.
+
+## 2.20Q — binding definitivo del target de reconnect
+
+La pending de reconnect conserva el `target_connection_id` resuelto server-side
+y la finalización usa exclusivamente ese ID. Valida la misma Organization,
+Store, provider, identidad externa y estado `active` o `disabled`; un target
+nulo, inexistente o incompatible falla cerrado sin buscar otra Connection.
+Reconnect nunca crea Store ni Connection. El éxito reemplaza atómicamente el
+secreto existente, incrementa la versión, limpia el lease, activa la Connection,
+audita `integration.reconnected` y consume la pending al final.
+
+La implementación target-bound quedó aplicada y validada en el proyecto remoto
+dedicado mediante fixtures sintéticos con rollback. La matriz reducida pasó 8/8
+sin modificar Store, Connection, secreto, versión, lease, listings ni pending
+legacy reales. No se ejecutó OAuth, refresh ni finalización real.

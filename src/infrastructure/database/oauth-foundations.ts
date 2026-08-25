@@ -33,7 +33,12 @@ const auditMetadataSchema = z
   );
 
 export type OAuthPurpose = z.infer<typeof oauthPurposeSchema>;
-export type OnboardingOutcome = 'created' | 'already_connected' | 'reactivated' | 'conflict';
+export type OnboardingOutcome =
+  | 'created'
+  | 'already_connected'
+  | 'reactivated'
+  | 'reconnected'
+  | 'conflict';
 
 export interface OAuthAttemptRecord {
   id: string;
@@ -82,6 +87,7 @@ export interface PendingOAuthAuthorization {
   actorMembershipId: string;
   provider: IntegrationProvider;
   purpose: OAuthPurpose;
+  targetConnectionId: string | null;
   externalAccountId: string;
   displayName: string | null;
   accessTokenExpiresAt: string;
@@ -430,6 +436,7 @@ export class OAuthFoundationRepository {
     actorMembershipId: string;
     provider: IntegrationProvider;
     purpose: OAuthPurpose;
+    targetConnectionId?: string | null;
     externalAccountId: string;
     displayName?: string;
     accessToken: string;
@@ -444,6 +451,7 @@ export class OAuthFoundationRepository {
         actorMembershipId: uuidSchema,
         provider: providerSchema,
         purpose: oauthPurposeSchema,
+        targetConnectionId: uuidSchema.nullable().optional(),
         externalAccountId: z.string().trim().min(1).max(255),
         displayName: z.string().trim().min(1).max(255).optional(),
         accessToken: z.string().min(1).max(8192),
@@ -463,6 +471,7 @@ export class OAuthFoundationRepository {
         actor_membership_id: parsed.actorMembershipId,
         provider: parsed.provider,
         purpose: parsed.purpose,
+        target_connection_id: parsed.targetConnectionId ?? null,
         external_account_id: parsed.externalAccountId,
         display_name: parsed.displayName ?? null,
         encrypted_access_token: access.ciphertext,
@@ -472,7 +481,7 @@ export class OAuthFoundationRepository {
         expires_at: parsed.expiresAt
       })
       .select(
-        'id, oauth_attempt_id, organization_id, actor_membership_id, provider, purpose, external_account_id, display_name, access_token_expires_at, expires_at'
+        'id, oauth_attempt_id, organization_id, actor_membership_id, provider, purpose, target_connection_id, external_account_id, display_name, access_token_expires_at, expires_at'
       )
       .single();
     return pendingAuthorizationRecord(record(data, error));
@@ -500,7 +509,7 @@ export class OAuthFoundationRepository {
     const { data, error } = await this.client
       .from('oauth_pending_authorizations')
       .select(
-        'id, oauth_attempt_id, organization_id, actor_membership_id, provider, purpose, external_account_id, display_name, access_token_expires_at, expires_at'
+        'id, oauth_attempt_id, organization_id, actor_membership_id, provider, purpose, target_connection_id, external_account_id, display_name, access_token_expires_at, expires_at'
       )
       .eq('id', parsed.id)
       .eq('organization_id', parsed.organizationId)
@@ -640,7 +649,7 @@ export class OAuthFoundationRepository {
     const { data, error } = await this.client.rpc(name, args);
     const value = record(data?.[0] ?? null, error);
     const outcome = z
-      .enum(['created', 'already_connected', 'reactivated', 'conflict'])
+      .enum(['created', 'already_connected', 'reactivated', 'reconnected', 'conflict'])
       .parse(value.outcome);
     return { outcome, storeId: value.store_id, connectionId: value.connection_id };
   }
@@ -653,6 +662,7 @@ function pendingAuthorizationRecord(record: {
   actor_membership_id: string;
   provider: string;
   purpose: string;
+  target_connection_id: string | null;
   external_account_id: string;
   display_name: string | null;
   access_token_expires_at: string;
@@ -665,6 +675,7 @@ function pendingAuthorizationRecord(record: {
     actorMembershipId: record.actor_membership_id,
     provider: record.provider as IntegrationProvider,
     purpose: record.purpose as OAuthPurpose,
+    targetConnectionId: record.target_connection_id,
     externalAccountId: record.external_account_id,
     displayName: record.display_name,
     accessTokenExpiresAt: record.access_token_expires_at,

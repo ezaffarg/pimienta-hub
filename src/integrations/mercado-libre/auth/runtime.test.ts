@@ -202,6 +202,7 @@ describe('Mercado Libre OAuth runtime', () => {
         expiresAt: '2030-01-01T00:10:00.000Z'
       });
       setup.connections.findByProviderAndExternalAccount.mockResolvedValue({
+        id: '10000000-0000-4000-8000-000000000003',
         organizationId: 'org_test',
         provider: 'mercado-libre',
         externalAccountId: '123',
@@ -211,7 +212,11 @@ describe('Mercado Libre OAuth runtime', () => {
       await expect(
         completeMercadoLibreOAuth({ code: 'test-code', state: 'a'.repeat(32) }, setup)
       ).resolves.toEqual({ status: 'READY_FOR_RECONNECT', displayName: 'ML Test' });
-      expect(setup.test.foundations.createPendingOAuthAuthorization).toHaveBeenCalledOnce();
+      expect(setup.test.foundations.createPendingOAuthAuthorization).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetConnectionId: '10000000-0000-4000-8000-000000000003'
+        })
+      );
     }
   );
 
