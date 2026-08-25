@@ -231,3 +231,17 @@ restrictiva, CHECK, RPC target-bound, `SECURITY DEFINER`, `search_path` seguro,
 grant exclusivo de backend y RLS sin policies browser-facing. La matriz remota
 sintética pasó 8/8 con rollback y cero residuos; los conteos reales, versión de
 credencial, lease, listings y pending legacy permanecieron sin cambios.
+
+## Subfase 2.20E — primera persistencia real de listings
+
+Tras el reconnect real de 2.20R, la credencial persistida vigente permitió
+reanudar el primer sync controlado. El runtime oficial recuperó 1 publicación
+mediante seller search y multiget, la normalizó como `ExternalListingSummary` y
+`ListingSyncService` creó 1 fila tenant-scoped en `public.listings`.
+
+Una segunda sincronización del mismo conjunto mantuvo la misma fila y el mismo
+`external_listing_id`, actualizó el timestamp de sync y dejó Listings en 1. El
+postcheck confirmó Store y Connection correctas, provider Mercado Libre, datos
+esenciales completos y 0 duplicados. `integration_secrets` permaneció en 1,
+`credential_version` en 2 y el lease libre: no se ejecutó refresh. No hubo
+escrituras en Mercado Libre, OAuth, reconnect, migration ni cambios de schema.
