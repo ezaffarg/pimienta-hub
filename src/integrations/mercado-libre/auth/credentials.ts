@@ -3,11 +3,15 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type {
+  CredentialRefreshCompleteFailureCode,
   CredentialRefreshClaim,
   CredentialRefreshState,
   DecryptedCredentials
 } from '@/infrastructure/database/oauth-foundations';
-import { OAuthFoundationRepository } from '@/infrastructure/database/oauth-foundations';
+import {
+  CredentialRefreshCompleteError,
+  OAuthFoundationRepository
+} from '@/infrastructure/database/oauth-foundations';
 import { SecretCipherError } from '@/lib/crypto/integration-secrets';
 import { MercadoLibreOAuthClient, MercadoLibreProviderError } from './client';
 
@@ -31,11 +35,14 @@ export class MercadoLibreCredentialError extends Error {
 export interface RefreshErrorDetails {
   httpStatus?: number;
   providerCode?: string;
+  casFailure?: CasCompleteFailureCode;
   expectedVersion?: number;
   actualVersion?: number | null;
   leasePresent?: boolean;
   leaseMatches?: boolean;
 }
+
+export type CasCompleteFailureCode = CredentialRefreshCompleteFailureCode | 'CAS_REJECTED';
 
 export type RefreshStage =
   | 'READ'
@@ -201,7 +208,11 @@ export class MercadoLibreCredentialService {
         if (error instanceof SecretCipherError) {
           throw new MercadoLibreCredentialError('CREDENTIAL_ENCRYPTION_FAILED', 'ENCRYPT');
         }
-        throw new MercadoLibreCredentialError('REFRESH_COMPLETE_RPC_FAILED', 'CAS_COMPLETE');
+        throw new MercadoLibreCredentialError(
+          'REFRESH_COMPLETE_RPC_FAILED',
+          'CAS_COMPLETE',
+          error instanceof CredentialRefreshCompleteError ? { casFailure: error.code } : {}
+        );
       }
       if (completed) return credentials.accessToken;
 
@@ -217,7 +228,7 @@ export class MercadoLibreCredentialService {
       throw new MercadoLibreCredentialError(
         'REFRESH_CAS_REJECTED',
         'CAS_COMPLETE',
-        latest.diagnostics
+        { casFailure: 'CAS_REJECTED', ...latest.diagnostics }
       );
     } catch (error) {
       if (error instanceof MercadoLibreCredentialError) throw error;

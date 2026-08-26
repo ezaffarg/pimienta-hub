@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
+  CredentialRefreshCompleteError,
   OAuthFoundationRepository,
   auditMetadata,
   newOAuthAttemptState
@@ -98,6 +99,39 @@ describe('OAuth foundation validation', () => {
     const payload = rpc.mock.calls[0]?.[1] as Record<string, string>;
     expect(payload.p_encrypted_access_token).not.toContain('rotated-access-token-plaintext');
     expect(payload.p_encrypted_refresh_token).not.toContain('rotated-refresh-token-plaintext');
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    ['CAS_RPC_THROW', vi.fn().mockRejectedValue(new Error('raw throw detail'))],
+    [
+      'CAS_RPC_ERROR',
+      vi.fn().mockResolvedValue({ data: null, error: { message: 'raw RPC detail' } })
+    ],
+    ['CAS_RESPONSE_INVALID', vi.fn().mockResolvedValue({ data: 'unexpected', error: null })]
+  ] as const)('classifies %s without retaining raw RPC material', async (code, rpc) => {
+    vi.stubEnv('INTEGRATION_SECRETS_MASTER_KEY', Buffer.alloc(32, 7).toString('base64url'));
+    const repository = new OAuthFoundationRepository({ rpc } as never);
+
+    const error = await repository
+      .completeCredentialRefresh({
+        organizationId: 'org_test',
+        connectionId: '10000000-0000-4000-8000-000000000001',
+        expectedVersion: 1,
+        leaseId: '10000000-0000-4000-8000-000000000002',
+        credentials: {
+          accessToken: 'rotated-access-token-plaintext',
+          refreshToken: 'rotated-refresh-token-plaintext',
+          accessTokenExpiresAt: '2030-01-01T00:00:00.000Z',
+          tokenMetadata: { token_type: 'bearer' },
+          credentialVersion: 2
+        }
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toEqual(new CredentialRefreshCompleteError(code));
+    expect(JSON.stringify(error)).not.toContain('raw');
+    expect(JSON.stringify(error)).not.toContain('token-plaintext');
     vi.unstubAllEnvs();
   });
 

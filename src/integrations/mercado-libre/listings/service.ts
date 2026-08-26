@@ -28,14 +28,23 @@ export class MercadoLibreListingsServiceError extends Error {
   }
 }
 
-export interface MercadoLibreListingBackfillResult {
+export interface MercadoLibreListingBackfillProgress {
   discovered: number;
   requested: number;
   fetched: number;
   persisted: number;
   failed: number;
+  pages: number;
+  batches: number;
+}
+
+export interface MercadoLibreListingBackfillResult extends MercadoLibreListingBackfillProgress {
   failures: readonly MercadoLibreListingFailure[];
 }
+
+export type MercadoLibreListingProgressCallback = (
+  progress: MercadoLibreListingBackfillProgress
+) => Promise<void>;
 
 export class MercadoLibreListingsService {
   constructor(
@@ -60,11 +69,14 @@ export class MercadoLibreListingsService {
     });
   }
 
-  async syncAllActiveConnectionListings(input: {
-    organizationId: string;
-    storeId: string;
-    connectionId: string;
-  }): Promise<MercadoLibreListingBackfillResult> {
+  async syncAllActiveConnectionListings(
+    input: {
+      organizationId: string;
+      storeId: string;
+      connectionId: string;
+    },
+    onProgress?: MercadoLibreListingProgressCallback
+  ): Promise<MercadoLibreListingBackfillResult> {
     const parsed = listingInputSchema.omit({ limit: true }).parse(input);
     const runtime = await this.getRuntime(parsed);
     const accessToken = runtime.accessToken;
@@ -78,10 +90,22 @@ export class MercadoLibreListingsService {
     let fetched = 0;
     let persisted = 0;
     let pages = 0;
+    let batches = 0;
+
+    const reportProgress = async (): Promise<void> => {
+      await onProgress?.({
+        discovered: discoveredIds.size,
+        requested,
+        fetched,
+        persisted,
+        failed: failures.length,
+        pages,
+        batches
+      });
+    };
 
     do {
-      pages += 1;
-      if (pages > MAX_DISCOVERY_PAGES) {
+      if (pages >= MAX_DISCOVERY_PAGES) {
         throw new MercadoLibreListingsError('invalid_provider_response', 'discovery', false);
       }
       const page = await this.listings.discoverSellerListingIds({
@@ -114,6 +138,8 @@ export class MercadoLibreListingsService {
               status: error.status
             }))
           );
+          batches += 1;
+          await reportProgress();
           continue;
         }
 
@@ -126,8 +152,12 @@ export class MercadoLibreListingsService {
           });
           persisted += records.length;
         }
+        batches += 1;
+        await reportProgress();
       }
 
+      pages += 1;
+      await reportProgress();
       cursor = page.nextCursor;
       if (cursor?.mode === 'offset') {
         const cursorKey = JSON.stringify(cursor);
@@ -144,6 +174,8 @@ export class MercadoLibreListingsService {
       fetched,
       persisted,
       failed: failures.length,
+      pages,
+      batches,
       failures
     };
   }

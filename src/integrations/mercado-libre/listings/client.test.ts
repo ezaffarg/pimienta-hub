@@ -447,25 +447,41 @@ describe('MercadoLibreListingsService', () => {
       { discoverSellerListingIds, getListingDetails } as never,
       { syncAuthorizedConnection } as never
     );
+    const onProgress = vi.fn().mockResolvedValue(undefined);
 
     await expect(
-      service.syncAllActiveConnectionListings({
-        organizationId,
-        storeId,
-        connectionId
-      })
+      service.syncAllActiveConnectionListings(
+        {
+          organizationId,
+          storeId,
+          connectionId
+        },
+        onProgress
+      )
     ).resolves.toEqual({
       discovered: 45,
       requested: 45,
       fetched: 45,
       persisted: 45,
       failed: 0,
+      pages: 2,
+      batches: 3,
       failures: []
     });
     expect(getListingDetails.mock.calls.map(([input]) => input.itemIds.length)).toEqual([
       20, 5, 20
     ]);
     expect(syncAuthorizedConnection).toHaveBeenCalledTimes(3);
+    expect(onProgress).toHaveBeenCalledTimes(5);
+    expect(onProgress).toHaveBeenLastCalledWith({
+      discovered: 45,
+      requested: 45,
+      fetched: 45,
+      persisted: 45,
+      failed: 0,
+      pages: 2,
+      batches: 3
+    });
     expect(discoverSellerListingIds).toHaveBeenLastCalledWith(
       expect.objectContaining({ cursor: { mode: 'offset', offset: 25 } })
     );
@@ -517,6 +533,8 @@ describe('MercadoLibreListingsService', () => {
       fetched: 1,
       persisted: 1,
       failed: 1,
+      pages: 1,
+      batches: 1,
       failures: [failure]
     });
     expect(syncAuthorizedConnection).toHaveBeenCalledWith(

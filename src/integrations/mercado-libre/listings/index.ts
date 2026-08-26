@@ -11,5 +11,13 @@ export {
 export {
   MercadoLibreListingsService,
   MercadoLibreListingsServiceError,
-  type MercadoLibreListingBackfillResult
+  type MercadoLibreListingBackfillProgress,
+  type MercadoLibreListingBackfillResult,
+  type MercadoLibreListingProgressCallback
 } from './service';
+export {
+  MercadoLibreListingSyncRunError,
+  MercadoLibreListingSyncRunService,
+  type MercadoLibreListingSyncExecutionOutcome,
+  type MercadoLibreListingSyncExecutionResult
+} from './run-service';

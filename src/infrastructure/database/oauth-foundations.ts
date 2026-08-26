@@ -74,6 +74,18 @@ export interface CredentialRefreshState {
   leaseMatches: boolean;
 }
 
+export type CredentialRefreshCompleteFailureCode =
+  | 'CAS_RPC_THROW'
+  | 'CAS_RPC_ERROR'
+  | 'CAS_RESPONSE_INVALID';
+
+export class CredentialRefreshCompleteError extends Error {
+  constructor(public readonly code: CredentialRefreshCompleteFailureCode) {
+    super(code);
+    this.name = 'CredentialRefreshCompleteError';
+  }
+}
+
 export interface OnboardingResult {
   outcome: OnboardingOutcome;
   storeId: string | null;
@@ -357,7 +369,9 @@ export class OAuthFoundationRepository {
       .parse(input);
     const access = encryptIntegrationSecret(parsed.credentials.accessToken);
     const refresh = encryptIntegrationSecret(parsed.credentials.refreshToken);
-    const { data, error } = await this.client.rpc('complete_integration_secret_refresh', {
+    let response;
+    try {
+      response = await this.client.rpc('complete_integration_secret_refresh', {
       p_organization_id: parsed.organizationId,
       p_connection_id: parsed.connectionId,
       p_expected_version: parsed.expectedVersion,
@@ -368,8 +382,13 @@ export class OAuthFoundationRepository {
       p_token_metadata: parsed.credentials.tokenMetadata,
       p_key_version: access.keyVersion
     });
-    throwOnError(error);
-    return z.boolean().parse(data);
+    } catch {
+      throw new CredentialRefreshCompleteError('CAS_RPC_THROW');
+    }
+    if (response.error) throw new CredentialRefreshCompleteError('CAS_RPC_ERROR');
+    const completed = z.boolean().safeParse(response.data);
+    if (!completed.success) throw new CredentialRefreshCompleteError('CAS_RESPONSE_INVALID');
+    return completed.data;
   }
 
   async getCredentialRefreshState(input: {
