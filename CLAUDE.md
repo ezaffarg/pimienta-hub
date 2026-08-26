@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+> **Compatibilidad heredada:** este archivo pertenece al tooling del starter.
+> Para el gobierno actual prevalecen `AGENTS.md` y `REGLAS.md`; las skills
+> canónicas viven en `.agents/skills/`.
+
 This is a Next.js 16 + shadcn/ui admin dashboard starter kit.
 
 ## Key References

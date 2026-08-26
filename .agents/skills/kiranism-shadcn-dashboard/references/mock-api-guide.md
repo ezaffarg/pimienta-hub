@@ -1,5 +1,11 @@
 # Mock API Guide
 
+> **Demo-only reference.** Use this guide only when the user explicitly asks
+> for mock/demo behavior. Mocks are not productive persistence, tenancy, RBAC,
+> Store Scope or provider access. New e-Hub product features must use their
+> approved internal server/service boundary; Mercado Libre code belongs in
+> `src/integrations/` and DB access in `src/infrastructure/`.
+
 ## Table of Contents
 
 1. [Structure](#structure)
@@ -11,7 +17,9 @@
 
 ## Structure
 
-Each mock API file lives in `src/constants/mock-api-<name>.ts` and is a self-contained in-memory database. It uses:
+An existing starter demo mock may live in `src/constants/mock-api-<name>.ts` as
+a self-contained in-memory fixture. Do not create one automatically for every
+new feature. Existing mocks use:
 
 - **faker** for generating sample data
 - **match-sorter** for fuzzy search across fields
@@ -202,9 +210,11 @@ List methods must return `{ items, total_items }` (or `{ products, total }` etc.
 
 ---
 
-## Integrating with the API Layer
+## Integrating a demo mock with the API layer
 
-The mock API is only imported in `service.ts`. Queries and components import from the service and types files:
+Within an explicitly approved demo, the mock API is only imported in
+`service.ts`. Queries and components import from the service and types files.
+This indirection does not make the mock a secure or productive backend:
 
 ```
 mock-api-orders.ts  →  api/service.ts  →  api/queries.ts  →  components
@@ -253,3 +263,7 @@ const mutation = useMutation({
   onSuccess: () => queryClient.invalidateQueries({ queryKey: orderKeys.all })
 });
 ```
+
+For productive e-Hub data, replace this demo source with the approved internal
+endpoint/service boundary. Components must never import mock constants,
+provider DTOs or privileged repositories directly.

@@ -1,18 +1,23 @@
 # Database
 
-Supabase es infraestructura PostgreSQL; no es identidad.
+Supabase es infraestructura PostgreSQL; no es identidad ni autorización.
 
-Modelo inicial:
+El modelo vigente incluye memberships, Stores, assignments, Connections,
+staging OAuth, secretos cifrados, auditoría, Listings y listing sync runs. El
+schema exacto y su estado implemented/deferred viven en
+`docs/meli-database.md`; no duplicarlos ni inferirlos desde esta skill.
 
-- `stores`
-- `external_connections`
-- `external_accounts`
-- `external_entities`
-- `sync_cursors`
-- `webhook_events`
-- `sync_runs` o `jobs`
-- `integration_errors`
+## Invariantes
 
-Las tablas deben tener relaciones, constraints, indices y claves unicas compuestas por tenant/provider/account cuando aplique.
+- Toda fila de negocio tiene tenant key o relación verificable e indexada.
+- Organization, Store y Connection se ligan con constraints/FKs compuestas.
+- El acceso se encapsula en repositories y RPCs server-only.
+- `service_role` nunca llega al browser.
+- RLS deny-by-default y grants restringidos refuerzan el boundary vigente.
+- RLS no sustituye auth, Permission, Store Scope ni predicates tenant-scoped.
+- Credenciales OAuth se almacenan cifradas y separadas de metadata pública.
+- Identidades e idempotency keys usan constraints explícitas según el dominio.
+- Migrations aplicadas no se editan; toda corrección es forward-only.
 
-Credenciales OAuth deben estar separadas de datos publicables y cifradas en reposo. El acceso a la base se encapsula en repositorios server-only. RLS puede reforzar aislamiento, pero cada operacion sigue validando Clerk y tenant context.
+No crear tablas genéricas de jobs, métricas o lifecycle por anticipación. Cada
+nuevo schema requiere un caso aprobado, constraints, tests y documentación.

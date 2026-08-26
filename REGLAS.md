@@ -23,13 +23,25 @@ Estas reglas son obligatorias para cualquier cambio de e-ngenieria Hub.
 ## Obligatorio
 
 - Todas las integraciones externas viven en `src/integrations/`.
-- Clerk es la unica identidad y autenticacion.
+- Clerk es la fuente de identidad, autenticación, sesión, `userId` y
+  Organization activa; su membership técnica no sustituye los roles de
+  negocio e-Hub.
 - Clerk Organizations representa el tenant.
+- `hub_memberships` es la fuente definitiva server-side del business role
+  e-Hub: `Owner`, `Manager`, `Employee` y `Client`.
+- Supabase se usa únicamente como PostgreSQL/persistencia; Supabase Auth está
+  prohibido. `service_role` es server-only y RLS/constraints complementan el
+  aislamiento según el modelo vigente.
 - Toda operacion server-side valida autenticacion, autorizacion y tenant.
 - La autorizacion se evalua como `User -> Role -> Permission -> Resource Scope -> Resource`.
 - Owner, Manager, Employee y Client son roles distintos; Employee y Client nunca obtienen acceso global por su rol.
-- Clerk resuelve identidad, autenticacion, Organization y roles/permisos base; la aplicacion resuelve el alcance comercial de Client, Store, Team, ownership y asignaciones.
-- Mientras no exista una fuente propia de roles, el mapping provisional server-side es `org:admin -> Owner` y `org:member -> Employee`; cualquier otro rol de Clerk se deniega. Manager y Client no se infieren desde Clerk.
+- La aplicación resuelve roles, permisos, Store Scope, ownership y
+  asignaciones comerciales server-side; no se infieren desde roles de Clerk.
+- El mapping histórico/transicional `org:admin -> Owner` y `org:member -> Employee`
+  sólo describe compatibilidad anterior y no es la autoridad vigente.
+- Owner y Manager tienen scope de todas las Stores de su Organization.
+- Employee y Client sólo tienen scope de las Stores asignadas explícitamente.
+- Permission y Store Scope son controles independientes.
 - Toda ruta de negocio requiere Organization activa salvo que este definida expresamente como publica o global.
 - Todo body, params y query string se valida en runtime antes de usarse.
 - Los errores HTTP no exponen secretos, tokens, trazas, SQL, detalles de Clerk ni infraestructura. Un recurso existente fuera de scope devuelve 403 cuando su existencia no deba ocultarse; 404 se usa solo cuando la politica del recurso exija ocultarla.
@@ -46,6 +58,50 @@ Estas reglas son obligatorias para cualquier cambio de e-ngenieria Hub.
 
 `Request -> Authentication -> Authorization -> Tenant resolution -> Validation -> Service -> Repository -> Database`
 
-## Primer hito Mercado Libre
+## Mercado Libre
 
-Solo conectar cuentas: pantalla, OAuth server-side, state, callback, persistencia segura, desconexion, reautorizacion y estados. Items, inventario, ordenes, preguntas, envios, publicaciones, webhooks completos y otros proveedores quedan fuera.
+- Usar exclusivamente la aplicación propia de Mercado Libre Developers y sus
+  APIs oficiales.
+- Ejecutar OAuth Authorization Code y refresh únicamente server-side.
+- Almacenar tokens y secretos cifrados; nunca exponerlos al navegador, logs o
+  respuestas.
+- Resolver la identidad mediante la API oficial y respetar siempre los límites
+  Organization -> Store -> Connection -> Provider.
+- No usar backends privados, cookies de sesión de terceros ni scraping.
+- Las escrituras hacia Mercado Libre requieren autorización explícita de la
+  subfase correspondiente.
+- Normalizar errores del provider sin filtrar material sensible.
+
+## Minimal Diff / No Churn
+
+Todo cambio debe producir el diff semántico mínimo necesario.
+
+### Obligatorio
+
+- Modificar únicamente las líneas necesarias para cumplir el objetivo aprobado.
+- Preservar líneas no relacionadas sin reescribirlas.
+- Preferir patches quirúrgicos sobre regeneración de archivos.
+- Preservar EOL, whitespace, indentación y wrapping existentes fuera de las
+  líneas realmente modificadas.
+- Revisar `git diff` y `git diff --stat` antes del checkpoint.
+- Eliminar churn no semántico antes de finalizar.
+
+### Prohibido
+
+- Borrar y volver a escribir líneas idénticas o semánticamente equivalentes sin
+  necesidad.
+- Reescribir un archivo completo para un cambio local.
+- Normalizar CRLF/LF incidentalmente.
+- Modificar whitespace, indentación, wrapping o newline final fuera del alcance.
+- Reordenar listas, imports, propiedades o bloques sin necesidad funcional o
+  documental.
+- Ejecutar formatters o cleanup globales como efecto lateral de una tarea acotada.
+- Tocar archivos o bloques no relacionados sólo por consistencia estética.
+- Aceptar churn producido por una herramienta si puede reducirse sin perder el
+  cambio semántico.
+
+Una línea eliminada y agregada con contenido semánticamente idéntico se considera
+un defecto, salvo razón técnica explícita y documentada. Si una herramienta
+genera churn, detener la edición, identificar si proviene de EOL, formatter,
+wrapping, regeneración o reemplazo amplio, eliminar el ruido y conservar sólo el
+cambio semántico mínimo. Minimal Diff no permite sacrificar claridad o seguridad.

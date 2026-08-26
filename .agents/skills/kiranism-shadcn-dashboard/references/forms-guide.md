@@ -1,304 +1,171 @@
 # Forms Guide
 
-## Table of Contents
-
-1. [Architecture](#architecture)
-2. [Field Types](#field-types)
-3. [Usage Patterns](#usage-patterns)
-4. [Validation Strategies](#validation-strategies)
-5. [Sheet/Dialog Forms](#sheetdialog-forms)
-6. [Multi-Step Forms](#multi-step-forms)
-7. [Advanced Patterns](#advanced-patterns)
-
----
+This reference describes the current e-Hub form composition retained from the
+dashboard UI. It is a frontend pattern, not an auth or persistence boundary.
 
 ## Architecture
 
-The form system is built on **TanStack Form + Zod** with a composable field layer.
+Forms use TanStack Form + Zod through:
 
-**Key files:**
+- `src/lib/form.ts`: exports `useAppForm` and registers shared fields;
+- `src/lib/form-context.ts`: shared field/form contexts;
+- `src/components/forms/fields/`: field implementations;
+- `src/components/forms/submit-button.tsx`: registered submit behavior;
+- `src/components/ui/field.tsx`: shadcn field anatomy.
 
-- `src/components/ui/tanstack-form.tsx` — exports `useAppForm`, `useFormFields<T>()`, composed fields
-- `src/components/ui/form-context.tsx` — contexts, `createFormField`, structural components
-- `src/components/forms/fields/*.tsx` — 8 field type implementations
-
-**Key exports:**
+Import the hook from the canonical path:
 
 ```tsx
-import { useAppForm, useFormFields } from '@/components/ui/tanstack-form';
+import { useAppForm } from '@/lib/form';
 ```
 
-- `useAppForm(config)` — creates a form instance with `defaultValues`, `validators`, `onSubmit`
-- `useFormFields<T>()` — returns all 8 typed field components with name autocomplete from `T`
-- `form.AppForm` — context provider wrapper
-- `form.Form` — `<form>` element that handles submit
-- `form.SubmitButton` — auto-disabled when form is invalid or submitting
-- `form.AppField` — low-level render prop for custom fields
+Do not use the removed `useFormFields<T>()` API and do not import forms from the
+old `@/components/ui/tanstack-form` path.
 
----
-
-## Field Types
-
-All fields accept: `name`, `label`, `description`, `required`, `disabled`, `validators`, `listeners`, `className`.
-
-| Component             | Props                                                                                         | Notes                                   |
-| --------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `FormTextField`       | `type` (text/email/number/password/tel/url), `placeholder`, `min`, `max`, `step`, `maxLength` | For numbers use `type='number'`         |
-| `FormTextareaField`   | `placeholder`, `rows`, `maxLength`                                                            | Multiline text                          |
-| `FormSelectField`     | `options: {value, label}[]`, `placeholder`                                                    | Single select dropdown                  |
-| `FormCheckboxField`   | `options?: {value, label}[]`                                                                  | Single checkbox or multi-checkbox group |
-| `FormSwitchField`     | —                                                                                             | Toggle switch                           |
-| `FormRadioGroupField` | `options: {value, label}[]`, `orientation`                                                    | Radio button group                      |
-| `FormSliderField`     | `min`, `max`, `step`                                                                          | Range slider                            |
-| `FormFileUploadField` | `maxSize`, `maxFiles`, `accept`                                                               | Drag-and-drop with preview              |
-
----
-
-## Usage Patterns
-
-### Pattern 1: `useFormFields<T>()` (Recommended)
-
-Type-safe field components with name autocomplete:
+## Standard form
 
 ```tsx
-const { FormTextField, FormSelectField } = useFormFields<OrderFormValues>();
+'use client';
 
-<FormTextField name='customer' label='Customer' required placeholder='Name'
-  validators={{ onBlur: z.string().min(2) }} />
-
-<FormSelectField name='status' label='Status' required options={STATUS_OPTIONS}
-  validators={{ onBlur: z.string().min(1) }} />
-```
-
-### Pattern 2: `form.AppField` render prop
-
-Full control for custom field rendering:
-
-```tsx
-<form.AppField name='framework'>
-  {(field) => (
-    <field.FieldSet>
-      <field.Field>
-        <field.TextField label='Framework' />
-      </field.Field>
-      <field.FieldError />
-    </field.FieldSet>
-  )}
-</form.AppField>
-```
-
-### Pattern 3: Direct import (no type safety)
-
-For quick prototyping:
-
-```tsx
-import { FormTextField } from '@/components/ui/tanstack-form';
-<FormTextField name='name' label='Name' />;
-```
-
----
-
-## Validation Strategies
-
-### Field-level (recommended for UX)
-
-```tsx
-<FormTextField
-  name='email'
-  label='Email'
-  validators={{
-    onBlur: z.string().email('Invalid email') // Validates when field loses focus
-  }}
-/>
-```
-
-### Form-level (catch-all on submit)
-
-```tsx
 const form = useAppForm({
-  validators: { onSubmit: orderSchema }, // Validates entire form on submit
+  defaultValues: {
+    name: '',
+    status: ''
+  } as OrderFormValues,
+  validators: {
+    onSubmit: orderSchema
+  },
   onSubmit: async ({ value }) => {
-    /* ... */
+    await mutation.mutateAsync(value);
   }
 });
+
+return (
+  <form
+    onSubmit={(event) => {
+      event.preventDefault();
+      form.handleSubmit();
+    }}
+  >
+    <FieldGroup>
+      <form.AppField
+        name='name'
+        children={(field) => (
+          <field.TextField label='Name' required placeholder='Order name' />
+        )}
+      />
+
+      <form.AppField
+        name='status'
+        children={(field) => (
+          <field.SelectField
+            label='Status'
+            required
+            options={STATUS_OPTIONS}
+            placeholder='Select status'
+          />
+        )}
+      />
+    </FieldGroup>
+  </form>
+);
 ```
 
-### Async validation (server-side checks)
+Key rules:
+
+- Define the Zod schema and inferred values type in the feature schema.
+- Put complete defaults in `useAppForm`.
+- Validate the full payload with `validators.onSubmit`.
+- Render registered fields through `form.AppField`.
+- Prevent the native submit and call `form.handleSubmit()`.
+- Keep mutation/UI callbacks in the client component.
+- Server-side endpoints must validate and authorize again.
+
+## Registered fields
+
+The current registry in `src/lib/form.ts` includes:
+
+- `TextField`
+- `TextareaField`
+- `SelectField`
+- `CheckboxField`
+- `SwitchField`
+- `RadioGroupField`
+- `SliderField`
+- `ComboboxField`
+- `DatePickerField`
+- `DateRangeField`
+- `OtpField`
+- `ColorField`
+- `FileUploadField`
+- `CheckboxGroupField`
+- `TagsField`
+- `ToggleGroupField`
+
+Inspect the component file under `src/components/forms/fields/` before using
+props; do not infer a shared prop contract that the implementation does not
+declare.
+
+## Sheet and dialog forms
+
+Use a native form `id` when its submit action lives in a footer outside the
+form element:
 
 ```tsx
-<FormTextField
-  name='username'
-  label='Username'
-  validators={{
-    onChangeAsync: async ({ value }) => {
-      const exists = await checkUsername(value);
-      return exists ? 'Username taken' : undefined;
-    }
+<form
+  id='order-sheet-form'
+  onSubmit={(event) => {
+    event.preventDefault();
+    form.handleSubmit();
   }}
-  asyncDebounceMs={500}
-/>
-```
+>
+  <form.AppField
+    name='name'
+    children={(field) => <field.TextField label='Name' required />}
+  />
+</form>
 
-### Linked field validation
-
-For dependent fields (e.g., confirm password):
-
-```tsx
-<FormTextField
-  name='confirmPassword'
-  label='Confirm Password'
-  validators={{
-    onChangeListenTo: ['password'],
-    onChange: ({ value, fieldApi }) => {
-      const password = fieldApi.form.getFieldValue('password');
-      return value !== password ? 'Passwords must match' : undefined;
-    }
-  }}
-/>
-```
-
----
-
-## Sheet/Dialog Forms
-
-The key pattern for forms inside sheets or dialogs: give the `<form.Form>` an `id`, and use that `id` on the submit button's `form` attribute. This allows the submit button to live outside the form element (e.g., in `SheetFooter`).
-
-```tsx
-<form.AppForm>
-  <form.Form id='my-sheet-form' className='space-y-4'>
-    {/* fields */}
-  </form.Form>
-</form.AppForm>;
-
-{
-  /* In SheetFooter — button is outside the <form> but still submits it */
-}
 <SheetFooter>
-  <Button type='submit' form='my-sheet-form'>
+  <Button type='button' variant='outline' onClick={() => onOpenChange(false)}>
+    Cancel
+  </Button>
+  <Button type='submit' form='order-sheet-form'>
     Save
   </Button>
 </SheetFooter>;
 ```
 
-On success, call `onOpenChange(false)` to close the sheet and `form.reset()` for create forms.
+Close the sheet after a successful mutation, not merely after submit. Preserve
+pending/error state and avoid duplicate submissions using the current shared
+button pattern in the comparable feature.
 
----
+## Custom fields
 
-## Multi-Step Forms
+For a control not registered in `src/lib/form.ts`, use the raw TanStack field
+render pattern and compose shared shadcn Field primitives. Extract a component
+when the control needs local React state; do not call hooks conditionally or
+inside a render callback.
 
-Use `withFieldGroup` + `useAppForm` with `StepButton`:
+Array fields use `mode='array'` only when supported by the actual component and
+value type. Check existing checkbox-group, tags and toggle-group examples.
 
-```tsx
-// Define field groups for each step
-const Step1 = withFieldGroup({
-  fields: ['name', 'email'],
-  render: ({ form }) => {
-    const { FormTextField } = useFormFields<FormValues>();
-    return (
-      <>
-        <FormTextField name='name' label='Name' />
-        <FormTextField name='email' label='Email' />
-        <form.StepButton direction='next' label='Next' />
-      </>
-    );
-  }
-});
+## Validation
 
-const Step2 = withFieldGroup({
-  fields: ['address', 'city'],
-  render: ({ form }) => {
-    const { FormTextField } = useFormFields<FormValues>();
-    return (
-      <>
-        <FormTextField name='address' label='Address' />
-        <FormTextField name='city' label='City' />
-        <form.StepButton direction='prev' label='Back' />
-        <form.SubmitButton label='Submit' />
-      </>
-    );
-  }
-});
-```
+- Client validation improves UX; it does not protect the server.
+- Runtime server validation remains mandatory for body, params and query.
+- Do not send Organization, role, Permission or Store Scope as trusted form
+  authority.
+- Do not surface raw provider, DB or auth errors in field messages.
+- Map server failures to controlled user-facing messages.
 
-Use the `useStepper` hook from `src/hooks/use-stepper.tsx` to manage step state.
+## Current examples
 
----
+Use these as implementation evidence before older snippets:
 
-## Advanced Patterns
+- `src/features/products/components/product-form.tsx`
+- `src/features/users/components/user-form-sheet.tsx`
+- `src/features/auth/components/user-auth-form.tsx`
+- `src/components/forms/demo-form.tsx`
 
-### Nested objects (dot notation)
-
-```tsx
-<FormTextField name='address.street' label='Street' />
-<FormTextField name='address.city' label='City' />
-```
-
-### Dynamic array rows
-
-```tsx
-<form.AppField name='items' mode='array'>
-  {(field) => (
-    <>
-      {field.state.value.map((_, i) => (
-        <form.AppField key={i} name={`items[${i}].name`}>
-          {(subField) => <subField.TextField label={`Item ${i + 1}`} />}
-        </form.AppField>
-      ))}
-      <Button onClick={() => field.pushValue({ name: '' })}>Add Row</Button>
-    </>
-  )}
-</form.AppField>
-```
-
-### Side effects with listeners
-
-```tsx
-<FormSelectField
-  name='country'
-  label='Country'
-  options={countryOptions}
-  listeners={{
-    onChange: ({ value }) => {
-      // Reset city when country changes
-      form.setFieldValue('city', '');
-    }
-  }}
-/>
-```
-
-### Custom field with `form.AppField`
-
-For fields not covered by the built-in 8 types:
-
-```tsx
-<form.AppField name='color'>
-  {(field) => (
-    <field.FieldSet>
-      <Label>Pick a color</Label>
-      <field.Field>
-        <input
-          type='color'
-          value={field.state.value}
-          onChange={(e) => field.handleChange(e.target.value)}
-        />
-      </field.Field>
-      <field.FieldError />
-    </field.FieldSet>
-  )}
-</form.AppField>
-```
-
-### Form-level errors
-
-Display errors that apply to the whole form (e.g., server errors):
-
-```tsx
-import { FormErrors } from '@/components/ui/form-context';
-
-<form.AppForm>
-  <form.Form>
-    <FormErrors /> {/* Renders form-level validation errors */}
-    {/* fields... */}
-  </form.Form>
-</form.AppForm>;
-```
+Demo forms illustrate field composition only. They do not establish productive
+data access, tenancy or authorization.

@@ -2,6 +2,9 @@
 
 ## Primer hito
 
+> **SNAPSHOT HISTÓRICO:** este alcance inicial fue superado por las capacidades
+> implementadas y el estado 2.20T documentados más abajo.
+
 Solo OAuth, cuenta autorizada y estado de conexion.
 
 ## Fases posteriores
@@ -16,6 +19,9 @@ Solo OAuth, cuenta autorizada y estado de conexion.
 Cada recurso debe tener DTO, mapper, errores y tests contractuales propios dentro del adapter. Consultar la documentacion oficial vigente antes de fijar contratos.
 
 ## Listings read-only — 2.20B
+
+> **SNAPSHOT DE ESE MOMENTO:** las afirmaciones de este bloque sobre ausencia de
+> persistencia y sync fueron superadas por 2.20E, 2.20S y 2.20T más abajo.
 
 La primera lectura de publicaciones usa exclusivamente la API oficial autenticada de Mercado Libre y se ejecuta server-side desde una Connection activa ya vinculada al tenant y a la Store. No existe todavía una ruta pública, UI, sincronización ni persistencia de listings.
 
@@ -57,3 +63,55 @@ El resultado agregado expone únicamente `discovered`, `requested`, `fetched`,
 provider; `last_synced_at` continúa siendo el reloj local. No se implementan
 ausencia, soft-delete, variaciones, User Products, métricas/audit persistentes ni
 escrituras hacia Mercado Libre.
+
+## Listing sync run orchestration — 2.20T
+
+`MercadoLibreListingSyncRunService` envuelve el backfill server-only existente
+sin mover lógica del provider a la capa de DB. Recibe Organization, Store,
+Connection, actor membership e idempotency key desde un caller server-side ya
+autorizado; inicia el run, persiste checkpoints después de cada batch y al
+cerrar cada página, y finaliza `succeeded`, `partial` o `failed`.
+
+El resultado seguro distingue `executed`, `reused` y `already_running`. Un run
+reutilizado o bloqueado no vuelve a llamar al backfill. Los fallos fatales se
+clasifican con códigos allowlisted y resúmenes controlados; nunca se persiste
+`error.message`, tokens, headers o bodies. Los fallos parciales completan el
+recorrido y cierran como `partial_item_failure`.
+
+`credential_failure` conserva su código canónico. Cuando la capa de credenciales
+entrega un stage primario conocido, el resumen usa una plantilla controlada con
+ese stage allowlisted; stages desconocidos vuelven al resumen genérico sin
+interpolar mensajes ni material del proveedor.
+
+Una idempotency key histórica puede devolver `reused` aunque la Connection haya
+sido deshabilitada después, siempre después de validar tenant, Store,
+Connection y actor server-side. Esto sólo reconoce el run existente: una key
+nueva sobre una Connection disabled falla cerrado y no inicia backfill.
+
+El resultado 2.20S incorpora `pages` y `batches` y admite un callback opcional
+de progreso, por lo que los callers anteriores siguen funcionando. El callback
+no se ejecuta por item. No existe route pública, scheduler, worker, heartbeat,
+cursor persistente, resumability, missing reconciliation ni recovery automática
+de runs stale en este corte.
+
+La infraestructura DB/RPC 2.20T quedó validada en el proyecto remoto mediante
+fixtures sintéticas con rollback. Esa validación estructural inicial no incluyó
+el orquestador real; el resultado runtime posterior se registra en el bloque
+vigente siguiente. La recuperación automática/general de stale runs continúa
+`DEFERRED`; checkpoint continúa sin ser resumability.
+
+### Estado runtime vigente 2.20T
+
+El root cause inicial de input scope fue corregido: el caller construye
+`ListingScope` explícitamente y mantiene `actorMembershipId` e `idempotencyKey`
+fuera del scope estricto. El caller de finalize también construye progress con
+los siete counters canónicos y excluye `failures`. La observabilidad CAS
+distingue fallos seguros sin conservar material sensible.
+
+La validación real creó el run y completó discovery, detail fetch, persistencia
+y checkpoints. La recuperación posterior finalizó ese mismo run como
+`succeeded`, sin repetir trabajo del provider, con counters `1/1/1/1/0`, una
+página y un batch. Quedaron exactamente un audit `listing.sync.started` y uno
+`listing.sync.succeeded`, sin terminales duplicados ni runs `running`.
+Listings permanece en 1 sin duplicados; el reconnect controlado dejó
+`credential_version=3` y lease `CLEAR`. 2.20T está cerrado.

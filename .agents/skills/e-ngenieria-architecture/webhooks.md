@@ -1,6 +1,6 @@
 # Webhooks
 
-Los webhooks son fase posterior al primer hito de conexion.
+Los webhooks permanecen diferidos hasta una subfase explícitamente aprobada.
 
 Cuando se habiliten:
 

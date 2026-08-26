@@ -1,787 +1,244 @@
-# AGENTS.md - AI Coding Agent Reference
-
-This file provides essential information for AI coding agents working on this project. It contains project-specific details, conventions, and guidelines that complement the README.
-
----
-
-## Project Overview
-
-**Next.js Admin Dashboard Starter** is a production-ready admin dashboard template built with:
-
-- **Framework**: Next.js 16 (App Router)
-- **Language**: TypeScript 5.7
-- **Styling**: Tailwind CSS v4
-- **UI Components**: shadcn/ui (New York style)
-- **Authentication**: Clerk (with Organizations/Billing support)
-- **Error Tracking**: Sentry
-- **Charts**: Recharts
-- **Containerization**: Docker (Node.js & Bun Dockerfiles)
-- **Package Manager**: Bun (preferred) or npm
-
-The project follows a feature-based folder structure designed for scalability in SaaS applications, internal tools, and admin panels.
-
----
-
-## Technology Stack Details
-
-### Core Framework & Runtime
-
-- Next.js 16.0.10 with App Router
-- React 19.2.0
-- TypeScript 5.7.2 with strict mode enabled
-
-### Styling & UI
-
-- Tailwind CSS v4 (using `@import 'tailwindcss'` syntax)
-- PostCSS with `@tailwindcss/postcss` plugin
-- shadcn/ui component library (Radix UI primitives)
-- CSS custom properties for theming (OKLCH color format)
-
-### State Management
-
-- Zustand 5.x for local UI state in the stateful demo features
-- Nuqs for URL search params state management
-- TanStack Form + Zod for form handling (`createFormHook` + shadcn `Field`-anatomy components)
-
-### Data Fetching & Caching
-
-- TanStack React Query for data fetching, caching, and mutations
-- Server-side prefetching with `HydrationBoundary` + `dehydrate`
-- Client-side `useQuery` + nuqs `shallow: true` for tables (no RSC round-trips on pagination/filter)
-- `useMutation` + `invalidateQueries` for form submissions
-- Query client singleton in `src/lib/query-client.ts`
-
-### Authentication & Authorization
-
-- Clerk for authentication and user management
-- Clerk Organizations for multi-tenant workspaces
-- Clerk Billing for subscription management (B2B)
-- Client-side RBAC for navigation visibility
-
-### Data & APIs
-
-- TanStack Table for data tables
-- TanStack React Query for data fetching and mutations
-- Recharts for analytics/charts
-- Service layer per feature (`api/types.ts` → `api/service.ts` → `api/queries.ts`)
-- Route handlers at `src/app/api/` (for Route Handler or BFF patterns)
-- Mock data in `src/constants/mock-api*.ts` (default, swap via service layer)
-- API client utility in `src/lib/api-client.ts` (for fetch-based patterns)
-
-### Development Tools
-
-- ESLint 8.x with Next.js core-web-vitals config
-- Prettier 3.x with prettier-plugin-tailwindcss
-- Husky for git hooks
-- lint-staged for pre-commit formatting
-
----
-
-## Project Structure
-
-```
-/src
-├── app/                    # Next.js App Router
-│   ├── auth/              # Authentication routes (sign-in, sign-up)
-│   ├── dashboard/         # Dashboard routes
-│   │   ├── overview/      # Parallel routes (@area_stats, @bar_stats, etc.)
-│   │   ├── product/       # Product management pages
-│   │   ├── kanban/        # Kanban board page
-│   │   ├── chat/          # Messaging page
-│   │   ├── ai-chat/       # AI chat streaming demo
-│   │   ├── notifications/ # Notifications page
-│   │   ├── workspaces/    # Organization management
-│   │   ├── billing/       # Subscription billing
-│   │   ├── exclusive/     # Pro plan feature example
-│   │   └── profile/       # User profile
-│   ├── api/               # API routes (if any)
-│   ├── layout.tsx         # Root layout with providers
-│   ├── page.tsx           # Landing page
-│   ├── global-error.tsx   # Global error boundary
-│   └── not-found.tsx      # 404 page
-│
-├── components/
-│   ├── ui/                # shadcn/ui components (50+ components)
-│   ├── layout/            # Layout components (sidebar, header, etc.)
-│   ├── forms/             # Field components (shadcn TanStack Form anatomy) + demos
-│   ├── themes/            # Theme system components
-│   ├── kbar/              # Command+K search bar
-│   ├── icons.tsx          # Icon registry
-│   └── ...
-│
-├── features/              # Feature-based modules
-│   ├── auth/              # Authentication components
-│   ├── overview/          # Dashboard analytics
-│   ├── products/          # Product management (React Query + nuqs)
-│   │   ├── api/
-│   │   │   ├── types.ts   # Type contract (response shapes, filters, payloads)
-│   │   │   ├── service.ts # Data access layer (swap for your backend)
-│   │   │   └── queries.ts # React Query options + key factories
-│   │   ├── components/    # Listing, form, table components
-│   │   ├── schemas/       # Zod schemas
-│   │   └── constants/     # Filter options
-│   ├── users/             # User management (React Query + nuqs)
-│   │   ├── api/           # Same pattern: types.ts → service.ts → queries.ts
-│   │   └── components/    # Listing, table components
-│   ├── react-query-demo/  # React Query showcase (Pokemon API)
-│   ├── kanban/            # Kanban board with dnd-kit
-│   ├── chat/              # Messaging UI (conversations, bubbles, composer)
-│   ├── ai-chat/           # Scripted useChat streaming demo
-│   ├── notifications/     # Notification center & store
-│   └── profile/           # Profile management
-│
-├── config/                # Configuration files
-│   ├── nav-config.ts      # Navigation with RBAC
-│   └── ...
-│
-├── hooks/                 # Custom React hooks
-│   ├── use-nav.ts         # RBAC navigation filtering
-│   ├── use-data-table.ts  # Data table state
-│   └── ...
-│
-├── lib/                   # Utility functions
-│   ├── utils.ts           # cn() and formatters
-│   ├── searchparams.ts    # Search param utilities
-│   └── ...
-│
-├── types/                 # TypeScript type definitions
-│   └── index.ts           # Core types (NavItem, etc.)
-│
-└── styles/                # Global styles
-    ├── globals.css        # Tailwind imports + view transitions
-    ├── theme.css          # Theme imports
-    └── themes/            # Individual theme files
-
-/docs                      # Documentation
-│   ├── clerk_setup.md     # Clerk configuration guide
-│   ├── nav-rbac.md        # Navigation RBAC documentation
-│   └── themes.md          # Theme customization guide
-
-/scripts                   # Dev tooling
-    ├── cleanup.js         # Feature removal, run via `bun run cleanup` (templates in cleanup-templates/, typechecked)
-    └── cleanup-templates/ # Replacement files cleanup.js copies into the repo
-
-Dockerfile                 # Node.js production Dockerfile
-Dockerfile.bun             # Bun production Dockerfile
-.dockerignore              # Docker build exclusions
-```
-
----
-
-## Build & Development Commands
-
-```bash
-# Install dependencies
-bun install
-
-# Development server
-bun run dev          # Starts at http://localhost:3000
-
-# Build for production
-bun run build
-
-# Start production server
-bun run start
-
-# Linting
-bun run lint         # Run ESLint
-bun run lint:fix     # Fix ESLint issues and format
-bun run lint:strict  # Zero warnings tolerance
-
-bun run typecheck    # tsc --noEmit
-
-# Formatting
-bun run format       # Format with Prettier
-bun run format:check # Check formatting
-
-# Git hooks
-bun run prepare      # Install Husky hooks
-```
-
----
-
-## Environment Configuration
-
-Copy `env.example.txt` to `.env.local` and configure:
-
-### Required for Authentication (Clerk)
-
-```env
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
-CLERK_SECRET_KEY=sk_...
-
-# Redirect URLs
-NEXT_PUBLIC_CLERK_SIGN_IN_URL="/auth/sign-in"
-NEXT_PUBLIC_CLERK_SIGN_UP_URL="/auth/sign-up"
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/dashboard/overview"
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/dashboard/overview"
-```
-
-### Optional for Error Tracking (Sentry)
-
-```env
-NEXT_PUBLIC_SENTRY_DSN=https://...@....ingest.sentry.io/...
-NEXT_PUBLIC_SENTRY_ORG=your-org
-NEXT_PUBLIC_SENTRY_PROJECT=your-project
-SENTRY_AUTH_TOKEN=sntrys_...
-NEXT_PUBLIC_SENTRY_DISABLED="false"  # Set to "true" to disable in dev
-```
-
-**Note**: Clerk supports "keyless mode" - the app works without API keys for initial development.
-
----
-
-## Code Style Guidelines
-
-### TypeScript
-
-- Strict mode enabled
-- Use explicit return types for public functions
-- Prefer interface over type for object definitions
-- Use `@/*` alias for imports from src
-
-### Formatting (Prettier)
-
-```json
-{
-  "singleQuote": true,
-  "jsxSingleQuote": true,
-  "semi": true,
-  "trailingComma": "none",
-  "tabWidth": 2,
-  "arrowParens": "always"
-}
-```
-
-### ESLint Rules
-
-- `@typescript-eslint/no-unused-vars`: warn
-- `no-console`: warn
-- `react-hooks/exhaustive-deps`: warn
-- `import/no-unresolved`: off (handled by TypeScript)
-
-### Component Conventions
-
-- Use function declarations for components: `function ComponentName() {}`
-- Props interface named `{ComponentName}Props`
-- shadcn/ui components use `cn()` utility for class merging
-- Server components by default, `'use client'` only when needed
-
----
-
-## Theming System
-
-The project uses a sophisticated multi-theme system with 10 built-in themes:
-
-- `vercel` (default)
-- `claude`
-- `discord`
-- `supabase`
-- `mono`
-- `notebook`
-- `light-green`
-- `zen`
-- `astro-vista`
-- `whatsapp`
-
-### Theme Files
-
-- CSS files: `src/styles/themes/{theme-name}.css`
-- Theme registry: `src/components/themes/theme.config.ts`
-- Font config: `src/components/themes/font.config.ts`
-- Active theme provider: `src/components/themes/active-theme.tsx`
-
-### Adding a New Theme
-
-1. Create `src/styles/themes/your-theme.css` with `[data-theme='your-theme']` selector
-2. Import in `src/styles/theme.css`
-3. Add to `THEMES` array in `src/components/themes/theme.config.ts`
-4. (Optional) Add fonts in `font.config.ts`
-5. (Optional) Set as default in `theme.config.ts`
-
-See `docs/themes.md` for detailed theming guide.
-
----
-
-## Navigation & RBAC System
-
-### Navigation Configuration
-
-Navigation is organized into groups in `src/config/nav-config.ts`:
-
-```typescript
-import { NavGroup } from '@/types';
-
-export const navGroups: NavGroup[] = [
-  {
-    label: 'Overview',
-    items: [
-      {
-        title: 'Dashboard',
-        url: '/dashboard/overview',
-        icon: 'dashboard',
-        shortcut: ['d', 'd'],
-        items: [],
-        access: { requireOrg: true } // RBAC check
-      }
-    ]
-  }
-];
-```
-
-### Access Control Properties
-
-- `requireOrg: boolean` - Requires active organization
-- `permission: string` - Requires specific permission
-- `role: string` - Requires specific role
-- `plan: string` - Requires specific subscription plan
-- `feature: string` - Requires specific feature
-
-### Client-Side Filtering
-
-The `useFilteredNavItems()` hook in `src/hooks/use-nav.ts` filters navigation client-side using Clerk's `useOrganization()` and `useUser()` hooks. This is for UX only - actual security checks must happen server-side.
-
----
-
-## Authentication Patterns
-
-### Protected Routes
-
-Dashboard routes use Clerk's middleware pattern. Pages that require organization:
-
-```tsx
-import { auth } from '@clerk/nextjs';
-import { redirect } from 'next/navigation';
-
-export default async function Page() {
-  const { orgId } = await auth();
-  if (!orgId) redirect('/dashboard/workspaces');
-  // ...
-}
-```
-
-### Plan/Feature Protection
-
-Use Clerk's `<Protect>` component for client-side:
-
-```tsx
-import { Protect } from '@clerk/nextjs';
-
-<Protect plan='pro' fallback={<UpgradePrompt />}>
-  <PremiumContent />
-</Protect>;
-```
-
-Use `has()` function for server-side checks:
-
-```tsx
-import { auth } from '@clerk/nextjs';
-
-const { has } = await auth();
-const hasFeature = has({ feature: 'premium_access' });
-```
-
----
-
-## Data Fetching Patterns
-
-### Service Layer Architecture
-
-Each feature has a three-file API layer:
-
-```
-src/features/<name>/api/
-  types.ts      ← Type contract (response shapes, filters, payloads)
-  service.ts    ← Data access functions (the ONE file to swap for your backend)
-  queries.ts    ← React Query options + query key factories (stable, never changes)
-```
-
-**`service.ts` is the only file you modify when connecting to a real backend.** Queries and components import from it — they never change.
-
-#### Backend Patterns
-
-| Pattern                                            | How to implement                                                                            |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Server Actions + ORM** (Prisma/Drizzle/Supabase) | Add `'use server'` at top of `service.ts`, call ORM directly                                |
-| **Route Handlers + ORM**                           | `service.ts` calls `/api/` routes via `apiClient`, route handlers call ORM                  |
-| **BFF** (Next.js proxies to Laravel/Go/etc.)       | `service.ts` calls `/api/` routes via `apiClient`, route handlers proxy to external backend |
-| **Direct external API** (frontend-only)            | `service.ts` calls external URL via `fetch()`                                               |
-| **Mock** (default)                                 | `service.ts` calls in-memory fake data stores                                               |
-
-Route handlers at `src/app/api/` are ready for patterns 2 and 3. `src/lib/api-client.ts` provides a typed `fetch` wrapper.
+# AGENTS.md — Manual operativo de agentes
 
-### Query Key Factories
-
-Each feature defines a key factory in `queries.ts` for type-safe, hierarchical cache invalidation:
+Este archivo define cómo trabajar en **e-ngenieria Hub**. Es una guía operativa:
+no reemplaza la arquitectura, el plan, las reglas ni la documentación técnica.
 
-```tsx
-export const entityKeys = {
-  all: ['entities'] as const,
-  list: (filters: EntityFilters) => [...entityKeys.all, 'list', filters] as const,
-  detail: (id: number) => [...entityKeys.all, 'detail', id] as const
-};
+## 1. Snapshot del proyecto
 
-// Usage in queryOptions
-queryKey: entityKeys.list(filters);
+e-ngenieria Hub es un SaaS operativo multi-tenant para administrar múltiples
+Stores e integraciones e-commerce con aislamiento por Organization.
 
-// Usage in mutations — invalidate all entity queries
-queryClient.invalidateQueries({ queryKey: entityKeys.all });
-```
+Stack vigente:
 
-### React Query (Default for all new pages)
+- Next.js 16.2.12 con App Router y React 19.2.4.
+- TypeScript estricto, Zod y TanStack.
+- Tailwind CSS v4 y shadcn Base Nova sobre Base UI.
+- Clerk para identidad y contexto técnico de Organization.
+- Supabase PostgreSQL para persistencia.
+- Sentry para observabilidad y Recharts para visualización.
+- Bun como package manager preferido.
 
-The project uses TanStack React Query with server-side prefetching and client-side cache management:
+El repositorio deriva de Kiranism como origen/upstream, pero el producto y sus
+reglas son los de e-ngenieria Hub.
 
-1. **Query options** defined in `queries.ts` — shared between server prefetch and client hooks
-2. **Server prefetch** using `void queryClient.prefetchQuery()` + `HydrationBoundary` + `dehydrate` — `void` (fire-and-forget) is the standard TanStack pattern for Next.js App Router
-3. **Client fetch** using `useSuspenseQuery()` — integrates with React Suspense so prefetched data streams in without showing a loading skeleton on first load
-4. **Suspense boundary** wraps the client component — shows a fallback skeleton only on subsequent client-side navigations when cache is empty
+## 2. Fuentes, autoridad y conflictos
 
-```tsx
-// Server component: prefetch + dehydrate
-const queryClient = getQueryClient();
-void queryClient.prefetchQuery(entitiesQueryOptions(filters)); // void, not await
+Las fuentes cumplen funciones diferentes; no existe una precedencia absoluta
+capaz de resolver automáticamente toda contradicción:
 
-return (
-  <HydrationBoundary state={dehydrate(queryClient)}>
-    <Suspense fallback={<Skeleton />}>
-      <EntityTable />
-    </Suspense>
-  </HydrationBoundary>
-);
+- **Autoridad normativa:** [REGLAS.md](./REGLAS.md) y
+  [plan y gobierno](./docs/plan-y-gobierno.md).
+- **Evidencia técnica:** código y tests vigentes.
+- **Instrucciones operativas:** este `AGENTS.md`.
+- **Detalle técnico:** documentación especializada en `docs/`.
+- **Ayudas:** skills locales de `.agents/skills/`.
+- **Historia:** [handoff](./docs/codex-handoff.md) y
+  [prompts archivados](./docs/prompts/README.md).
 
-// Client component: useSuspenseQuery (not useQuery)
-const { data } = useSuspenseQuery(entitiesQueryOptions(filters));
-```
+El repositorio es la fuente de verdad del estado implementado. Los prompts son
+historial operativo, no autorización permanente ni especificación superior.
 
-**Why `void` + `useSuspenseQuery`:**
+Si dos fuentes presentan un conflicto material sobre arquitectura, seguridad,
+datos, integraciones, alcance o comportamiento, detenerse y reportar la
+contradicción. No resolverla silenciosamente por precedencia ni convertir una
+suposición en una decisión.
 
-- `void` fires the prefetch without blocking the server component
-- `useSuspenseQuery` integrates with React Suspense — the pending query streams in via Next.js streaming SSR
-- With `<Suspense fallback={<Skeleton />}>`: skeleton shows immediately while data streams in — this is expected behavior, the skeleton IS the Suspense fallback during streaming
-- Without `<Suspense>` wrapper: no skeleton, but the previous page stays visible until data fully resolves (feels like a slow navigation)
-- Once data is cached (within `staleTime`), subsequent visits are instant — no skeleton
+## 3. Lectura mínima antes de trabajar
 
-**Why NOT `useQuery`:**
+Antes de modificar el repositorio:
 
-- `useQuery` doesn't integrate with Suspense — returns `isLoading: true` and you must handle loading state manually
-- Hydrated pending queries from `void` prefetch won't prevent the loading state
-- Results in skeleton flash even when data is prefetched
+1. Leer [README.md](./README.md) y [REGLAS.md](./REGLAS.md).
+2. Leer el [plan y gobierno](./docs/plan-y-gobierno.md), el
+   [handoff](./docs/codex-handoff.md) y el
+   [workflow de agentes](./docs/agent-workflow.md).
+3. Revisar la documentación especializada aplicable al alcance.
+4. Revisar código, tests y patrones similares ya implementados.
+5. Inspeccionar el working tree y preservar cambios ajenos o preexistentes.
+6. Verificar si existe una skill local relevante.
 
-### Mutations
+No cargar documentación no relacionada por rutina. Profundizar sólo en las
+fuentes necesarias para entender el cambio y sus límites.
 
-Components import service functions for mutations. Use query key factories for invalidation:
+## 4. Uso de skills
 
-```tsx
-import { createEntity } from '../api/service';
-import { entityKeys } from '../api/queries';
+Las skills locales viven en `.agents/skills/`. Antes de cambiar una parte del
+sistema, revisar y usar la skill relevante cuando exista.
 
-const mutation = useMutation({
-  mutationFn: (data) => createEntity(data),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: entityKeys.all });
-    toast.success('Created');
-  }
-});
-```
+Una skill es una ayuda, no autoridad normativa. Debe subordinarse a
+`REGLAS.md`, al plan, a decisiones explícitamente aprobadas, a la arquitectura
+de e-Hub y a la evidencia vigente del código y los tests.
 
-### URL State Management
+Si una skill contradice alguna de esas fuentes, detenerse y reportarlo. No
+aplicar ciegamente patrones genéricos. Esto es especialmente importante para
+`kiranism-shadcn-dashboard`, `next-best-practices`,
+`vercel-react-best-practices` y `tanstack-query`: sus recomendaciones sólo
+aplican cuando respetan los boundaries de este proyecto.
 
-Use `nuqs` for search params state:
+## 5. Flujo server-side obligatorio
 
-- `searchParamsCache` (server) — reads params in server components
-- `useQueryState` (client) — reads/writes params in client components with `shallow: true`
+Todo acceso sensible o tenant-scoped debe seguir este orden conceptual:
 
-### Data Tables
+`Request → Authentication → Authorization → Tenant resolution → Validation → Service → Repository → Database`
 
-Tables use TanStack Table with React Query:
+- Autenticar y autorizar en servidor.
+- Tratar Organization, Store, roles, IDs y filtros recibidos como input no
+  confiable hasta validarlos contra el contexto autenticado.
+- Resolver tenant y Store Scope antes de ejecutar lógica de negocio.
+- Validar payloads en runtime, normalmente con Zod.
+- Mantener reglas de negocio en servicios y persistencia en repositories.
+- No acceder a la base ni a providers externos directamente desde UI cliente.
 
-- Query options in `features/*/api/queries.ts`
-- Column definitions in `features/*/components/*-tables/columns.tsx`
-- Table component in `src/components/ui/table/data-table.tsx`
-- Column pinning via `initialState.columnPinning` in `useDataTable`
+## 6. Authentication, autorización y tenancy
 
----
+Clerk es responsable de:
 
-## Error Handling & Monitoring
+- authentication y session;
+- `userId`;
+- Organization activa;
+- membership técnica de Clerk Organization.
 
-### Sentry Integration
+`hub_memberships` es la autoridad de roles de negocio. Los roles vigentes son:
 
-Sentry is configured for both client and server:
-
-- Client config: `src/instrumentation-client.ts`
-- Server config: `src/instrumentation.ts`
-- Global error: `src/app/global-error.tsx`
-
-To disable Sentry in development:
-
-```env
-NEXT_PUBLIC_SENTRY_DISABLED="true"
-```
-
-### Error Boundaries
-
-- `global-error.tsx` - Catches all errors, reports to Sentry
-- Parallel route `error.tsx` files for specific sections
-
----
-
-## Testing Strategy
-
-The project uses Vitest in a Node environment for security and utility tests. The current suite covers server-side authentication, Organization, RBAC, Organization resource scope, input validation, HTTP error contracts, Sentry privacy, and representative Route Handler composition.
-
-Future component tests may use React Testing Library and critical end-to-end flows may use Playwright, but neither is part of the current Fase 1 test infrastructure.
-
-Recommended test locations:
-
-```
-/src
-  /__tests__           # Unit tests
-  /features/*/tests    # Feature tests
-/e2e                   # Playwright tests
-```
-
----
-
-## Deployment
-
-Canonical guide: [docs/deployment.md](./docs/deployment.md) (Vercel, production environment variables, Docker).
-
-### Vercel (Recommended)
-
-1. Connect repository to Vercel
-2. Add environment variables in dashboard
-3. Deploy
-
-### Environment Variables for Production
-
-Ensure these are set in your deployment platform:
-
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-- `CLERK_SECRET_KEY`
-- All `NEXT_PUBLIC_*` variables for client-side access
-- `SENTRY_*` variables if using error tracking
-
-### Docker
-
-Production-ready Dockerfiles are included:
-
-- `Dockerfile` — Node.js-based
-- `Dockerfile.bun` — Bun-based
-
-Both use `output: 'standalone'` in `next.config.ts`. Pass `NEXT_PUBLIC_*` vars as `--build-arg` at build time, and runtime secrets via `-e` at run time.
-
-### Build Considerations
-
-- Output: `standalone` (optimized for Docker/self-hosting)
-- Images: Configured for `api.slingacademy.com`, `img.clerk.com`, `clerk.com`
-- Sentry source maps uploaded automatically in CI
-
----
-
-## Feature Cleanup System
-
-A single `scripts/cleanup.js` file handles removal of optional features:
-
-```bash
-# Interactive mode — prompts for each feature
-node scripts/cleanup.js --interactive
-
-# Remove specific features
-node scripts/cleanup.js clerk           # Remove auth/org/billing
-node scripts/cleanup.js kanban          # Remove kanban board
-node scripts/cleanup.js chat            # Remove messaging UI
-node scripts/cleanup.js ai-chat         # Remove AI chat demo
-node scripts/cleanup.js notifications   # Remove notification center
-node scripts/cleanup.js themes          # Keep one theme, remove rest
-node scripts/cleanup.js sentry          # Remove error tracking
-
-# Remove multiple at once
-node scripts/cleanup.js kanban chat notifications
-
-# Preview without changing files
-node scripts/cleanup.js --dry-run kanban
-
-# List all features
-node scripts/cleanup.js --list
-```
-
-**Safety**: Script requires git repository with at least one commit. Use `--force` to skip.
-
-Replacement files live in `scripts/cleanup-templates/` as real `.ts`/`.tsx` files typechecked by `tsc` and `next build`, so template rot fails loudly instead of shipping broken code.
-
-After cleanup, delete `scripts/cleanup.js` and `scripts/cleanup-templates/` — the dev server message auto-cleans on next start.
-
----
-
-## Icon System
-
-**All icons come from a single source: `src/components/icons.tsx`.**
-
-The project uses `@tabler/icons-react` as the sole icon package. Every icon is re-exported through a centralized `Icons` object — **never import directly from `@tabler/icons-react` or any other icon package**.
-
-### Usage
-
-```tsx
-import { Icons } from '@/components/icons';
-
-// In JSX
-<Icons.search className='h-4 w-4' />
-<Icons.chevronRight className='h-4 w-4' />
-
-// Passing as a prop
-icon={Icons.check}
-```
-
-### Adding a New Icon
-
-1. Import the tabler icon in `src/components/icons.tsx`
-2. Add a semantic key to the `Icons` object
-3. Use `Icons.yourKey` everywhere — never the raw import
-
-```tsx
-// In src/components/icons.tsx
-import { IconNewIcon } from '@tabler/icons-react';
-
-export const Icons = {
-  // ...existing icons
-  newIcon: IconNewIcon
-};
-```
-
-### Available Icon Categories
-
-| Category        | Example Keys                                                                  |
-| --------------- | ----------------------------------------------------------------------------- |
-| General         | `check`, `close`, `search`, `settings`, `trash`, `spinner`, `info`, `warning` |
-| Navigation      | `chevronDown`, `chevronLeft`, `chevronRight`, `chevronUp`, `chevronsUpDown`   |
-| Layout          | `dashboard`, `kanban`, `panelLeft`                                            |
-| User            | `user`, `account`, `profile`, `teams`                                         |
-| Communication   | `chat`, `notification`, `phone`, `video`, `send`                              |
-| Files           | `page`, `post`, `media`, `fileTypePdf`, `fileTypeDoc`                         |
-| Actions         | `add`, `edit`, `upload`, `share`, `login`, `logout`                           |
-| Theme           | `sun`, `moon`, `brightness`, `laptop`, `palette`                              |
-| Text formatting | `bold`, `italic`, `underline`, `text`                                         |
-| Data / Charts   | `trendingUp`, `trendingDown`, `eyeOff`, `adjustments`                         |
-
-### Icon Showcase Page
-
-Browse all available icons at `/dashboard/elements/icons` — a searchable grid of every icon in the registry.
-
-### Why This Pattern?
-
-- **Single source of truth** — swap icon packages by editing one file
-- **Semantic naming** — `Icons.trash` is clearer than `IconTrash` scattered across files
-- **Discoverability** — autocomplete on `Icons.` shows every available icon
-- **No direct dependencies** — components never couple to a specific icon package
-
----
-
-## Common Development Tasks
-
-### Adding a New Feature (End-to-End)
-
-1. Create `src/features/<name>/api/types.ts` — response types, filter types, mutation payloads
-2. Create `src/features/<name>/api/service.ts` — data access functions (mock by default)
-3. Create `src/features/<name>/api/queries.ts` — query key factory + `queryOptions`
-4. Create page route: `src/app/dashboard/<name>/page.tsx`
-5. Create feature components in `src/features/<name>/components/`
-6. Add navigation item in `src/config/nav-config.ts`
-7. (Optional) Add route handlers in `src/app/api/<name>/` for REST API patterns
-8. (Optional) Register new icon in `src/components/icons.tsx`
-
-### Adding a New API Route
-
-1. Create: `src/app/api/my-route/route.ts`
-2. Export HTTP method handlers: `GET`, `POST`, etc.
-3. For BFF pattern: proxy requests to your external backend
-
-### Adding a shadcn Component
-
-```bash
-npx shadcn add component-name
-```
-
-### Adding a New Theme
-
-See "Theming System" section above or `docs/themes.md`.
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-**Build fails with Tailwind errors**
-
-- Ensure using Tailwind CSS v4 syntax (`@import 'tailwindcss'`)
-- Check `postcss.config.js` uses `@tailwindcss/postcss`
-
-**Clerk keyless mode popup**
-
-- Normal in development without API keys
-- Click popup to claim application or set env variables
-
-**Theme not applying**
-
-- Check theme name matches in CSS `[data-theme]` and `theme.config.ts`
-- Verify theme CSS is imported in `theme.css`
-
-**Navigation items not showing**
-
-- Check `access` property in nav config
-- Verify user has required org/permission/role
-
----
-
-## External Documentation
-
-- [Next.js App Router](https://nextjs.org/docs/app)
-- [Clerk Next.js SDK](https://clerk.com/docs/references/nextjs)
-- [shadcn/ui](https://ui.shadcn.com/docs)
-- [Tailwind CSS v4](https://tailwindcss.com/docs)
-- [TanStack Table](https://tanstack.com/table/latest)
-- [Sentry Next.js](https://docs.sentry.io/platforms/javascript/guides/nextjs/)
-
----
-
-## Notes for AI Agents
-
-### Gobierno de fases y decisiones del proyecto
-
-Estas reglas son obligatorias para este proyecto:
-
-1. No saltar fases.
-2. No implementar fases futuras sin autorización explícita.
-3. No implementar decisiones no confirmadas. Registrar una **DECISIÓN PENDIENTE** y solicitar definición cuando el asunto pueda afectar arquitectura, seguridad, datos, integraciones o UX.
-4. No modificar la arquitectura sin documentar primero la decisión y su motivo.
-5. No tocar integraciones futuras mientras la fase activa sea seguridad o persistencia, salvo autorización explícita.
-6. Cada fase debe pasar `typecheck`, `lint`, `build` y los tests definidos para esa fase.
-7. Cada fase debe actualizar la documentación correspondiente.
-8. Todo acceso a datos debe estar autenticado, autorizado y tenant-scoped en servidor.
-9. Nunca exponer secretos, access tokens o refresh tokens al cliente, navegador, logs, respuestas o trazas.
-10. No borrar funcionalidades del starter hasta confirmar si son reutilizables.
-11. No hacer cambios masivos sin explicar primero el alcance y los archivos que se modificarán.
-12. No avanzar a la siguiente fase hasta cumplir todas las condiciones de salida documentadas.
-13. Los prompts operativos pueden preautorizar acciones rutinarias dentro del workspace; no solicitar confirmación repetida para esas acciones explícitamente autorizadas. Las operaciones sensibles, destructivas, globales, remotas o fuera de scope siguen requiriendo aprobación.
-
-El plan, las puertas de fase y el registro de decisiones están en [docs/plan-y-gobierno.md](./docs/plan-y-gobierno.md). Ese documento es la fuente de verdad operativa; los documentos especializados aportan detalle y el análisis histórico conserva contexto, pero no autoriza por sí mismo implementación futura.
-
-Antes de tocar código, un agente nuevo debe leer [el handoff](./docs/codex-handoff.md), [el workflow](./docs/agent-workflow.md), el plan y los documentos especializados que correspondan al alcance. El repositorio Git es la autoridad técnica; skills, Graphify y memoria externa solo son herramientas de apoyo. El índice de mandatos significativos está en [docs/prompts/README.md](./docs/prompts/README.md).
-
-### Distinción obligatoria entre decisión y suposición
-
-Los agentes deben distinguir explícitamente entre decisiones confirmadas, suposiciones y decisiones pendientes. Una suposición no puede convertirse silenciosamente en un modelo de datos, contrato de API, migración, integración o comportamiento de seguridad.
-
-1. **Always use `cn()` for className merging** - never concatenate strings manually
-2. **Respect the feature-based structure** - put new feature code in `src/features/`
-3. **Server components by default** - only add `'use client'` when using browser APIs or React hooks
-4. **Type safety first** - avoid `any`, prefer explicit types
-5. **Follow existing patterns** - look at similar components before creating new ones
-6. **Environment variables** - prefix with `NEXT_PUBLIC_` for client-side access
-7. **shadcn components** - don't modify files in `src/components/ui/` directly; extend them instead
-8. **Icons** - NEVER import icons directly from `@tabler/icons-react` or any other icon package. All icons must be registered in `src/components/icons.tsx` and imported as `import { Icons } from '@/components/icons'`. To add a new icon: add the tabler import to `icons.tsx`, add a semantic key to the `Icons` object, then use `Icons.keyName` in your component.
-9. **Page headers** - Always use `PageContainer` props (`pageTitle`, `pageDescription`, `pageHeaderAction`) for page headers. Never import `<Heading>` manually in pages — `PageContainer` handles that internally.
-10. **Forms** - Use `useAppForm` from `@/lib/form` with `form.AppField` rendering the shared field components (`field.TextField`, `field.SelectField`, …) from `@/components/forms/fields`. Each component follows the official shadcn TanStack Form anatomy; drop down to raw `form.Field` render props for one-off custom fields. Never use `useState` inside a render prop — extract stateful controls into components.
-11. **Button loading** - Use `<Button isLoading={isPending}>` for loading states. Uses CSS Grid overlap trick for zero layout shift. When `isLoading` is not passed, button behaves as default shadcn. `SubmitButton` in forms handles this automatically via form `isSubmitting` state.
-12. **Data layer** - Always go through the service layer: `types.ts` → `service.ts` → `queries.ts`. Components import types from `types.ts`, functions from `service.ts`, query options from `queries.ts`. Never import from `@/constants/mock-api*` directly in components.
+- `Owner`
+- `Manager`
+- `Employee`
+- `Client`
+
+Store Scope:
+
+- Owner: todas las Stores de la Organization.
+- Manager: todas las Stores de la Organization.
+- Employee: sólo Stores asignadas.
+- Client: sólo Stores asignadas.
+
+Permission y Store Scope son dimensiones independientes. Una acción requiere
+que ambas condiciones sean válidas cuando correspondan.
+
+No usar Clerk role, Clerk plan, metadata cliente ni visibilidad de UI como
+autorización de negocio. El filtrado de navegación en cliente es sólo UX. Toda
+protección efectiva debe repetirse en el servidor.
+
+Cualquier fallback transicional documentado en el código es compatibilidad,
+no un reemplazo silencioso del modelo de `hub_memberships`.
+
+## 7. Datos, Supabase y secretos
+
+- Supabase se usa como PostgreSQL/persistencia; no se usa Supabase Auth.
+- `service_role` es exclusivamente server-only y nunca llega al navegador.
+- El browser no tiene autoridad ni acceso directo privilegiado a la base.
+- Todo query y mutation debe estar autenticado, autorizado y tenant-scoped.
+- El acceso a datos pasa por repositories y boundaries de infraestructura.
+- RLS, constraints, índices y RPCs aportan defensa según el diseño vigente;
+  no sustituyen la autorización server-side.
+- Tokens y credenciales de integraciones permanecen cifrados y server-only.
+- No exponer secretos, tokens, authorization codes, ciphertexts ni headers
+  sensibles en cliente, respuestas, logs, trazas, fixtures o documentación.
+
+No introducir ORM ni acceso directo desde frontend como patrón alternativo.
+Las migraciones deben respetar aislamiento, integridad e idempotencia y sólo se
+aplican remotamente con autorización explícita.
+
+## 8. Boundaries de arquitectura
+
+- `src/features/`: lógica de producto y UI provider-agnostic.
+- `src/integrations/`: adapters, clients y comportamiento de providers.
+- `src/infrastructure/`: base de datos e infraestructura técnica.
+
+Mercado Libre y otros providers no pertenecen dentro de `features`. Sus DTOs,
+errores y contratos se traducen en el boundary de integración; no deben
+contaminar features ni modelos internos.
+
+Las páginas y componentes consumen servicios o endpoints internos. Los
+servicios coordinan reglas de negocio. Los repositories encapsulan detalles de
+persistencia. Mantener estas fronteras antes de crear nuevas abstracciones.
+
+Para Mercado Libre, consultar como mínimo:
+
+- [arquitectura de integraciones](./docs/meli-architecture.md);
+- [seguridad de integraciones](./docs/meli-security.md);
+- [modelo de datos](./docs/meli-database.md);
+- [contratos de API](./docs/meli-api.md).
+
+No realizar OAuth, refresh, sync, migraciones, escrituras al provider ni
+validaciones remotas fuera del alcance expresamente autorizado.
+
+## 9. Convenciones de código y UI
+
+- TypeScript estricto; evitar `any` y definir contratos explícitos.
+- Server Components por defecto; agregar `'use client'` sólo cuando hooks o
+  APIs del navegador lo requieran.
+- Respetar la estructura por features y los patrones existentes.
+- Usar `cn()` para combinar `className`.
+- Usar `PageContainer` para headers de páginas.
+- Usar `useAppForm`, `form.AppField` y los shared form fields para formularios.
+- Mantener componentes base de shadcn sin modificaciones innecesarias;
+  extender o componer cuando sea posible.
+- En código productivo nuevo, usar el registro `Icons` de
+  `src/components/icons.tsx`. Primitives shadcn existentes pueden conservar
+  imports directos legítimos de Tabler cuando forman parte de su implementación.
+- No introducir dependencias ni abstracciones especulativas.
+
+## 10. TanStack Query
+
+Patrón vigente para server state:
+
+- Server: `prefetchQuery` + `HydrationBoundary` + `dehydrate`.
+- Client: `useSuspenseQuery`.
+- Mutations: `useMutation` + `invalidateQueries` mediante keys estables.
+
+Mantener contratos y query options fuera de la UI cuando el feature ya aplica
+ese patrón. SWR no es el estándar del proyecto.
+
+## 11. Gobierno del trabajo
+
+- No saltar fases ni implementar fases futuras sin autorización explícita.
+- Distinguir siempre **decisión confirmada**, **suposición** y
+  **decisión pendiente**.
+- Una suposición no puede convertirse en modelo de datos, contrato, migración,
+  comportamiento de seguridad o UX sin aprobación.
+- Documentar una decisión de arquitectura y su motivo antes de aplicarla.
+- Mantener el cambio dentro del scope solicitado; no hacer refactors laterales.
+- Preservar el working tree del usuario y evitar sobrescribir cambios ajenos.
+- Cumplir la regla **Minimal Diff / No Churn** de `REGLAS.md`: antes del
+  checkpoint revisar el diff y eliminar ruido no semántico; si una herramienta
+  intenta reescribir o reformatear contenido ajeno, detenerse y usar un parche menor.
+- Explicar el alcance antes de cambios masivos y detenerse ante archivos
+  inesperados que no puedan atribuirse con seguridad.
+- No ejecutar acciones destructivas, remotas o de cierre Git sin autorización.
+- Archivar prompts operativos significativos según el workflow cuando el
+  alcance permita modificar esa documentación.
+- No borrar funcionalidad heredada sólo porque no participe del bloque actual.
+- Actualizar documentación especializada cuando cambien contratos o conducta.
+
+## 12. Validación proporcional
+
+Validar en proporción al riesgo y al gate activo:
+
+- Docs-only: revisar `git diff` relevante y ejecutar `git diff --check`.
+- Cambio TypeScript pequeño: tests focalizados y `bun run typecheck`.
+- Auth, autorización, DB o seguridad: tests relevantes, typecheck y lint.
+- Build: ejecutarlo cuando el cierre de fase, el gate o el riesgo lo justifique.
+
+La fase activa puede exigir validaciones adicionales. No sustituirlas por esta
+tabla ni repetir validaciones remotas o efectos reales sin autorización.
+Registrar con precisión qué se ejecutó, qué se tomó como baseline y qué quedó
+pendiente. Un warning informativo no debe presentarse como PASS silencioso.
+
+## 13. Cierre y handoff
+
+Antes de entregar:
+
+- Revisar el diff y confirmar que sólo contiene cambios intencionales propios.
+- Reportar archivos modificados, validaciones, resultados y riesgos pendientes.
+- No declarar una fase cerrada si falta un gate o existe una contradicción.
+- No hacer `git add`, commit o push salvo autorización explícita.
+- Dejar el siguiente paso recomendado sin implementarlo cuando así se solicite.
+
+Referencias operativas:
+
+- [README del proyecto](./README.md)
+- [Reglas obligatorias](./REGLAS.md)
+- [Plan y gobierno](./docs/plan-y-gobierno.md)
+- [Handoff vigente](./docs/codex-handoff.md)
+- [Workflow de agentes](./docs/agent-workflow.md)
+- [Índice de prompts](./docs/prompts/README.md)

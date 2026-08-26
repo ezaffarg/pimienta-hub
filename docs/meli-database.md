@@ -4,13 +4,17 @@ Supabase se usará únicamente como PostgreSQL; Supabase Auth queda fuera de la 
 
 > **Validation evidence:** [database-runtime-validation.md](./database-runtime-validation.md). **Operational history:** [índice de prompts de Fase 2](./prompts/phase-02/README.md). Este documento conserva el diseño canónico, no transcripciones de prompts.
 
+> **Lectura histórica:** cada bloque identificado por Subfase o Checkpoint es un
+> snapshot de ese momento. Sus afirmaciones sobre remoto, OAuth o RLS pueden
+> quedar superadas por las secciones posteriores y el estado runtime vigente.
+
 ## Estado de la Subfase 2.1
 
 **Database Runtime Validation: LOCAL VALIDATED.** Docker y Supabase CLI ejecutaron localmente desde cero las migraciones 2.2 y 2.5 en dos resets reproducibles. La matriz runtime verificó schema, constraints, aislamiento por FKs compuestas, `ON DELETE RESTRICT` y semántica de Connections. No existe link remoto, no se ejecutó `db push` y OAuth permanece diferido. Este documento continúa siendo canónico; ver [checkpoint runtime](./database-runtime-validation.md) para la evidencia de ejecución. Connections no contiene tokens ni secretos.
 
-Bootstrap First Owner está validado localmente por una RPC transaccional con advisory lock por Organization. Una Organization puede tener **uno o más Owners**: el lock serializa únicamente el primer bootstrap y no introduce unicidad permanente. Una membership existente no-Owner no se promociona automáticamente. Remote execution sigue pendiente.
+Bootstrap First Owner está validado localmente por una RPC transaccional con advisory lock por Organization. Una Organization puede tener **uno o más Owners**: el lock serializa únicamente el primer bootstrap y no introduce unicidad permanente. Una membership existente no-Owner no se promociona automáticamente. La validación remota posterior se realizó con fixtures limpiados; 2.20T no introduce nuevas mutaciones de bootstrap.
 
-**Remote Supabase: LINKED + VALIDATED.** El proyecto remoto `ffcudwwrzttkumbdvada` tiene las tres migrations aplicadas; schema, constraints y bootstrap funcional fueron validados con fixtures limpiados. Concurrencia se validó localmente; no se repitió en remoto. Fallback Clerk sigue TRANSITIONAL, RLS DEFERRED, OAuth NOT STARTED y Production Ready NO.
+**Remote Supabase: LINKED + VALIDATED.** El proyecto remoto `ffcudwwrzttkumbdvada` tiene las migrations aplicadas; schema, constraints y bootstrap funcional fueron validados con fixtures limpiados. Concurrencia se validó localmente; no se repitió en remoto. Fallback Clerk sigue TRANSITIONAL, RLS permanece aplicado sin policies browser-facing, OAuth/reconnect real de 2.20R ya fue validado y 2.20T está cerrado. Production Ready NO.
 
 ## 2.10 — Activación de autoridad de membership
 
@@ -260,3 +264,69 @@ conteos agregados de discovery, requests, details, persistencia y fallos. Un
 item inválido o fallido no bloquea otros batches, pero una falla DB continúa
 fallando cerrado. No se agregan tablas, columnas, sync runs, métricas, audit,
 missing detection, soft-delete ni migration.
+
+## Subfase 2.20T — listing sync runs persistentes
+
+La migration `20260825220634_listing_sync_runs.sql` agrega
+`public.listing_sync_runs` como modelo específico del backfill de listings, no
+como plataforma genérica de jobs. Cada run queda ligado mediante FKs compuestas
+a Organization, Store, Connection y actor membership. `kind` se limita a
+`listing_backfill`; los estados posibles son `running`, `succeeded`, `partial`
+y `failed`, con coherencia entre estado, `completed_at` y el error allowlisted.
+
+Los siete contadores de discovery, requests, details, persistencia, fallos,
+páginas y batches son no negativos. La idempotency key UUID es única por
+Organization, Connection y kind; un índice parcial permite un solo run
+`running` por Connection/kind. La clave sólo deduplica una solicitud ya
+autorizada y nunca decide tenant o scope.
+
+`start_listing_sync_run` serializa por la Connection tenant-bound, resuelve
+`started`, `reused` o `already_running` e inserta `listing.sync.started` en la
+misma transacción. `checkpoint_listing_sync_run` acepta únicamente contadores
+monotónicos para un run tenant-bound que siga `running`.
+`finalize_listing_sync_run` realiza una sola transición terminal y su audit
+correspondiente de forma atómica. La tabla y las tres RPC tienen RLS sin
+policies browser-facing; PUBLIC, `anon` y `authenticated` no tienen acceso, y
+`service_role` es el único rol habilitado.
+
+La resolución idempotente valida primero los bindings de Organization, Store,
+Connection y actor. Una key ya existente devuelve el run histórico aunque la
+Connection haya sido deshabilitada después, sin ejecutar trabajo ni crear otro
+run/audit. Una key nueva exige que la Connection siga activa y falla cerrado si
+está disabled. Los counters de checkpoint/finalize rechazan tanto negativos
+como `NULL` explícitamente.
+
+El checkpoint contiene sólo contadores y timestamps: **checkpoint no es
+resumability**. No se persisten offset, cursor ni `scroll_id`; una nueva
+ejecución comienza discovery desde cero. Una caída de proceso puede dejar un
+run `running`; la recuperación administrativa de stale runs permanece
+explícitamente diferida.
+
+La migration fue aplicada al proyecto remoto dedicado y su history quedó
+alineado. La inspección confirmó columnas, constraints, FKs, índices, RLS sin
+policies, grants server-only y las tres RPC con `SECURITY DEFINER` y
+`search_path=pg_catalog`. La matriz sintética remota pasó 22/22 dentro de una
+transacción revertida: no persistió runs, audits, Stores, Connections ni
+Listings fixture. Los conteos reales permanecieron en Stores 1, Connections 1,
+Listings 1 e `integration_secrets` 1; `credential_version` permaneció en 2 y el
+lease libre.
+
+### Estado runtime final 2.20T
+
+El root cause de input scope fue corregido en el caller: `ListingScope` se
+construye explícitamente con Organization, Store y Connection; actor membership
+e idempotency key quedan fuera del scope estricto. Finalize recibe únicamente
+los siete counters canónicos y excluye `failures`. La observabilidad CAS
+distingue categorías seguras sin persistir mensajes crudos ni secretos.
+
+La ejecución real creó el run y completó discovery, detail fetch, persistencia
+y checkpoints. La recuperación autorizada finalizó ese mismo run como
+`succeeded` sin repetir trabajo del provider. Los counters quedaron
+`1/1/1/1/0`, con una página y un batch; existen exactamente un audit
+`listing.sync.started` y uno `listing.sync.succeeded`, sin terminales duplicados
+ni runs `running`.
+
+Stores, Connections, Listings e `integration_secrets` permanecen en 1,
+duplicados en 0, `credential_version` en 3 y lease `CLEAR`. 2.20T está cerrado;
+stale-run recovery administrativa general, scheduler/worker, missing
+reconciliation y soft-delete continúan `DEFERRED`.

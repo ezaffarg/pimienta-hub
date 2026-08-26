@@ -17,13 +17,17 @@ La Organization activa se obtiene desde `auth()` en servidor. Client, Store, Tea
 
 El servidor aplica `User -> Role -> Permission -> Organization Scope -> Store Scope -> Resource` y los repositorios filtran por tenant. En Fase 1, el scope efectivo era Organization; 2.4 agrega el resolver server-only de Store Scope sin reemplazarlo. Una conexión nunca puede reutilizarse entre Organizations. Webhooks futuros resolverán el tenant por la cuenta/conexión almacenada, no desde el payload.
 
-RLS puede reforzar PostgreSQL, pero no sustituye autenticacion Clerk, autorizacion ni validacion de ownership.
+RLS deny-by-default y el privilege hardening vigente refuerzan PostgreSQL sin
+policies browser-facing, pero no sustituyen Clerk, autorización ni ownership.
 
 ## Estado al cierre de Fase 1
 
+> **SNAPSHOT HISTÓRICO:** este bloque describe el cierre de Fase 1 y no el estado
+> persistente actual.
+
 El único Resource Scope implementado es Organization. Los mocks tenantizados son almacenamiento temporal para demostrar que `resource.organizationId === context.organizationId`; no representan Client, Store, Team, ownership ni asignaciones reales. En Fase 2, el scope deberá imponerse dentro de repositorios o queries tenant-scoped, no mediante filtrado posterior en memoria.
 
-## Decisiones de diseño aprobadas para Fase 2
+## Snapshot histórico — decisiones aprobadas para Fase 2
 
 `hub_memberships` es la autoridad de roles e-Hub por Organization; Clerk conserva AuthN e identidad. Owner y Manager tienen Store Scope implícito para todas las Stores de su Organization, sujeto a permissions. Employee y Client requieren `store_assignments` explícitos; sin membership o assignment aplicable, el resultado es deny. El bootstrap del primer Owner está implementado con estrategia concurrente; el mapping Clerk sigue como fallback transitorio para usuarios aún no provisionados y no inventa assignments.
 
@@ -34,6 +38,17 @@ La Subfase 2.1 documenta —sin aplicar todavía— las referencias compuestas `
 La 2.3 prepara repositorios que no exponen lookup global de Store ni membership por Clerk user sin Organization. La 2.4 añade un resolver explícito: `all-stores` para Owner/Manager y `assigned-stores` para Employee/Client; un scope vacío nunca equivale a todas las Stores. Listados por IDs siguen requiriendo `organization_id` y no hay aún rutas de Store ni DB ejecutada.
 
 La 2.5 agrega el modelo de Connection: Store 1:N Connections y FK compuesta `(store_id, organization_id)`. Provider es el conjunto canónico controlado por código; una cuenta externa solo se reserva globalmente cuando la Connection está `active`. Tokens, OAuth y StoreIntegrationResolver siguen diferidos.
+
+## Estado vigente
+
+- La relación operativa es `Organization -> Store -> Connection -> Provider`.
+- RLS y privilege hardening están aplicados donde corresponde, sin policies
+  browser-facing; `service_role` permanece server-only.
+- OAuth Mercado Libre y los tokens cifrados server-side están implementados.
+- El browser no es autoridad de tenant, business role, Permission o Store Scope.
+- Permanecen diferidos los webhooks, otros dominios/providers y las capacidades
+  de sync marcadas como futuras en la documentación vigente.
+
 # Bootstrap First Owner
 
 Flujo validado: Usuario autenticado → Clerk → Organization activa → `org:admin` server-side → IDs confiables → RPC bootstrap → advisory transaction lock por Organization → membership Owner persistente. Browser, body, query y formularios no eligen Organization, usuario ni rol. Bootstrap sólo crea el primer Owner; una Organization puede tener uno o más Owners mediante un futuro flujo administrativo. Una membership no-Owner existente no se promociona automáticamente.

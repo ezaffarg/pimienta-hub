@@ -28,20 +28,16 @@ export function invoiceListOptions(filters: InvoiceFilters) {
 }
 ```
 
-### Usage — always compose at the call site
+### Usage — compose at the call site
 
 ```ts
-// basic
-const { data } = useQuery(invoiceOptions(id));
-
-// with suspense — same options, different hook
+// Current e-Hub standard
 const { data } = useSuspenseQuery(invoiceOptions(id));
 
-// with extra options spread on top — full type inference, no TS pain
-const { data } = useQuery({
+// Extra options can be spread when compatible with suspense
+const { data } = useSuspenseQuery({
   ...invoiceOptions(id),
-  select: (invoice) => invoice.createdAt, // data infers as string | undefined
-  enabled: !!id
+  select: (invoice) => invoice.createdAt
 });
 
 // prefetch in a route loader (works outside React — this is why hooks are wrong)
@@ -76,14 +72,14 @@ function useInvoice(id: number, options?: Partial<UseQueryOptions<Invoice>>) { .
 
 `queryOptions` solves this via a `DataTag` symbol on the queryKey — full inference, zero manual generics.
 
-### Custom hooks are still fine on top
+### Custom hooks are still possible on top
 
 If a component always uses the same composition, a hook is fine — but build it _on top of_ `queryOptions`:
 
 ```ts
 // OK — hook built on queryOptions
 function useInvoice(id: number) {
-  return useQuery(invoiceOptions(id));
+  return useSuspenseQuery(invoiceOptions(id));
 }
 
 // OK — hook that adds per-feature defaults
@@ -150,4 +146,10 @@ const { mutate } = useMutation({
 | Compose extra options at the call site via spread             | Full TS inference without manual generics                              |
 | Import `getQueryClient()` in mutation files                   | Handles SSR/client correctly without prop drilling                     |
 | Co-locate `queryKey` inside `queryOptions`                    | Typed key reuse in `invalidateQueries`, `setQueryData`, `getQueryData` |
-| Custom hooks are fine — but built ON TOP of `queryOptions`    | Hooks for component convenience, `queryOptions` for sharing config     |
+| Use `useSuspenseQuery` in current e-Hub pages                | Matches server prefetch, hydration and Suspense boundaries             |
+| Custom hooks may be built on `queryOptions` when useful      | Hooks for component convenience, options for shared configuration      |
+
+`useQuery` may still be valid for an exceptional non-Suspense flow, but it is
+not the default project pattern. Do not replace the established server
+`prefetchQuery` + `HydrationBoundary` + `dehydrate` and client
+`useSuspenseQuery` flow without a concrete reason.

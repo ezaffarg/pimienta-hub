@@ -1,16 +1,16 @@
 # Sync strategy
 
-La sincronizacion no pertenece al primer hito.
+No confundir capacidades independientes:
 
-La estrategia futura sera webhook-first con reconciliacion:
+- backfill/discovery del provider;
+- mapper y upsert idempotente;
+- run orchestration, counters y checkpoints;
+- resumability con cursor persistente;
+- missing reconciliation/lifecycle;
+- scheduler/worker;
+- webhooks y dead-letter.
 
-1. backfill inicial paginado;
-2. cursor/checkpoint por tenant, conexion y recurso;
-3. notificacion idempotente;
-4. GET del recurso completo;
-5. mapper y upsert canonico;
-6. reintentos clasificados;
-7. reconciliacion periodica;
-8. dead-letter y observabilidad.
-
-No asumir orden perfecto, entrega unica ni payload completo. Registrar version de API y fecha de revision de la documentacion.
+Consultar código y `docs/meli-api.md` para saber cuáles están implementadas.
+Checkpoint de contadores no implica resumability. No asumir orden perfecto,
+entrega única ni payload completo; cada cursor, recovery o reconciliación
+requiere diseño y autorización propios.

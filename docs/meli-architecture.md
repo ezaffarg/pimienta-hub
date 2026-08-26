@@ -1,32 +1,105 @@
 # Arquitectura Mercado Libre
 
-## Alcance
+Mercado Libre es el primer provider de e-ngenieria Hub. Esta documentación
+define invariantes y separa capacidades implementadas de trabajo futuro. El
+estado operativo actual se resume en [codex-handoff.md](./codex-handoff.md).
 
-Mercado Libre es el primer adapter de un Hub SaaS multi-tenant. Clerk autentica al usuario; Clerk Organization define el tenant; Supabase aporta PostgreSQL.
+## Modelo y tenant boundary
 
 ```text
-Usuario -> Clerk -> Organization/Tenant -> Store -> External Connection -> MercadoLibreAdapter -> API de Mercado Libre
+Usuario
+  -> Clerk session
+  -> Organization
+    -> Store
+      -> Connection
+        -> MercadoLibreAdapter
+          -> API oficial de Mercado Libre
 ```
 
-La integracion vive en `src/integrations/`. Las features consumen modelos canonicos y no conocen DTOs de Mercado Libre.
+- Clerk resuelve identidad, sesión y Organization activa en servidor.
+- `hub_memberships` aporta el business role; Permission y Store Scope se
+  validan antes de resolver una Connection.
+- Organization, Store y Connection se cruzan siempre mediante bindings
+  tenant-scoped. IDs del browser sólo identifican objetivos y nunca autorizan.
+- La identidad externa se obtiene y verifica mediante la API oficial.
 
-## Límites de capas confirmados
+## Límites de capas
 
-- `features/` contiene capacidades y experiencias del producto; permanece desacoplado de proveedores externos.
-- `integrations/` contiene adapters técnicos hacia sistemas externos. Existe una única implementación reutilizable por proveedor, por ejemplo `src/integrations/mercado-libre/`; una Store nunca contiene una copia del código de Mercado Libre.
-- Una Store es una entidad de negocio que en el futuro tendrá conexiones/configuración persistidas: `Organization -> Store -> IntegrationConnection -> Provider`. La conexión conserva referencias y credenciales seguras; el código del provider permanece una sola vez en `integrations/`.
-- `src/application/` solo se introducirá cuando existan casos de uso compartidos reales que no correspondan a una feature. `src/domain/` solo se introducirá cuando existan modelos propios de negocio que justifiquen esa frontera. No crear carpetas vacías ni anticipatorias.
+- `src/features/` contiene lógica y UI de producto provider-agnostic.
+- `src/integrations/` contiene adapters, clients, DTOs, mappers, credenciales y
+  servicios de providers externos.
+- `src/infrastructure/` contiene repositories, DB e infraestructura técnica.
 
-Los tipos canónicos de `src/integrations/core/` permanecen allí temporalmente. Antes de implementar adapters reales de ventas, productos, inventario u órdenes se revisará si deben moverse a un dominio o puertos propios.
+Los DTOs y errores de Mercado Libre no cruzan a features. Los mappers producen
+contratos internos; una Store guarda relaciones y configuración, no una copia
+del código del provider.
 
-## Contrato
+No se crean `src/application/` o `src/domain/` por estilo. Sólo se extraen
+responsabilidades reales cuando aportan un boundary claro y documentado.
 
-`EcommerceIntegration` debe ser agnostico al proveedor y expresar capacidades opcionales. El primer hito solo implementa conexion OAuth; la lectura y las mutaciones son fases posteriores.
+## Seguridad de integración
 
-## Límite
+- OAuth Authorization Code, refresh y llamadas autenticadas ocurren server-side.
+- `client_id`, `client_secret`, access token y refresh token no llegan al
+  navegador, logs, respuestas ni documentación.
+- Los tokens se almacenan cifrados y separados de metadata de Connection.
+- Refresh usa lease, versionado y compare-and-swap para impedir writers stale.
+- Pending authorizations expiran, se consumen una vez y quedan tenant/actor-bound.
+- Reconnect usa un `target_connection_id` resuelto y validado server-side.
+- La UI sólo consume endpoints internos protegidos.
+- Errores externos se normalizan y se redacta material sensible.
+- Se usan exclusivamente la aplicación propia de Mercado Libre Developers y
+  las APIs oficiales; no scraping, cookies de terceros ni backends privados.
 
-No modificar componentes base ni migrar mocks innecesariamente. Mantener cambios de dominio pequeños para conservar actualizaciones del upstream.
+La documentación oficial vigente debe revalidarse antes de cambiar OAuth,
+refresh, endpoints, PKCE, rate limits o writes al provider.
 
-La integración funcional futura de Mercado Libre usará una Mercado Libre Developers Application, OAuth server-side y la API oficial. Sus credenciales técnicas (`client_id`, `client_secret`, `redirect_uri`) pertenecen al servidor, y cada cuenta vendedora autorizará la aplicación mediante OAuth. Nunca se expondrán `access_token`, `refresh_token` ni `client_secret` al navegador.
+## Capacidades implementadas
 
-MercadoCuentas es únicamente una referencia funcional o de producto: no es proveedor de datos, API, dependencia, backend ni integración. No se consumen ni copian endpoints privados; cualquier capacidad inspirada en ella se implementará con la API oficial de Mercado Libre, datos propios del e-Hub y cálculos propios según corresponda.
+- OAuth server-side, state de un solo uso y staging de pending authorization.
+- Onboarding y finalización atómica tenant-bound.
+- Credenciales cifradas, auditoría y safe refresh con lease/version/CAS.
+- Reconnect real target-bound reutilizando Store y Connection.
+- Identidad oficial de la cuenta externa.
+- Listings read-only mediante discovery oficial y multiget/detail.
+- Normalización provider-agnostic y persistencia idempotente por Connection.
+- Backfill con paginación/scan, chunks máximos de 20, timeout, retry acotado,
+  fallos parciales sanitizados y timestamps del provider.
+- Sync-run orchestration persistente con start/checkpoint/finalize, audits,
+  idempotency y single-running por Connection/kind.
+
+2.20T está cerrado: la infraestructura DB/RPC, la orchestration y la
+observabilidad persistente están implementadas y validadas. El run real final
+terminó `succeeded`, sin runs activos ni duplicados. Ver [API](./meli-api.md) y
+[base de datos](./meli-database.md) para el contrato exacto.
+
+## Capacidades futuras o diferidas
+
+- missing reconciliation y lifecycle/soft-delete;
+- scheduler/worker y ejecución periódica;
+- stale-run recovery administrativa;
+- resumability con cursor persistente;
+- webhooks;
+- writes hacia Mercado Libre, sólo con autorización explícita;
+- variaciones, inventario, órdenes, preguntas, envíos y otros dominios;
+- otros providers.
+
+Checkpoint persistente no significa resumability: el run actual conserva
+contadores y timestamps, pero no offset, cursor ni `scroll_id`.
+
+## Contratos y referencias
+
+`EcommerceIntegration` y los contratos de `src/integrations/core/` deben seguir
+siendo agnósticos al provider y expresar capacidades opcionales. No se obliga a
+todos los providers a soportar los mismos recursos.
+
+- [REGLAS.md](../REGLAS.md)
+- [Plan y gobierno](./plan-y-gobierno.md)
+- [Seguridad](./meli-security.md)
+- [Multi-tenancy](./meli-multi-tenancy.md)
+- [API](./meli-api.md)
+- [Base de datos](./meli-database.md)
+- [OAuth](./meli-mercadolibre-OAuth/API.md)
+
+MercadoCuentas es sólo referencia funcional/producto. No es proveedor de datos,
+API, dependencia ni backend de e-Hub.
