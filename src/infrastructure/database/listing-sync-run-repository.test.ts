@@ -356,4 +356,98 @@ describe('ListingSyncRunRepository', () => {
     expect(storeFilter).toHaveBeenCalledWith('store_id', scope.storeId);
     expect(connectionFilter).toHaveBeenCalledWith('connection_id', scope.connectionId);
   });
+
+  it.each(['recovered', 'already_terminal', 'not_stale', 'not_recoverable'] as const)(
+    'maps the controlled administrative recovery outcome %s',
+    async (outcome) => {
+      const rpc = vi.fn().mockResolvedValue({
+        data: [{ outcome, ...runRow() }],
+        error: null
+      });
+      const repository = new ListingSyncRunRepository({ rpc } as unknown as SupabaseClient);
+
+      await expect(
+        repository.recoverStale({
+          organizationId: scope.organizationId,
+          runId,
+          recoveryActorMembershipId: actorMembershipId,
+          terminalStatus: 'failed',
+          reason: 'PROCESS_CRASHED',
+          staleBefore: '2026-08-25T22:30:00.000Z'
+        })
+      ).resolves.toMatchObject({ outcome, run: { id: runId } });
+      expect(rpc).toHaveBeenCalledWith('recover_stale_listing_sync_run', {
+        p_organization_id: scope.organizationId,
+        p_run_id: runId,
+        p_recovery_actor_membership_id: actorMembershipId,
+        p_terminal_status: 'failed',
+        p_recovery_reason: 'PROCESS_CRASHED',
+        p_stale_before: '2026-08-25T22:30:00.000Z'
+      });
+    }
+  );
+
+  it('inspects recovery state through Organization and terminal audit boundaries', async () => {
+    const runMaybeSingle = vi.fn().mockResolvedValue({ data: runRow(), error: null });
+    const runQuery = {
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: runMaybeSingle
+    };
+    const auditQuery = {
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockResolvedValue({ count: 1, error: null })
+    };
+    const from = vi.fn((table: string) => ({
+      select: vi.fn(() => (table === 'listing_sync_runs' ? runQuery : auditQuery))
+    }));
+    const repository = new ListingSyncRunRepository({ from } as unknown as SupabaseClient);
+
+    await expect(repository.inspectForRecovery(scope.organizationId, runId)).resolves.toMatchObject({
+      run: { id: runId, organizationId: scope.organizationId },
+      terminalAuditPresent: true
+    });
+    expect(from).toHaveBeenNthCalledWith(1, 'listing_sync_runs');
+    expect(runQuery.eq).toHaveBeenCalledWith('organization_id', scope.organizationId);
+    expect(from).toHaveBeenNthCalledWith(2, 'audit_events');
+    expect(auditQuery.eq).toHaveBeenCalledWith('organization_id', scope.organizationId);
+    expect(auditQuery.eq).toHaveBeenCalledWith('resource_id', runId);
+    expect(auditQuery.in).toHaveBeenCalledWith('action', [
+      'listing.sync.succeeded',
+      'listing.sync.partial',
+      'listing.sync.failed'
+    ]);
+  });
+
+  it('sanitizes administrative recovery RPC errors and malformed responses', async () => {
+    const failure = new ListingSyncRunRepository({
+      rpc: vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'raw tenant and token detail' }
+      })
+    } as unknown as SupabaseClient);
+    await expect(
+      failure.recoverStale({
+        organizationId: scope.organizationId,
+        runId,
+        recoveryActorMembershipId: actorMembershipId,
+        terminalStatus: 'failed',
+        reason: 'UNKNOWN_EXECUTION_STATE',
+        staleBefore: '2026-08-25T22:30:00.000Z'
+      })
+    ).rejects.toMatchObject({ message: 'Listing sync run recovery failed' });
+
+    const malformed = new ListingSyncRunRepository({
+      rpc: vi.fn().mockResolvedValue({ data: [{ outcome: 'unexpected' }], error: null })
+    } as unknown as SupabaseClient);
+    await expect(
+      malformed.recoverStale({
+        organizationId: scope.organizationId,
+        runId,
+        recoveryActorMembershipId: actorMembershipId,
+        terminalStatus: 'failed',
+        reason: 'UNKNOWN_EXECUTION_STATE',
+        staleBefore: '2026-08-25T22:30:00.000Z'
+      })
+    ).rejects.toMatchObject({ message: 'Listing sync run recovery response invalid' });
+  });
 });

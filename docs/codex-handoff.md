@@ -29,7 +29,7 @@ deny-by-default y no existen policies browser-facing para las tablas Hub.
 ## Estado actual
 
 - Fase 0 completada y Fase 1 cerrada.
-- Fase 2 activa; **2.20T cerrado**.
+- Fase 2 activa; **2.20T cerrado y 2.20U validado remotamente**.
 - Modelo persistente multi-tenant operativo: memberships, Stores, assignments,
   Connections, secretos, auditoría, listings y sync runs.
 - Stores y Connections reales operativas y tenant-bound.
@@ -40,6 +40,8 @@ deny-by-default y no existen policies browser-facing para las tablas Hub.
 - Primera listing real persistida; 2.20S production hardening y backfill real
   idempotente validados.
 - DB/RPC de 2.20T validados localmente y en el remoto dedicado.
+- Recovery administrativa 2.20U validada localmente y en remoto; queda lista
+  para cierre formal.
 
 El código conserva un camino `clerk-fallback` transicional para compatibilidad;
 no sustituye la autoridad de `hub_memberships` ni concede Store assignments.
@@ -53,8 +55,26 @@ Connection/kind, contadores, checkpoints y audits atómicos mediante RPCs
 server-only.
 
 Checkpoint no equivale a resumability: no se persisten offset, cursor ni
-`scroll_id`. La recuperación administrativa general de stale runs,
-scheduler/worker y missing reconciliation siguen diferidos.
+`scroll_id`. Scheduler/worker, recovery automática y missing reconciliation
+siguen diferidos.
+
+## Bloque vigente — 2.20U
+
+Existe una superficie server-only de inspección y recuperación explícita para
+runs stale. Sólo Owner/Manager con membership persistente pueden usarla. El
+threshold es 15 minutos desde el último checkpoint; `succeeded` requiere
+evidencia completa y `failed` registra `administrative_recovery`. La RPC
+preserva counters, checkpoint y actor original y escribe los audits con el
+recovery actor en la misma transacción. No llama a Mercado Libre.
+
+`supabase db reset`, matrices 2.20T 22/22 y 2.20U 12/12, tests 213/213,
+typecheck y lint pasaron localmente. Ese checkpoint local no ejecutó remote,
+OAuth, refresh, reconnect, provider calls ni Git closure.
+
+La migration 2.20U también quedó aplicada remotamente. La matriz sintética
+controlada validó roles, tenant/Store/Connection boundaries, outcomes,
+atomicidad, audits e idempotencia; el cleanup dejó cero fixtures y los conteos
+reales intactos. No hubo provider calls ni recovery sobre runs reales.
 
 La validación real creó el run, completó discovery, detail fetch, persistencia y
 checkpoints, y terminó `succeeded` con counters `1/1/1/1/0`, una página y un
@@ -83,7 +103,7 @@ duplicados; el reconnect controlado dejó `credential_version=3` y lease
 
 ## Trabajo futuro ya diferido
 
-- stale-run recovery administrativa;
+- recovery automática de stale runs;
 - scheduler/worker;
 - missing reconciliation y lifecycle/soft-delete;
 - resumability persistente;
@@ -100,6 +120,8 @@ duplicados; el reconnect controlado dejó `credential_version=3` y lease
 4. [API](./meli-api.md) y [base de datos](./meli-database.md).
 5. [2.20T](./prompts/phase-02/2.20t-sync-run-orchestration-observability.md)
    sólo como historial operativo del checkpoint.
+6. [2.20U](./prompts/phase-02/2.20u-administrative-stale-run-recovery.md)
+   como alcance local vigente.
 
 Antes de actuar, inspeccionar siempre el working tree: puede contener cambios
 locales intencionales aún no cerrados. El repositorio es la fuente de verdad;

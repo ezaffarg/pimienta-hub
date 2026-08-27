@@ -51,3 +51,8 @@ Prompt archivado: [2.12](2.12-real-user-provisioning-plan.md). Estado: ACTIVE / 
 # 2.13 — Provision Current Owner Persistently
 
 Prompt archivado: [2.13](2.13-provision-current-owner.md). Estado: COMPLETED.
+
+# 2.20U — Administrative Stale-Run Recovery
+
+Prompt archivado: [2.20U](2.20u-administrative-stale-run-recovery.md). Estado:
+REMOTE VALIDATED / NOT CLOSED.

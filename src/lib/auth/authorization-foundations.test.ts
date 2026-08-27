@@ -11,6 +11,7 @@ describe('OAuth and audit permissions', () => {
       expect(hasPermission(role, 'audit:read')).toBe(true);
       expect(hasPermission(role, 'integration:connect')).toBe(true);
       expect(hasPermission(role, 'integration:reconnect')).toBe(true);
+      expect(hasPermission(role, 'listings:recover')).toBe(true);
     }
   );
 
@@ -19,6 +20,7 @@ describe('OAuth and audit permissions', () => {
     (role) => {
       expect(hasPermission(role, 'audit:read')).toBe(false);
       expect(hasPermission(role, 'integration:connect')).toBe(false);
+      expect(hasPermission(role, 'listings:recover')).toBe(false);
     }
   );
 

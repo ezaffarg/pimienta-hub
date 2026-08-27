@@ -5,7 +5,7 @@ import {
   ListingSyncRunRepository,
   ListingSyncRunStartError,
   type ListingSyncProgress,
-  type ListingSyncRunErrorCode,
+  type ListingSyncRunOperationalErrorCode,
   type ListingSyncRunRecord,
   type ListingSyncRunStartDiagnostic,
   type ListingSyncRunStartFailureCode
@@ -134,7 +134,7 @@ const runInputSchema = z
   })
   .strict();
 
-const safeErrorSummary: Readonly<Record<ListingSyncRunErrorCode, string>> = {
+const safeErrorSummary: Readonly<Record<ListingSyncRunOperationalErrorCode, string>> = {
   provider_rate_limited: 'The provider rate limit stopped the listing sync',
   provider_timeout: 'The provider timed out during the listing sync',
   provider_unavailable: 'The provider was unavailable during the listing sync',
@@ -161,10 +161,10 @@ const observableCasFailures = new Set<CasCompleteFailureCode>([
 ]);
 
 function classifyRunFailure(error: unknown): {
-  code: ListingSyncRunErrorCode;
+  code: ListingSyncRunOperationalErrorCode;
   summary: string;
 } {
-  let code: ListingSyncRunErrorCode = 'persistence_failure';
+  let code: ListingSyncRunOperationalErrorCode = 'persistence_failure';
   if (error instanceof MercadoLibreCredentialError) {
     return {
       code: 'credential_failure',

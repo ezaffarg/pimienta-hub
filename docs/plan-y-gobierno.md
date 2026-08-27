@@ -111,7 +111,7 @@ Validación base:
 | --- | --- | --- |
 | 0 | Decisiones, fuentes y boundaries | Completada |
 | 1 | Seguridad base server-side | Cerrada |
-| 2 | Persistencia multi-tenant e integración Mercado Libre incremental | **Activa — 2.20T completado** |
+| 2 | Persistencia multi-tenant e integración Mercado Libre incremental | **Activa — 2.20U validado remotamente** |
 | 3–7 | Evolución funcional y productiva posterior | No iniciadas como fases independientes |
 
 La Fase 2 evolucionó mediante subfases explícitamente aprobadas e incorporó
@@ -182,13 +182,23 @@ página y un batch. Existen exactamente un audit `listing.sync.started` y uno
 Listings permanece en 1 sin duplicados; `credential_version` quedó en 3 y el
 lease `CLEAR`. **2.20T está cerrado.**
 
-## E. Alcance futuro real
+## E. Estado vigente — 2.20U
+
+2.20U implementa inspección y recuperación administrativa explícita de runs
+stale para Owner/Manager persistentes. Usa un threshold server-side de 15
+minutos, outcomes controlados, RPC atómica y audits con recovery actor; conserva
+scope, actor original, counters y checkpoint y no llama al provider. Reset DB,
+matrices locales 2.20T/2.20U y validaciones de aplicación pasaron. La migration
+fue aplicada y validada en remoto con fixtures sintéticos eliminados, sin tocar
+runs ni datos reales. 2.20U queda listo para cierre, pero aún no está cerrado.
+
+## F. Alcance futuro real
 
 Permanece diferido y requiere planificación/aprobación propia:
 
 - missing reconciliation y lifecycle/soft-delete;
 - scheduler, worker/queue y ejecución periódica;
-- recuperación administrativa de runs stale;
+- recovery automática de runs stale;
 - resumability con cursor persistente;
 - writes hacia Mercado Libre;
 - webhooks y otros dominios aún no implementados;
@@ -197,7 +207,7 @@ Permanece diferido y requiere planificación/aprobación propia:
 Checkpoint no equivale a resumability: los runs actuales no persisten offset,
 cursor ni `scroll_id` y una nueva ejecución reinicia discovery.
 
-## F. Condiciones generales de avance
+## G. Condiciones generales de avance
 
 Antes de cerrar una fase o abrir la siguiente debe existir evidencia de:
 

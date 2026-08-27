@@ -6,7 +6,7 @@ import { getSupabaseServerClient } from './supabase-server';
 import { PersistenceError, type ListingScope } from './repositories';
 
 export const listingSyncRunStatusSchema = z.enum(['running', 'succeeded', 'partial', 'failed']);
-export const listingSyncRunErrorCodeSchema = z.enum([
+export const listingSyncRunOperationalErrorCodeSchema = z.enum([
   'provider_rate_limited',
   'provider_timeout',
   'provider_unavailable',
@@ -15,9 +15,16 @@ export const listingSyncRunErrorCodeSchema = z.enum([
   'persistence_failure',
   'partial_item_failure'
 ]);
+export const listingSyncRunErrorCodeSchema = z.union([
+  listingSyncRunOperationalErrorCodeSchema,
+  z.literal('administrative_recovery')
+]);
 
 export type ListingSyncRunStatus = z.infer<typeof listingSyncRunStatusSchema>;
 export type ListingSyncRunErrorCode = z.infer<typeof listingSyncRunErrorCodeSchema>;
+export type ListingSyncRunOperationalErrorCode = z.infer<
+  typeof listingSyncRunOperationalErrorCodeSchema
+>;
 export type ListingSyncRunStartOutcome = 'started' | 'reused' | 'already_running';
 export type ListingSyncRunStartFailureCode =
   | 'RUN_START_RPC_FAILED'
@@ -79,6 +86,30 @@ export interface ListingSyncRunRecord extends ListingScope, ListingSyncProgress 
 
 export interface ListingSyncRunStartResult {
   outcome: ListingSyncRunStartOutcome;
+  run: ListingSyncRunRecord;
+}
+
+export const listingSyncRunRecoveryReasonSchema = z.enum([
+  'FINALIZE_INTERRUPTED',
+  'PROCESS_CRASHED',
+  'MANUAL_ABORT',
+  'UNKNOWN_EXECUTION_STATE'
+]);
+
+export type ListingSyncRunRecoveryReason = z.infer<typeof listingSyncRunRecoveryReasonSchema>;
+export type ListingSyncRunRecoveryOutcome =
+  | 'recovered'
+  | 'already_terminal'
+  | 'not_stale'
+  | 'not_recoverable';
+
+export interface ListingSyncRunRecoveryInspection {
+  run: ListingSyncRunRecord;
+  terminalAuditPresent: boolean;
+}
+
+export interface ListingSyncRunRecoveryResult {
+  outcome: ListingSyncRunRecoveryOutcome;
   run: ListingSyncRunRecord;
 }
 
@@ -178,6 +209,65 @@ export class ListingSyncRunRepository {
     return data ? listingSyncRunRecord(data) : null;
   }
 
+  async inspectForRecovery(
+    organizationId: string,
+    runId: string
+  ): Promise<ListingSyncRunRecoveryInspection | null> {
+    const parsed = recoveryLookupSchema.parse({ organizationId, runId });
+    const { data, error } = await this.client
+      .from('listing_sync_runs')
+      .select(listingSyncRunColumns)
+      .eq('id', parsed.runId)
+      .eq('organization_id', parsed.organizationId)
+      .maybeSingle();
+    if (error) throw new PersistenceError('Listing sync run recovery inspection failed');
+    if (!data) return null;
+
+    const auditResponse = await this.client
+      .from('audit_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', parsed.organizationId)
+      .eq('resource_type', 'listing_sync_run')
+      .eq('resource_id', parsed.runId)
+      .in('action', terminalAuditActions);
+    if (auditResponse.error) {
+      throw new PersistenceError('Listing sync run recovery inspection failed');
+    }
+    return {
+      run: listingSyncRunRecord(data),
+      terminalAuditPresent: (auditResponse.count ?? 0) > 0
+    };
+  }
+
+  async recoverStale(input: {
+    organizationId: string;
+    runId: string;
+    recoveryActorMembershipId: string;
+    terminalStatus: 'succeeded' | 'failed';
+    reason: ListingSyncRunRecoveryReason;
+    staleBefore: string;
+  }): Promise<ListingSyncRunRecoveryResult> {
+    const parsed = recoveryInputSchema.parse(input);
+    let response;
+    try {
+      response = await this.client.rpc('recover_stale_listing_sync_run', {
+        p_organization_id: parsed.organizationId,
+        p_run_id: parsed.runId,
+        p_recovery_actor_membership_id: parsed.recoveryActorMembershipId,
+        p_terminal_status: parsed.terminalStatus,
+        p_recovery_reason: parsed.reason,
+        p_stale_before: parsed.staleBefore
+      });
+    } catch {
+      throw new PersistenceError('Listing sync run recovery RPC failed');
+    }
+    if (response.error) throw new PersistenceError('Listing sync run recovery failed');
+    const rows = recoveryRowsSchema.safeParse(response.data);
+    if (!rows.success) throw new PersistenceError('Listing sync run recovery response invalid');
+    const row = rows.data[0];
+    return { outcome: row.outcome, run: listingSyncRunRecord(row) };
+  }
+
   async checkpoint(input: {
     scope: ListingScope;
     runId: string;
@@ -205,7 +295,7 @@ export class ListingSyncRunRepository {
     runId: string;
     status: Exclude<ListingSyncRunStatus, 'running'>;
     progress: ListingSyncProgress;
-    errorCode?: ListingSyncRunErrorCode | null;
+    errorCode?: ListingSyncRunOperationalErrorCode | null;
     errorSummary?: string | null;
   }): Promise<ListingSyncRunRecord> {
     const parsed = finalizeInputSchema.parse(input);
@@ -256,6 +346,12 @@ const listingScopeSchema = z
     connectionId: z.uuid()
   })
   .strict();
+const recoveryLookupSchema = z
+  .object({
+    organizationId: z.string().trim().min(1).max(255),
+    runId: z.uuid()
+  })
+  .strict();
 const startInputSchema = z
   .object({
     scope: listingScopeSchema,
@@ -276,7 +372,7 @@ const finalizeInputSchema = z
     runId: z.uuid(),
     status: z.enum(['succeeded', 'partial', 'failed']),
     progress: progressSchema,
-    errorCode: listingSyncRunErrorCodeSchema.nullish(),
+    errorCode: listingSyncRunOperationalErrorCodeSchema.nullish(),
     errorSummary: z
       .string()
       .trim()
@@ -308,6 +404,17 @@ const finalizeInputSchema = z
     }
   });
 
+const recoveryInputSchema = z
+  .object({
+    organizationId: z.string().trim().min(1).max(255),
+    runId: z.uuid(),
+    recoveryActorMembershipId: z.uuid(),
+    terminalStatus: z.enum(['succeeded', 'failed']),
+    reason: listingSyncRunRecoveryReasonSchema,
+    staleBefore: z.iso.datetime({ offset: true })
+  })
+  .strict();
+
 const timestampSchema = z.iso.datetime({ offset: true });
 const runRowSchema = z.object({
   id: z.uuid(),
@@ -332,6 +439,20 @@ const runRowSchema = z.object({
   error_summary: z.string().max(512).nullable(),
   updated_at: timestampSchema
 });
+
+const recoveryRowsSchema = z
+  .array(
+    runRowSchema.extend({
+      outcome: z.enum(['recovered', 'already_terminal', 'not_stale', 'not_recoverable'])
+    })
+  )
+  .length(1);
+
+const terminalAuditActions = [
+  'listing.sync.succeeded',
+  'listing.sync.partial',
+  'listing.sync.failed'
+] as const;
 
 const listingSyncRunColumns =
   'id, organization_id, store_id, connection_id, actor_membership_id, kind, idempotency_key, status, started_at, completed_at, last_checkpoint_at, discovered_count, requested_count, fetched_count, persisted_count, failed_count, pages_count, batches_count, error_code, error_summary, updated_at';

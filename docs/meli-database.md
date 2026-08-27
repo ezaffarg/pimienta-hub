@@ -328,5 +328,29 @@ ni runs `running`.
 
 Stores, Connections, Listings e `integration_secrets` permanecen en 1,
 duplicados en 0, `credential_version` en 3 y lease `CLEAR`. 2.20T está cerrado;
-stale-run recovery administrativa general, scheduler/worker, missing
-reconciliation y soft-delete continúan `DEFERRED`.
+la recovery automática, scheduler/worker, missing reconciliation y soft-delete
+continúan `DEFERRED`.
+
+## Subfase 2.20U — recuperación administrativa de stale runs
+
+La migration `20260827081922_administrative_stale_listing_sync_recovery.sql`
+agrega la RPC `recover_stale_listing_sync_run` sin sumar columnas ni una tabla
+de jobs genérica. La RPC es `SECURITY DEFINER`, usa `search_path=pg_catalog`,
+no tiene grants para PUBLIC, `anon` o `authenticated` y sólo puede ejecutarla
+`service_role`.
+
+La transición bloquea el run, valida Organization, membership Owner/Manager y
+los bindings Store/Connection Mercado Libre derivados del propio run. Sólo un
+run `running` cuyo `last_checkpoint_at` sea menor o igual al cutoff server-side
+puede pasar a `succeeded` o `failed`. `succeeded` exige evidencia completa en
+los counters; `failed` usa el código controlado `administrative_recovery`. No
+se modifica actor original, checkpoint ni counters.
+
+El estado terminal y los audits terminal canónico y
+`listing.sync.recovered` se escriben en una sola transacción. Los audits llevan
+la membership del administrador y un reason allowlisted; un retry sobre un run
+terminal devuelve `already_terminal` sin duplicar eventos. La matriz local
+2.20U pasó 12/12 con rollback y la regresión 2.20T pasó 22/22; el reset local
+desde cero fue PASS. La migration también quedó aplicada y validada en remoto
+con fixtures sintéticos completamente limpiados: grants, boundaries, outcomes,
+audits e idempotencia pasaron, sin modificar runs ni datos reales.

@@ -115,3 +115,30 @@ página y un batch. Quedaron exactamente un audit `listing.sync.started` y uno
 `listing.sync.succeeded`, sin terminales duplicados ni runs `running`.
 Listings permanece en 1 sin duplicados; el reconnect controlado dejó
 `credential_version=3` y lease `CLEAR`. 2.20T está cerrado.
+
+## Administrative stale-run recovery — 2.20U
+
+La ruta server-only
+`/api/integrations/mercado-libre/listing-sync-runs/:id/recovery` expone `GET`
+para inspección segura y `POST` para una transición administrativa explícita.
+Ambas operaciones exigen una membership persistente Owner o Manager de la
+Organization activa; Clerk fallback, Employee y Client fallan cerrado.
+
+El browser sólo aporta el run ID, `terminalStatus` (`succeeded` o `failed`) y
+un reason allowlisted. Organization, recovery actor, Store y Connection se
+resuelven y validan server-side. Un run es stale cuando su último checkpoint
+tiene al menos 15 minutos de inactividad. La lectura clasifica
+`RECOVERABLE_AS_SUCCEEDED`, `RECOVERABLE_AS_FAILED`, `NOT_RECOVERABLE` o
+`NOT_STALE` y no expone idempotency key, actor original ni error summary.
+
+`succeeded` requiere checkpoint posterior al start, cero fallos, counters
+discovered/requested/fetched/persisted iguales y evidencia de página/batch.
+Cuando esa evidencia no alcanza, sólo se admite `failed`. La RPC conserva los
+counters, checkpoint y actor original; no llama a Mercado Libre ni reanuda el
+backfill. Scheduler, worker, auto-recovery, resumability y UI administrativa
+completa continúan fuera de alcance.
+
+La migration y el contrato RPC 2.20U quedaron validados en remoto con fixtures
+sintéticos eliminados al finalizar. La proyección administrativa segura,
+clasificaciones, roles, tenant boundaries y outcomes controlados pasaron sin
+usar runs reales ni ejecutar trabajo del provider.

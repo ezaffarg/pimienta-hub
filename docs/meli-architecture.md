@@ -73,11 +73,17 @@ observabilidad persistente están implementadas y validadas. El run real final
 terminó `succeeded`, sin runs activos ni duplicados. Ver [API](./meli-api.md) y
 [base de datos](./meli-database.md) para el contrato exacto.
 
+2.20U agrega una recuperación administrativa explícita para runs stale y quedó
+validado localmente y en remoto con fixtures sintéticos limpiados. Conserva el
+boundary Request → Authentication → Authorization → Tenant resolution →
+Validation → Service → Repository → Database, exige Owner/Manager persistente y
+termina el run de forma atómica sin reanudar ni repetir trabajo del provider.
+
 ## Capacidades futuras o diferidas
 
 - missing reconciliation y lifecycle/soft-delete;
 - scheduler/worker y ejecución periódica;
-- stale-run recovery administrativa;
+- recovery automática de stale runs;
 - resumability con cursor persistente;
 - webhooks;
 - writes hacia Mercado Libre, sólo con autorización explícita;

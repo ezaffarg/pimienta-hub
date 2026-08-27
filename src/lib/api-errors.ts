@@ -17,7 +17,8 @@ export type ApiErrorCode =
   | 'INVALID_PROVIDER_RESPONSE'
   | 'ALREADY_CONNECTED'
   | 'CONNECTION_CONFLICT'
-  | 'RECONNECT_TARGET_NOT_FOUND';
+  | 'RECONNECT_TARGET_NOT_FOUND'
+  | 'LISTING_SYNC_RUN_RECOVERY_FAILED';
 
 export function apiErrorResponse(code: ApiErrorCode, status: number): NextResponse {
   const messages: Record<ApiErrorCode, string> = {
@@ -37,7 +38,8 @@ export function apiErrorResponse(code: ApiErrorCode, status: number): NextRespon
     INVALID_PROVIDER_RESPONSE: 'OAuth provider response is invalid',
     ALREADY_CONNECTED: 'This account is already connected',
     CONNECTION_CONFLICT: 'This account cannot be connected here',
-    RECONNECT_TARGET_NOT_FOUND: 'The reconnect target was not found'
+    RECONNECT_TARGET_NOT_FOUND: 'The reconnect target was not found',
+    LISTING_SYNC_RUN_RECOVERY_FAILED: 'Listing sync run recovery failed safely'
   };
 
   return NextResponse.json(

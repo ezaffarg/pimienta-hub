@@ -10,6 +10,7 @@ export const PERMISSIONS = [
   'users.read',
   'users.write',
   'audit:read',
+  'listings:recover',
   'integration:connect',
   'integration:reconnect',
   'integration:self_connect'
@@ -24,6 +25,7 @@ const ROLE_PERMISSIONS: Readonly<Record<ApprovedRole, readonly Permission[]>> = 
     'users.read',
     'users.write',
     'audit:read',
+    'listings:recover',
     'integration:connect',
     'integration:reconnect'
   ],
@@ -32,6 +34,7 @@ const ROLE_PERMISSIONS: Readonly<Record<ApprovedRole, readonly Permission[]>> = 
     'products.write',
     'users.read',
     'audit:read',
+    'listings:recover',
     'integration:connect',
     'integration:reconnect'
   ],
