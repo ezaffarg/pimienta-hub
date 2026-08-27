@@ -29,7 +29,7 @@ deny-by-default y no existen policies browser-facing para las tablas Hub.
 ## Estado actual
 
 - Fase 0 completada y Fase 1 cerrada.
-- Fase 2 activa; **2.20T cerrado y 2.20U validado remotamente**.
+- Fase 2 activa; **2.20T, 2.20U y 2.20V cerrados**.
 - Modelo persistente multi-tenant operativo: memberships, Stores, assignments,
   Connections, secretos, auditoría, listings y sync runs.
 - Stores y Connections reales operativas y tenant-bound.
@@ -40,8 +40,9 @@ deny-by-default y no existen policies browser-facing para las tablas Hub.
 - Primera listing real persistida; 2.20S production hardening y backfill real
   idempotente validados.
 - DB/RPC de 2.20T validados localmente y en el remoto dedicado.
-- Recovery administrativa 2.20U validada localmente y en remoto; queda lista
-  para cierre formal.
+- Recovery administrativa 2.20U validada localmente y en remoto y cerrada.
+- UI administrativa read-only 2.20V-A cerrada.
+- Recovery UI 2.20V-B cerrada sobre el boundary 2.20U.
 
 El código conserva un camino `clerk-fallback` transicional para compatibilidad;
 no sustituye la autoridad de `hub_memberships` ni concede Store assignments.
@@ -58,7 +59,7 @@ Checkpoint no equivale a resumability: no se persisten offset, cursor ni
 `scroll_id`. Scheduler/worker, recovery automática y missing reconciliation
 siguen diferidos.
 
-## Bloque vigente — 2.20U
+## Último bloque cerrado — 2.20U
 
 Existe una superficie server-only de inspección y recuperación explícita para
 runs stale. Sólo Owner/Manager con membership persistente pueden usarla. El
@@ -75,6 +76,29 @@ La migration 2.20U también quedó aplicada remotamente. La matriz sintética
 controlada validó roles, tenant/Store/Connection boundaries, outcomes,
 atomicidad, audits e idempotencia; el cleanup dejó cero fixtures y los conteos
 reales intactos. No hubo provider calls ni recovery sobre runs reales.
+
+## Último bloque cerrado — 2.20V
+
+Existe una ruta dashboard read-only para inspeccionar listing sync runs. El
+servidor exige Owner/Manager persistente, limita el scan a los 50 runs más
+recientes del tenant y reutiliza el read model 2.20U. La tabla hidrata TanStack
+Query y muestra status, Store/Connection, timestamps UTC, progress, stale,
+eligibility y errores seguros. No agrega recovery, sync ni provider calls.
+Los tests focalizados quedaron 62/62, la suite 225/225, typecheck y lint PASS.
+
+No se agregó entrada al sidebar: su filtro vigente usa contexto Clerk en
+cliente y no puede representar con autoridad los roles `hub_memberships`.
+
+2.20V-B agrega una acción sólo para runs elegibles. El dialog confirma Store,
+Connection, target y reason taxonómica; evita doble submit, maneja concurrencia
+e invalida el listado. No agrega recovery logic, RPC, provider call ni sync.
+Los focalizados quedaron 69/69, la suite 232/232, typecheck y lint PASS.
+
+La validación remota con fixtures sintéticos confirmó lectura, recovery,
+concurrencia, invalidación y limpieza sin provider calls ni recursos reales
+modificados. Sonner y sus paths de feedback pasaron; la captura inicial ausente
+fue `AUTOMATION_OBSERVABILITY_LIMITATION`. Cero fixtures quedaron pendientes.
+**2.20V-A, 2.20V-B y 2.20V están cerrados.**
 
 La validación real creó el run, completó discovery, detail fetch, persistencia y
 checkpoints, y terminó `succeeded` con counters `1/1/1/1/0`, una página y un
@@ -121,6 +145,8 @@ duplicados; el reconnect controlado dejó `credential_version=3` y lease
 5. [2.20T](./prompts/phase-02/2.20t-sync-run-orchestration-observability.md)
    sólo como historial operativo del checkpoint.
 6. [2.20U](./prompts/phase-02/2.20u-administrative-stale-run-recovery.md)
+   como historial del bloque cerrado.
+7. [2.20V-A](./prompts/phase-02/2.20v-a-administrative-listing-sync-read-ui.md)
    como alcance local vigente.
 
 Antes de actuar, inspeccionar siempre el working tree: puede contener cambios

@@ -28,6 +28,20 @@ describe('server-only repositories', () => {
     expect(storeFilter).toHaveBeenCalledWith('store_id', 'store_a');
   });
 
+  it('lists selected Connections only after filtering by Organization', async () => {
+    const connectionIdFilter = vi.fn().mockResolvedValue({ data: [], error: null });
+    const organizationFilter = vi.fn(() => ({ in: connectionIdFilter }));
+    const repository = new ConnectionRepository(
+      clientFor({ select: vi.fn(() => ({ eq: organizationFilter })) })
+    );
+
+    await expect(repository.listByOrganizationAndIds('org_a', ['connection_a'])).resolves.toEqual(
+      []
+    );
+    expect(organizationFilter).toHaveBeenCalledWith('organization_id', 'org_a');
+    expect(connectionIdFilter).toHaveBeenCalledWith('id', ['connection_a']);
+  });
+
   it('creates Connections with a trusted Organization separated from payload', async () => {
     const single = vi.fn().mockResolvedValue({
       data: {

@@ -402,10 +402,12 @@ describe('ListingSyncRunRepository', () => {
     }));
     const repository = new ListingSyncRunRepository({ from } as unknown as SupabaseClient);
 
-    await expect(repository.inspectForRecovery(scope.organizationId, runId)).resolves.toMatchObject({
-      run: { id: runId, organizationId: scope.organizationId },
-      terminalAuditPresent: true
-    });
+    await expect(repository.inspectForRecovery(scope.organizationId, runId)).resolves.toMatchObject(
+      {
+        run: { id: runId, organizationId: scope.organizationId },
+        terminalAuditPresent: true
+      }
+    );
     expect(from).toHaveBeenNthCalledWith(1, 'listing_sync_runs');
     expect(runQuery.eq).toHaveBeenCalledWith('organization_id', scope.organizationId);
     expect(from).toHaveBeenNthCalledWith(2, 'audit_events');
@@ -416,6 +418,39 @@ describe('ListingSyncRunRepository', () => {
       'listing.sync.partial',
       'listing.sync.failed'
     ]);
+  });
+
+  it('lists recent runs by Organization and resolves terminal audits in one batch', async () => {
+    const runQuery = {
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: [runRow()], error: null })
+    };
+    const auditQuery = {
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn()
+    };
+    auditQuery.in.mockImplementation((column: string) =>
+      column === 'resource_id'
+        ? auditQuery
+        : Promise.resolve({ data: [{ resource_id: runId }], error: null })
+    );
+    const from = vi.fn((table: string) => ({
+      select: vi.fn(() => (table === 'listing_sync_runs' ? runQuery : auditQuery))
+    }));
+    const repository = new ListingSyncRunRepository({ from } as unknown as SupabaseClient);
+
+    await expect(repository.listRecentForRecovery(scope.organizationId, 50)).resolves.toEqual([
+      expect.objectContaining({
+        run: expect.objectContaining({ id: runId }),
+        terminalAuditPresent: true
+      })
+    ]);
+    expect(runQuery.eq).toHaveBeenCalledWith('organization_id', scope.organizationId);
+    expect(runQuery.order).toHaveBeenCalledWith('started_at', { ascending: false });
+    expect(runQuery.limit).toHaveBeenCalledWith(50);
+    expect(auditQuery.eq).toHaveBeenCalledWith('organization_id', scope.organizationId);
+    expect(auditQuery.in).toHaveBeenCalledWith('resource_id', [runId]);
   });
 
   it('sanitizes administrative recovery RPC errors and malformed responses', async () => {

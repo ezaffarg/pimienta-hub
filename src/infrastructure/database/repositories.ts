@@ -316,6 +316,22 @@ export class StoreAssignmentRepository {
 export class ConnectionRepository {
   constructor(private readonly client: SupabaseClient = getSupabaseServerClient()) {}
 
+  async listByOrganizationAndIds(
+    organizationId: string,
+    connectionIds: readonly string[]
+  ): Promise<ConnectionRecord[]> {
+    if (connectionIds.length === 0) return [];
+
+    const { data, error } = await this.client
+      .from('connections')
+      .select(
+        'id, organization_id, store_id, provider, external_account_id, status, scopes, expires_at'
+      )
+      .eq('organization_id', organizationId)
+      .in('id', connectionIds);
+    return requireData(data, error).map(connectionRecord);
+  }
+
   async listByStore(organizationId: string, storeId: string): Promise<ConnectionRecord[]> {
     const { data, error } = await this.client
       .from('connections')

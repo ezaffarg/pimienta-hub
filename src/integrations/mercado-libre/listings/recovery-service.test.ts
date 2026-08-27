@@ -6,6 +6,7 @@ import { AuthorizationDeniedError, type ApprovedRole } from '@/lib/auth/authoriz
 import {
   inspectMercadoLibreListingSyncRunRecovery,
   LISTING_SYNC_RUN_STALE_AFTER_MS,
+  listMercadoLibreListingSyncRuns,
   recoverMercadoLibreListingSyncRun
 } from './recovery-service';
 
@@ -62,12 +63,158 @@ function dependencies(role: ApprovedRole = 'Owner') {
         run: run(),
         terminalAuditPresent: false
       }),
+      listRecentForRecovery: vi
+        .fn()
+        .mockResolvedValue([{ run: run(), terminalAuditPresent: false }]),
       recoverStale: vi.fn().mockResolvedValue({ outcome: 'recovered', run: run() })
+    },
+    stores: {
+      listByOrganizationAndIds: vi.fn().mockResolvedValue([
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          organizationId: 'org_a',
+          name: 'Main Store',
+          status: 'active'
+        }
+      ])
+    },
+    connections: {
+      listByOrganizationAndIds: vi.fn().mockResolvedValue([
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          organizationId: 'org_a',
+          storeId: '11111111-1111-4111-8111-111111111111',
+          provider: 'mercado-libre',
+          externalAccountId: 'seller-123',
+          status: 'active',
+          scopes: [],
+          expiresAt: null
+        }
+      ])
     }
   };
 }
 
 describe('administrative listing sync run recovery', () => {
+  it.each(['Owner', 'Manager'] as const)(
+    'lists recent runs for a persistent %s with DB-only display enrichment',
+    async (role) => {
+      const deps = dependencies(role);
+
+      await expect(
+        listMercadoLibreListingSyncRuns({ page: 1, limit: 10 }, deps)
+      ).resolves.toMatchObject({
+        total: 1,
+        runs: [
+          {
+            id: runId,
+            storeName: 'Main Store',
+            connectionProvider: 'mercado-libre',
+            connectionExternalAccountId: 'seller-123',
+            stale: true,
+            classification: 'RECOVERABLE_AS_SUCCEEDED'
+          }
+        ]
+      });
+      expect(deps.runs.listRecentForRecovery).toHaveBeenCalledWith('org_a', 50);
+      expect(deps.stores.listByOrganizationAndIds).toHaveBeenCalledOnce();
+      expect(deps.connections.listByOrganizationAndIds).toHaveBeenCalledOnce();
+    }
+  );
+
+  it.each(['Employee', 'Client'] as const)(
+    'denies %s before listing or enrichment',
+    async (role) => {
+      const deps = dependencies(role);
+
+      await expect(
+        listMercadoLibreListingSyncRuns({ page: 1, limit: 10 }, deps)
+      ).rejects.toBeInstanceOf(AuthorizationDeniedError);
+      expect(deps.runs.listRecentForRecovery).not.toHaveBeenCalled();
+      expect(deps.stores.listByOrganizationAndIds).not.toHaveBeenCalled();
+      expect(deps.connections.listByOrganizationAndIds).not.toHaveBeenCalled();
+    }
+  );
+
+  it('filters and paginates the bounded admin read model without provider work', async () => {
+    const deps = dependencies();
+    deps.runs.listRecentForRecovery.mockResolvedValue([
+      {
+        run: run({
+          status: 'succeeded',
+          completedAt: '2026-08-27T11:40:00.000Z',
+          errorCode: null,
+          errorSummary: null
+        }),
+        terminalAuditPresent: true
+      },
+      {
+        run: run({
+          id: '77777777-7777-4777-8777-777777777777',
+          status: 'failed',
+          completedAt: '2026-08-27T11:35:00.000Z',
+          errorCode: 'credential_failure',
+          errorSummary: 'A valid provider credential was unavailable'
+        }),
+        terminalAuditPresent: true
+      }
+    ]);
+
+    await expect(
+      listMercadoLibreListingSyncRuns(
+        { page: 1, limit: 10, status: 'failed', eligibility: 'NOT_RECOVERABLE' },
+        deps
+      )
+    ).resolves.toMatchObject({
+      total: 1,
+      runs: [
+        {
+          status: 'failed',
+          errorCode: 'credential_failure',
+          errorSummary: 'A valid provider credential was unavailable'
+        }
+      ]
+    });
+  });
+
+  it('redacts a prohibited legacy error summary before it reaches the admin UI', async () => {
+    const deps = dependencies();
+    deps.runs.listRecentForRecovery.mockResolvedValue([
+      {
+        run: run({
+          status: 'failed',
+          completedAt: '2026-08-27T11:35:00.000Z',
+          errorCode: 'credential_failure',
+          errorSummary: 'access_token=must-not-render'
+        }),
+        terminalAuditPresent: true
+      }
+    ]);
+
+    await expect(
+      listMercadoLibreListingSyncRuns({ page: 1, limit: 10 }, deps)
+    ).resolves.toMatchObject({ runs: [{ errorSummary: null }] });
+  });
+
+  it('redacts a non-canonical SQL-like legacy summary before it reaches the admin UI', async () => {
+    const deps = dependencies();
+    deps.runs.listRecentForRecovery.mockResolvedValue([
+      {
+        run: run({
+          status: 'failed',
+          completedAt: '2026-08-27T11:35:00.000Z',
+          errorCode: 'persistence_failure',
+          errorSummary: 'duplicate key violates unique constraint listings_external_listing_id_key'
+        }),
+        terminalAuditPresent: true
+      }
+    ]);
+
+    await expect(
+      listMercadoLibreListingSyncRuns({ page: 1, limit: 10 }, deps)
+    ).resolves.toMatchObject({ runs: [{ errorSummary: null }] });
+  });
+
   it.each(['Owner', 'Manager'] as const)(
     'allows a persistent %s and exposes a safe deterministic read model',
     async (role) => {
@@ -90,9 +237,9 @@ describe('administrative listing sync run recovery', () => {
   it.each(['Employee', 'Client'] as const)('denies %s before inspecting a run', async (role) => {
     const deps = dependencies(role);
 
-    await expect(
-      inspectMercadoLibreListingSyncRunRecovery({ runId }, deps)
-    ).rejects.toBeInstanceOf(AuthorizationDeniedError);
+    await expect(inspectMercadoLibreListingSyncRunRecovery({ runId }, deps)).rejects.toBeInstanceOf(
+      AuthorizationDeniedError
+    );
     expect(deps.runs.inspectForRecovery).not.toHaveBeenCalled();
   });
 
@@ -147,12 +294,12 @@ describe('administrative listing sync run recovery', () => {
       terminalAuditPresent: false
     });
 
-    await expect(
-      inspectMercadoLibreListingSyncRunRecovery({ runId }, deps)
-    ).resolves.toMatchObject({
-      classification: 'RECOVERABLE_AS_FAILED',
-      eligibleTerminalStatuses: ['failed']
-    });
+    await expect(inspectMercadoLibreListingSyncRunRecovery({ runId }, deps)).resolves.toMatchObject(
+      {
+        classification: 'RECOVERABLE_AS_FAILED',
+        eligibleTerminalStatuses: ['failed']
+      }
+    );
   });
 
   it.each(['succeeded', 'partial', 'failed'] as const)(

@@ -79,6 +79,21 @@ boundary Request → Authentication → Authorization → Tenant resolution →
 Validation → Service → Repository → Database, exige Owner/Manager persistente y
 termina el run de forma atómica sin reanudar ni repetir trabajo del provider.
 
+2.20V-A agrega una superficie dashboard de sólo lectura para esos runs. Usa un
+GET interno y TanStack hydration, reutiliza la clasificación 2.20U y enriquece
+Store/Connection desde repositories tenant-bound. No agrega navegación global,
+mutation, provider call ni acceso DB desde el browser.
+
+2.20V-B compone sobre esa lectura una confirmación de recovery que llama al
+boundary 2.20U. La UI no decide stale ni elegibilidad, no cambia repositories o
+RPCs y trata la visibilidad de la acción sólo como UX; el POST repite auth y
+tenant resolution server-side.
+
+2.20V está cerrado con validación local y evidencia funcional remota. Los
+fixtures sintéticos fueron eliminados, no hubo provider calls ni recursos
+reales modificados, y la observabilidad inicial del toast quedó clasificada
+como limitación de automatización sin bug funcional.
+
 ## Capacidades futuras o diferidas
 
 - missing reconciliation y lifecycle/soft-delete;

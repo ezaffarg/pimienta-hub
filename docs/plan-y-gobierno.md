@@ -111,7 +111,7 @@ Validación base:
 | --- | --- | --- |
 | 0 | Decisiones, fuentes y boundaries | Completada |
 | 1 | Seguridad base server-side | Cerrada |
-| 2 | Persistencia multi-tenant e integración Mercado Libre incremental | **Activa — 2.20U validado remotamente** |
+| 2 | Persistencia multi-tenant e integración Mercado Libre incremental | **Activa — 2.20V cerrado** |
 | 3–7 | Evolución funcional y productiva posterior | No iniciadas como fases independientes |
 
 La Fase 2 evolucionó mediante subfases explícitamente aprobadas e incorporó
@@ -182,7 +182,7 @@ página y un batch. Existen exactamente un audit `listing.sync.started` y uno
 Listings permanece en 1 sin duplicados; `credential_version` quedó en 3 y el
 lease `CLEAR`. **2.20T está cerrado.**
 
-## E. Estado vigente — 2.20U
+## E. Cierre — 2.20U
 
 2.20U implementa inspección y recuperación administrativa explícita de runs
 stale para Owner/Manager persistentes. Usa un threshold server-side de 15
@@ -190,9 +190,32 @@ minutos, outcomes controlados, RPC atómica y audits con recovery actor; conserv
 scope, actor original, counters y checkpoint y no llama al provider. Reset DB,
 matrices locales 2.20T/2.20U y validaciones de aplicación pasaron. La migration
 fue aplicada y validada en remoto con fixtures sintéticos eliminados, sin tocar
-runs ni datos reales. 2.20U queda listo para cierre, pero aún no está cerrado.
+runs ni datos reales. **2.20U está cerrado.**
 
-## F. Alcance futuro real
+## F. Cierre — 2.20V
+
+2.20V-A agrega una UI administrativa de sólo lectura para Owner/Manager
+persistentes. Lista hasta 50 runs recientes mediante un GET interno
+tenant-bound, reutiliza stale/eligibility de 2.20U y muestra Store, Connection,
+status, timestamps, counters y error seguro. No incluye recovery, sync,
+provider calls, writes ni cambios de schema. La navegación global
+business-role-aware permanece fuera de este bloque porque el sidebar vigente
+usa contexto Clerk cliente y no `hub_memberships`.
+Los tests focalizados quedaron 62/62, la suite 225/225, typecheck y lint PASS.
+
+2.20V-B agrega confirmación y mutation UI únicamente para runs elegibles,
+reutilizando el endpoint 2.20U. Incluye reason taxonómica, prevención de doble
+submit, feedback seguro e invalidación del listado; no agrega recovery logic,
+DB, provider work ni sync.
+Los focalizados quedaron 69/69, la suite 232/232, typecheck y lint PASS.
+
+La evidencia funcional remota cubrió lectura, recovery, concurrencia,
+invalidación y cleanup con fixtures sintéticos, cero provider calls y recursos
+reales intactos. Sonner y los paths de feedback quedaron validados; la falta
+inicial de captura fue `AUTOMATION_OBSERVABILITY_LIMITATION`, no un bug
+funcional. **2.20V-A, 2.20V-B y 2.20V están cerrados.**
+
+## G. Alcance futuro real
 
 Permanece diferido y requiere planificación/aprobación propia:
 
@@ -207,7 +230,7 @@ Permanece diferido y requiere planificación/aprobación propia:
 Checkpoint no equivale a resumability: los runs actuales no persisten offset,
 cursor ni `scroll_id` y una nueva ejecución reinicia discovery.
 
-## G. Condiciones generales de avance
+## H. Condiciones generales de avance
 
 Antes de cerrar una fase o abrir la siguiente debe existir evidencia de:
 

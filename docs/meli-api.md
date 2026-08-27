@@ -142,3 +142,30 @@ La migration y el contrato RPC 2.20U quedaron validados en remoto con fixtures
 sintéticos eliminados al finalizar. La proyección administrativa segura,
 clasificaciones, roles, tenant boundaries y outcomes controlados pasaron sin
 usar runs reales ni ejecutar trabajo del provider.
+
+## Administrative listing sync read UI — 2.20V-A
+
+La ruta dashboard
+`/dashboard/integrations/mercado-libre/listing-sync-runs` muestra a Owner y
+Manager persistentes un historial administrativo de sólo lectura. La UI usa el
+GET interno `/api/integrations/mercado-libre/listing-sync-runs`, hidratación
+TanStack Query y el read model 2.20U; Employee, Client y Clerk fallback fallan
+cerrado antes de consultar runs.
+
+El servidor inspecciona como máximo los 50 runs más recientes del tenant,
+ordena por inicio descendente por defecto y permite filtros acotados por status,
+Store, stale y eligibility. Store y Connection se enriquecen sólo desde DB. La
+respuesta incluye timestamps UTC, counters y errores allowlisted/redactados;
+no expone actor, idempotency key ni material de credenciales. La ruta de
+listado no expone POST, recovery, acción de sync ni llamada al provider.
+
+2.20V-B consume exclusivamente el POST 2.20U
+`/api/integrations/mercado-libre/listing-sync-runs/[id]/recovery`. La UI sólo
+ofrece el target permitido por eligibility, exige una reason de la taxonomy
+vigente e invalida el listado tras cualquier outcome controlado. No reintenta,
+no expone errores backend y no llama al provider.
+
+2.20V está cerrado: baseline final 69/69 focalizados, 232/232 suite, typecheck
+y lint PASS. La evidencia remota funcional pasó con fixtures eliminados, cero
+provider calls y recursos reales intactos; el toast quedó validado y su captura
+inicial ausente se clasificó como `AUTOMATION_OBSERVABILITY_LIMITATION`.

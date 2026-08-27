@@ -239,6 +239,43 @@ export class ListingSyncRunRepository {
     };
   }
 
+  async listRecentForRecovery(
+    organizationId: string,
+    limit: number
+  ): Promise<ListingSyncRunRecoveryInspection[]> {
+    const parsed = recoveryListSchema.parse({ organizationId, limit });
+    const { data, error } = await this.client
+      .from('listing_sync_runs')
+      .select(listingSyncRunColumns)
+      .eq('organization_id', parsed.organizationId)
+      .order('started_at', { ascending: false })
+      .limit(parsed.limit);
+    if (error) throw new PersistenceError('Listing sync run recovery list failed');
+
+    const runs = z.array(runRowSchema).parse(data).map(listingSyncRunRecord);
+    if (runs.length === 0) return [];
+
+    const auditResponse = await this.client
+      .from('audit_events')
+      .select('resource_id')
+      .eq('organization_id', parsed.organizationId)
+      .eq('resource_type', 'listing_sync_run')
+      .in(
+        'resource_id',
+        runs.map((run) => run.id)
+      )
+      .in('action', terminalAuditActions);
+    if (auditResponse.error) throw new PersistenceError('Listing sync run recovery list failed');
+
+    const terminalRunIds = new Set(
+      z
+        .array(z.object({ resource_id: z.string().uuid() }))
+        .parse(auditResponse.data)
+        .map((audit) => audit.resource_id)
+    );
+    return runs.map((run) => ({ run, terminalAuditPresent: terminalRunIds.has(run.id) }));
+  }
+
   async recoverStale(input: {
     organizationId: string;
     runId: string;
@@ -350,6 +387,12 @@ const recoveryLookupSchema = z
   .object({
     organizationId: z.string().trim().min(1).max(255),
     runId: z.uuid()
+  })
+  .strict();
+const recoveryListSchema = z
+  .object({
+    organizationId: z.string().trim().min(1).max(255),
+    limit: z.number().int().min(1).max(100)
   })
   .strict();
 const startInputSchema = z

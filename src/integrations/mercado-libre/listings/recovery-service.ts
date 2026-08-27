@@ -7,7 +7,13 @@ import {
   type ListingSyncRunRecord,
   type ListingSyncRunRecoveryReason
 } from '@/infrastructure/database/listing-sync-run-repository';
-import { HubMembershipRepository } from '@/infrastructure/database/repositories';
+import {
+  ConnectionRepository,
+  HubMembershipRepository,
+  StoreRepository,
+  type ConnectionRecord,
+  type StoreRecord
+} from '@/infrastructure/database/repositories';
 import {
   AuthorizationDeniedError,
   requirePermission,
@@ -16,6 +22,7 @@ import {
 import { requireServerAuthorizationContext } from '@/lib/auth/server-context';
 
 export const LISTING_SYNC_RUN_STALE_AFTER_MS = 15 * 60 * 1000;
+export const LISTING_SYNC_RUN_ADMIN_SCAN_LIMIT = 50;
 
 export type ListingSyncRunRecoveryClassification =
   | 'RECOVERABLE_AS_SUCCEEDED'
@@ -51,6 +58,22 @@ export interface ListingSyncRunRecoveryReadModel {
   errorCode: ListingSyncRunRecord['errorCode'];
 }
 
+export interface ListingSyncRunAdminReadModel extends ListingSyncRunRecoveryReadModel {
+  storeName: string;
+  connectionProvider: 'mercado-libre';
+  connectionExternalAccountId: string | null;
+  errorSummary: string | null;
+}
+
+export interface ListingSyncRunAdminListResponse {
+  runs: ListingSyncRunAdminReadModel[];
+  total: number;
+  page: number;
+  limit: number;
+  scanLimit: number;
+  stores: { id: string; name: string }[];
+}
+
 export class ListingSyncRunRecoveryError extends Error {
   constructor(public readonly code: 'not_found' | 'recovery_failed') {
     super(code);
@@ -67,14 +90,108 @@ interface RecoveryContext {
 
 export interface ListingSyncRunRecoveryDependencies {
   now?: () => Date;
-  runs?: Pick<ListingSyncRunRepository, 'inspectForRecovery' | 'recoverStale'>;
+  runs?: Pick<
+    ListingSyncRunRepository,
+    'inspectForRecovery' | 'listRecentForRecovery' | 'recoverStale'
+  >;
   memberships?: Pick<HubMembershipRepository, 'findByOrganizationAndClerkUser'>;
+  stores?: Pick<StoreRepository, 'listByOrganizationAndIds'>;
+  connections?: Pick<ConnectionRepository, 'listByOrganizationAndIds'>;
   context?: () => Promise<{
     userId: string;
     organizationId: string;
     role: ApprovedRole;
     roleSource: 'persistent' | 'clerk-fallback';
   }>;
+}
+
+const listingSyncRunStatusValues = ['running', 'succeeded', 'partial', 'failed'] as const;
+const listingSyncRunRecoveryClassificationValues = [
+  'RECOVERABLE_AS_SUCCEEDED',
+  'RECOVERABLE_AS_FAILED',
+  'NOT_RECOVERABLE',
+  'NOT_STALE'
+] as const;
+const adminSortSchema = z.object({
+  id: z.enum(['status', 'startedAt', 'lastCheckpointAt', 'completedAt']),
+  desc: z.boolean()
+});
+type AdminSort = z.infer<typeof adminSortSchema>;
+const commaSeparatedUuidFilter = z
+  .string()
+  .max(2048)
+  .refine((value) =>
+    value
+      .split(',')
+      .filter(Boolean)
+      .every((item) => z.uuid().safeParse(item).success)
+  );
+
+export const listingSyncRunAdminListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(10),
+    status: commaSeparatedFilter(listingSyncRunStatusValues).optional(),
+    storeId: commaSeparatedUuidFilter.optional(),
+    stale: z.enum(['true', 'false']).optional(),
+    eligibility: commaSeparatedFilter(listingSyncRunRecoveryClassificationValues).optional(),
+    sort: z
+      .string()
+      .max(256)
+      .refine((value) => parseAdminSort(value) !== null, 'Invalid listing sync run sort')
+      .optional()
+  })
+  .strict();
+
+export type ListingSyncRunAdminListQuery = z.infer<typeof listingSyncRunAdminListQuerySchema>;
+
+export async function listMercadoLibreListingSyncRuns(
+  input: ListingSyncRunAdminListQuery,
+  dependencies: ListingSyncRunRecoveryDependencies = {}
+): Promise<ListingSyncRunAdminListResponse> {
+  const parsed = listingSyncRunAdminListQuerySchema.parse(input);
+  const context = await requireRecoveryContext(dependencies);
+  const runs = dependencies.runs ?? new ListingSyncRunRepository();
+  const inspections = await runs.listRecentForRecovery(
+    context.organizationId,
+    LISTING_SYNC_RUN_ADMIN_SCAN_LIMIT
+  );
+  const storeIds = [...new Set(inspections.map(({ run }) => run.storeId))];
+  const connectionIds = [...new Set(inspections.map(({ run }) => run.connectionId))];
+  const stores = dependencies.stores ?? new StoreRepository();
+  const connections = dependencies.connections ?? new ConnectionRepository();
+  const [storeRecords, connectionRecords] = await Promise.all([
+    stores.listByOrganizationAndIds(context.organizationId, storeIds),
+    connections.listByOrganizationAndIds(context.organizationId, connectionIds)
+  ]);
+  const storeById = new Map(storeRecords.map((store) => [store.id, store]));
+  const connectionById = new Map(
+    connectionRecords.map((connection) => [connection.id, connection])
+  );
+  const cutoff = staleBefore(dependencies.now);
+  const adminRuns = inspections.map(({ run, terminalAuditPresent }) =>
+    adminReadModel(
+      run,
+      terminalAuditPresent,
+      cutoff,
+      storeById.get(run.storeId),
+      connectionById.get(run.connectionId)
+    )
+  );
+  const filtered = filterAdminRuns(adminRuns, parsed);
+  const sorted = sortAdminRuns(filtered, parsed.sort);
+  const offset = (parsed.page - 1) * parsed.limit;
+
+  return {
+    runs: sorted.slice(offset, offset + parsed.limit),
+    total: sorted.length,
+    page: parsed.page,
+    limit: parsed.limit,
+    scanLimit: LISTING_SYNC_RUN_ADMIN_SCAN_LIMIT,
+    stores: storeRecords
+      .map((store) => ({ id: store.id, name: store.name }))
+      .toSorted((left, right) => left.name.localeCompare(right.name))
+  };
 }
 
 export async function inspectMercadoLibreListingSyncRunRecovery(
@@ -170,8 +287,7 @@ function recoveryReadModel(
     run.requested === run.fetched &&
     run.fetched === run.persisted &&
     run.pages > 0 &&
-    ((run.requested === 0 && run.batches === 0) ||
-      (run.requested > 0 && run.batches > 0));
+    ((run.requested === 0 && run.batches === 0) || (run.requested > 0 && run.batches > 0));
   const classification: ListingSyncRunRecoveryClassification =
     run.status !== 'running' || terminalAuditPresent
       ? 'NOT_RECOVERABLE'
@@ -212,6 +328,108 @@ function recoveryReadModel(
     },
     errorCode: run.errorCode
   };
+}
+
+function adminReadModel(
+  run: ListingSyncRunRecord,
+  terminalAuditPresent: boolean,
+  cutoff: string,
+  store: StoreRecord | undefined,
+  connection: ConnectionRecord | undefined
+): ListingSyncRunAdminReadModel {
+  if (
+    !store ||
+    store.organizationId !== run.organizationId ||
+    !connection ||
+    connection.organizationId !== run.organizationId ||
+    connection.storeId !== run.storeId ||
+    connection.provider !== 'mercado-libre'
+  ) {
+    throw new ListingSyncRunRecoveryError('recovery_failed');
+  }
+  return {
+    ...recoveryReadModel(run, terminalAuditPresent, cutoff),
+    storeName: store.name,
+    connectionProvider: connection.provider,
+    connectionExternalAccountId: connection.externalAccountId,
+    errorSummary: safeAdminErrorSummary(run.errorSummary)
+  };
+}
+
+function filterAdminRuns(
+  runs: ListingSyncRunAdminReadModel[],
+  query: ListingSyncRunAdminListQuery
+): ListingSyncRunAdminReadModel[] {
+  const statuses = splitFilter(query.status);
+  const storeIds = splitFilter(query.storeId);
+  const eligibility = splitFilter(query.eligibility);
+  const stale = query.stale === undefined ? null : query.stale === 'true';
+  return runs.filter(
+    (run) =>
+      (statuses.length === 0 || statuses.includes(run.status)) &&
+      (storeIds.length === 0 || storeIds.includes(run.storeId)) &&
+      (eligibility.length === 0 || eligibility.includes(run.classification)) &&
+      (stale === null || (run.status === 'running' && run.stale === stale))
+  );
+}
+
+function safeAdminErrorSummary(summary: string | null): string | null {
+  if (!summary) return null;
+  return safeAdminErrorSummaries.has(summary) || safeCredentialErrorSummary.test(summary)
+    ? summary
+    : null;
+}
+
+const safeAdminErrorSummaries = new Set([
+  'The provider rate limit stopped the listing sync',
+  'The provider timed out during the listing sync',
+  'The provider was unavailable during the listing sync',
+  'The provider returned an invalid listing response',
+  'A valid provider credential was unavailable',
+  'Listing sync persistence failed safely',
+  'One or more listing items could not be synchronized'
+]);
+const safeCredentialErrorSummary =
+  /^Credential refresh failed during (READ|DECRYPT|CLAIM|DOUBLE_CHECK|PROVIDER_REQUEST|PROVIDER_RESPONSE|ENCRYPT|CAS_COMPLETE(?:\/(?:CAS_RPC_THROW|CAS_RPC_ERROR|CAS_RESPONSE_INVALID|CAS_REJECTED))?)$/;
+
+function sortAdminRuns(
+  runs: ListingSyncRunAdminReadModel[],
+  serializedSort: string | undefined
+): ListingSyncRunAdminReadModel[] {
+  const sort = serializedSort ? parseAdminSort(serializedSort) : null;
+  const field = sort?.id ?? 'startedAt';
+  const direction = (sort?.desc ?? true) ? -1 : 1;
+  return runs.toSorted((left, right) => {
+    const leftValue = left[field] ?? '';
+    const rightValue = right[field] ?? '';
+    return String(leftValue).localeCompare(String(rightValue)) * direction;
+  });
+}
+
+function parseAdminSort(value: string): AdminSort | null {
+  try {
+    const parsed = z.array(adminSortSchema).max(1).safeParse(JSON.parse(value));
+    return parsed.success ? (parsed.data[0] ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
+function splitFilter(value: string | undefined): string[] {
+  return value?.split(',').filter(Boolean) ?? [];
+}
+
+function commaSeparatedFilter<const T extends readonly [string, ...string[]]>(values: T) {
+  const itemSchema = z.enum(values);
+  return z
+    .string()
+    .max(512)
+    .refine((value) =>
+      value
+        .split(',')
+        .filter(Boolean)
+        .every((item) => itemSchema.safeParse(item).success)
+    );
 }
 
 const recoveryLookupSchema = z.object({ runId: z.uuid() }).strict();

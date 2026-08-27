@@ -55,4 +55,16 @@ Prompt archivado: [2.13](2.13-provision-current-owner.md). Estado: COMPLETED.
 # 2.20U — Administrative Stale-Run Recovery
 
 Prompt archivado: [2.20U](2.20u-administrative-stale-run-recovery.md). Estado:
-REMOTE VALIDATED / NOT CLOSED.
+CLOSED.
+
+# 2.20V-A — Administrative Listing Sync Operations Read UI
+
+Prompt archivado:
+[2.20V-A](2.20v-a-administrative-listing-sync-read-ui.md). Estado: LOCAL
+VALIDATION PASS / CLOSED.
+
+# 2.20V-B — Administrative Listing Sync Recovery UI
+
+Prompt archivado:
+[2.20V-B](2.20v-b-administrative-listing-sync-recovery-ui.md). Estado: LOCAL
+AND REMOTE VALIDATION PASS / CLOSED. **2.20V está cerrado.**
