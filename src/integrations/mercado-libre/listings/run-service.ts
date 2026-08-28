@@ -83,10 +83,13 @@ export class MercadoLibreListingSyncRunService {
     let progress = progressFrom(started.run);
     let backfill: MercadoLibreListingBackfillResult;
     try {
-      backfill = await this.listings.syncAllActiveConnectionListings(scope, async (next) => {
-        progress = next;
-        await this.runs.checkpoint({ scope, runId: started.run.id, progress: next });
-      });
+      backfill = await this.listings.syncAllActiveConnectionListings(
+        { ...scope, runId: started.run.id },
+        async (next) => {
+          progress = next;
+          await this.runs.checkpoint({ scope, runId: started.run.id, progress: next });
+        }
+      );
     } catch (error) {
       const classified = classifyRunFailure(error);
       const run = await this.finalize({
@@ -94,6 +97,7 @@ export class MercadoLibreListingSyncRunService {
         runId: started.run.id,
         status: 'failed',
         progress,
+        reconciliationEligible: false,
         errorCode: classified.code,
         errorSummary: classified.summary
       });
@@ -107,6 +111,7 @@ export class MercadoLibreListingSyncRunService {
       runId: started.run.id,
       status: partial ? 'partial' : 'succeeded',
       progress,
+      reconciliationEligible: !partial && backfill.reconciliationEligible,
       errorCode: partial ? 'partial_item_failure' : null,
       errorSummary: partial ? safeErrorSummary.partial_item_failure : null
     });

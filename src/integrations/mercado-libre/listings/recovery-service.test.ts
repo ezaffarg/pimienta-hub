@@ -36,6 +36,9 @@ function run(overrides: Record<string, unknown> = {}) {
     batches: 1,
     errorCode: null,
     errorSummary: null,
+    reconciliationEligible: false,
+    missingCandidateCount: 0,
+    reappearedCount: 0,
     updatedAt: '2026-08-27T11:30:00.000Z',
     ...overrides
   };

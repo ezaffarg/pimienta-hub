@@ -68,3 +68,11 @@ VALIDATION PASS / CLOSED.
 Prompt archivado:
 [2.20V-B](2.20v-b-administrative-listing-sync-recovery-ui.md). Estado: LOCAL
 AND REMOTE VALIDATION PASS / CLOSED. **2.20V está cerrado.**
+
+# 2.20W — Safe Listing Reconciliation
+
+Historial: [W-A audit](2.20w-a-listing-reconciliation-design-schema-audit.md),
+[W-A2 semantics](2.20w-a2-provider-reconciliation-semantics.md) y
+[W-B implementation](2.20w-b-safe-run-aware-listing-reconciliation.md).
+Estado: W-B IMPLEMENTATION + LOCAL VALIDATION y W-C REMOTE VALIDATION PASS;
+W-A, W-A2, W-B, W-C y 2.20W CLOSED.

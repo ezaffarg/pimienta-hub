@@ -29,7 +29,7 @@ deny-by-default y no existen policies browser-facing para las tablas Hub.
 ## Estado actual
 
 - Fase 0 completada y Fase 1 cerrada.
-- Fase 2 activa; **2.20T, 2.20U y 2.20V cerrados**.
+- Fase 2 activa; **2.20T, 2.20U, 2.20V y 2.20W cerrados**.
 - Modelo persistente multi-tenant operativo: memberships, Stores, assignments,
   Connections, secretos, auditoría, listings y sync runs.
 - Stores y Connections reales operativas y tenant-bound.
@@ -56,8 +56,8 @@ Connection/kind, contadores, checkpoints y audits atómicos mediante RPCs
 server-only.
 
 Checkpoint no equivale a resumability: no se persisten offset, cursor ni
-`scroll_id`. Scheduler/worker, recovery automática y missing reconciliation
-siguen diferidos.
+`scroll_id`. En 2.20T, scheduler/worker, recovery automática y reconciliation
+todavía estaban diferidos; W-B implementa ahora sólo la última en local.
 
 ## Último bloque cerrado — 2.20U
 
@@ -129,7 +129,7 @@ duplicados; el reconnect controlado dejó `credential_version=3` y lease
 
 - recovery automática de stale runs;
 - scheduler/worker;
-- missing reconciliation y lifecycle/soft-delete;
+- lifecycle provider-confirmed y soft-delete;
 - resumability persistente;
 - writes al provider;
 - otros dominios e-commerce y otros providers.
@@ -152,3 +152,14 @@ duplicados; el reconnect controlado dejó `credential_version=3` y lease
 Antes de actuar, inspeccionar siempre el working tree: puede contener cambios
 locales intencionales aún no cerrados. El repositorio es la fuente de verdad;
 una contradicción material se reporta y no se resuelve por inferencia.
+
+## Último bloque cerrado — 2.20W
+
+La migration local agrega vínculo Listing→run con FK compuesta, estado
+`seen|missing_candidate`, evidencia consecutiva y counters del run. Los batches
+positivos son run-aware; el adapter sólo habilita reconciliation al agotar un
+perfil técnico consistente y sin fallos; la transición negativa y el finalize
+son atómicos. Recovery 2.20U no reconcilia y la UI 2.20V sólo suma los dos
+counters al read model. W-C aplicó una sola migration y pasó con fixtures
+sintéticos completamente eliminados, cero provider calls y recursos reales
+intactos. **2.20W-A, 2.20W-A2, 2.20W-B, 2.20W-C y 2.20W están cerrados.**

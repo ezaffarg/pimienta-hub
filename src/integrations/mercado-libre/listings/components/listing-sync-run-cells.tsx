@@ -82,6 +82,9 @@ export function ListingSyncRunProgress({ run }: { run: ListingSyncRunAdminReadMo
         Discovered {run.progress.discovered} · Fetched {run.progress.fetched} · Failed{' '}
         {run.progress.failed} · Pages {run.progress.pages} · Batches {run.progress.batches}
       </span>
+      <span className='text-muted-foreground text-xs'>
+        Missing candidates {run.progress.missingCandidates} · Reappeared {run.progress.reappeared}
+      </span>
     </div>
   );
 }

@@ -169,3 +169,22 @@ no expone errores backend y no llama al provider.
 y lint PASS. La evidencia remota funcional pasó con fixtures eliminados, cero
 provider calls y recursos reales intactos; el toast quedó validado y su captura
 inicial ausente se clasificó como `AUTOMATION_OBSERVABILITY_LIMITATION`.
+
+## Safe run-aware reconciliation — 2.20W-B
+
+El backfill orquestado entrega su `runId` a la persistencia positiva. Cada batch
+usa `persist_listing_sync_batch_for_run`, que valida Organization, Store,
+Connection y run `running`; actualiza `last_seen_sync_run_id`, restaura `seen` y
+cuenta una reaparición sólo durante la transición desde `missing_candidate`.
+
+El adapter calcula `reconciliationEligible` únicamente cuando el perfil técnico
+sin filtros reductores termina en el final oficial, conserva modo/total
+consistentes, no repite cursores y cumple
+`discovered=requested=fetched=persisted` sin fallos. Esto expresa evidencia
+interna de no-observación, no un snapshot autoritativo de Mercado Libre.
+
+`finalize_listing_sync_run_with_reconciliation` aplica una única reconciliación
+negativa y terminaliza el run en la misma transacción. Runs parciales, fallidos,
+incompletos o recuperados administrativamente nunca producen candidates. W-C
+validó remotamente ambos boundaries con fixtures sintéticos eliminados, cero
+provider calls y recursos reales intactos. **2.20W está cerrado.**

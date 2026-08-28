@@ -28,6 +28,7 @@ function renderAction(classification: ListingSyncRunAdminReadModel['classificati
     staleBefore: '2026-08-27T11:45:00.000Z',
     stale: true,
     terminalAuditPresent: false,
+    reconciliationEligible: false,
     classification,
     eligibleTerminalStatuses:
       classification === 'RECOVERABLE_AS_SUCCEEDED'
@@ -42,7 +43,9 @@ function renderAction(classification: ListingSyncRunAdminReadModel['classificati
       persisted: 1,
       failed: 0,
       pages: 1,
-      batches: 1
+      batches: 1,
+      missingCandidates: 0,
+      reappeared: 0
     },
     errorCode: null,
     storeName: 'Main Store',

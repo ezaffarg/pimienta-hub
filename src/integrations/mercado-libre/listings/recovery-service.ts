@@ -44,6 +44,7 @@ export interface ListingSyncRunRecoveryReadModel {
   staleBefore: string;
   stale: boolean;
   terminalAuditPresent: boolean;
+  reconciliationEligible: boolean;
   classification: ListingSyncRunRecoveryClassification;
   eligibleTerminalStatuses: readonly ('succeeded' | 'failed')[];
   progress: {
@@ -54,6 +55,8 @@ export interface ListingSyncRunRecoveryReadModel {
     failed: number;
     pages: number;
     batches: number;
+    missingCandidates: number;
+    reappeared: number;
   };
   errorCode: ListingSyncRunRecord['errorCode'];
 }
@@ -310,6 +313,7 @@ function recoveryReadModel(
     staleBefore: cutoff,
     stale,
     terminalAuditPresent,
+    reconciliationEligible: run.reconciliationEligible,
     classification,
     eligibleTerminalStatuses:
       classification === 'RECOVERABLE_AS_SUCCEEDED'
@@ -324,7 +328,9 @@ function recoveryReadModel(
       persisted: run.persisted,
       failed: run.failed,
       pages: run.pages,
-      batches: run.batches
+      batches: run.batches,
+      missingCandidates: run.missingCandidateCount,
+      reappeared: run.reappearedCount
     },
     errorCode: run.errorCode
   };

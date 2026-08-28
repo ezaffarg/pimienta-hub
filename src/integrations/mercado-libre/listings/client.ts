@@ -101,6 +101,8 @@ export type MercadoLibreListingDiscoveryCursor =
 export interface MercadoLibreListingDiscoveryPage {
   itemIds: readonly string[];
   total: number | null;
+  mode: 'offset' | 'scan';
+  exhausted: boolean;
   nextCursor: MercadoLibreListingDiscoveryCursor | null;
 }
 
@@ -279,6 +281,8 @@ export class MercadoLibreListingsClient {
     return {
       itemIds: parsed.results,
       total: parsed.paging?.total ?? null,
+      mode: 'offset',
+      exhausted: parsed.paging !== undefined && nextOffset >= parsed.paging.total,
       nextCursor:
         parsed.results.length > 0 &&
         parsed.paging &&
@@ -304,10 +308,9 @@ export class MercadoLibreListingsClient {
     return {
       itemIds: parsed.results,
       total: parsed.paging?.total ?? null,
-      nextCursor:
-        parsed.results.length > 0 && parsed.scroll_id
-          ? { mode: 'scan', scrollId: parsed.scroll_id }
-          : null
+      mode: 'scan',
+      exhausted: parsed.scroll_id === null,
+      nextCursor: parsed.scroll_id ? { mode: 'scan', scrollId: parsed.scroll_id } : null
     };
   }
 

@@ -155,6 +155,8 @@ describe('MercadoLibreListingsClient', () => {
     expect(first).toEqual({
       itemIds: ['MLA1'],
       total: 1001,
+      mode: 'scan',
+      exhausted: false,
       nextCursor: { mode: 'scan', scrollId: 'scroll-a' }
     });
     await expect(
@@ -163,7 +165,13 @@ describe('MercadoLibreListingsClient', () => {
         sellerId: '123',
         cursor: first.nextCursor
       })
-    ).resolves.toEqual({ itemIds: [], total: 1001, nextCursor: null });
+    ).resolves.toEqual({
+      itemIds: [],
+      total: 1001,
+      mode: 'scan',
+      exhausted: true,
+      nextCursor: null
+    });
 
     const [offsetUrl] = fetcher.mock.calls[0] as [URL];
     const [scanUrl] = fetcher.mock.calls[1] as [URL];
@@ -423,9 +431,11 @@ describe('MercadoLibreListingsService', () => {
       {
         itemIds: firstIds,
         total: 45,
+        mode: 'offset',
+        exhausted: false,
         nextCursor: { mode: 'offset', offset: 25 }
       },
-      { itemIds: secondIds, total: 45, nextCursor: null }
+      { itemIds: secondIds, total: 45, mode: 'offset', exhausted: true, nextCursor: null }
     ];
     const discoverSellerListingIds = vi
       .fn()
@@ -466,7 +476,8 @@ describe('MercadoLibreListingsService', () => {
       failed: 0,
       pages: 2,
       batches: 3,
-      failures: []
+      failures: [],
+      reconciliationEligible: false
     });
     expect(getListingDetails.mock.calls.map(([input]) => input.itemIds.length)).toEqual([
       20, 5, 20
@@ -511,6 +522,8 @@ describe('MercadoLibreListingsService', () => {
         discoverSellerListingIds: vi.fn().mockResolvedValue({
           itemIds: ['MLA1', 'MLA2'],
           total: 2,
+          mode: 'offset',
+          exhausted: true,
           nextCursor: null
         }),
         getListingDetails: vi.fn().mockResolvedValue({
@@ -535,7 +548,8 @@ describe('MercadoLibreListingsService', () => {
       failed: 1,
       pages: 1,
       batches: 1,
-      failures: [failure]
+      failures: [failure],
+      reconciliationEligible: false
     });
     expect(syncAuthorizedConnection).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -560,6 +574,8 @@ describe('MercadoLibreListingsService', () => {
         discoverSellerListingIds: vi.fn().mockResolvedValue({
           itemIds: ids,
           total: 21,
+          mode: 'offset',
+          exhausted: true,
           nextCursor: null
         }),
         getListingDetails
@@ -608,11 +624,15 @@ describe('MercadoLibreListingsService', () => {
         .mockResolvedValueOnce({
           itemIds: ['MLA1', 'MLA2'],
           total: 3,
+          mode: 'offset',
+          exhausted: false,
           nextCursor: { mode: 'offset', offset: 2 }
         })
         .mockResolvedValueOnce({
           itemIds: ['MLA2', 'MLA3'],
           total: 3,
+          mode: 'offset',
+          exhausted: true,
           nextCursor: null
         });
       return {
@@ -691,5 +711,61 @@ describe('MercadoLibreListingsService', () => {
       })
     ).rejects.toEqual(expect.objectContaining({ message: 'token_refresh_failed' }));
     expect(discoverSellerListingIds).not.toHaveBeenCalled();
+  });
+
+  it('uses run-aware persistence and marks only an exhausted consistent profile eligible', async () => {
+    const runId = '44444444-4444-4444-8444-444444444444';
+    const syncAuthorizedRun = vi.fn().mockResolvedValue([{ id: 'row-1' }]);
+    const service = new MercadoLibreListingsService(
+      { getById: vi.fn().mockResolvedValue(activeConnection()) } as never,
+      { getValidAccessToken: vi.fn().mockResolvedValue('token') } as never,
+      {
+        discoverSellerListingIds: vi.fn().mockResolvedValue({
+          itemIds: ['MLA1'],
+          total: 1,
+          mode: 'scan',
+          exhausted: true,
+          nextCursor: null
+        }),
+        getListingDetails: vi.fn().mockResolvedValue({ items: [summary('MLA1')], failures: [] })
+      } as never,
+      { syncAuthorizedRun } as never
+    );
+
+    await expect(
+      service.syncAllActiveConnectionListings({ organizationId, storeId, connectionId, runId })
+    ).resolves.toMatchObject({ reconciliationEligible: true });
+    expect(syncAuthorizedRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId,
+        summaries: [expect.objectContaining({ externalId: 'MLA1' })]
+      })
+    );
+  });
+
+  it('fails closed for an incomplete discovery terminal page', async () => {
+    const service = new MercadoLibreListingsService(
+      { getById: vi.fn().mockResolvedValue(activeConnection()) } as never,
+      { getValidAccessToken: vi.fn().mockResolvedValue('token') } as never,
+      {
+        discoverSellerListingIds: vi.fn().mockResolvedValue({
+          itemIds: [],
+          total: 0,
+          mode: 'scan',
+          exhausted: false,
+          nextCursor: null
+        })
+      } as never,
+      { syncAuthorizedRun: vi.fn() } as never
+    );
+
+    await expect(
+      service.syncAllActiveConnectionListings({
+        organizationId,
+        storeId,
+        connectionId,
+        runId: '44444444-4444-4444-8444-444444444444'
+      })
+    ).resolves.toMatchObject({ reconciliationEligible: false });
   });
 });

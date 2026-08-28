@@ -328,8 +328,9 @@ ni runs `running`.
 
 Stores, Connections, Listings e `integration_secrets` permanecen en 1,
 duplicados en 0, `credential_version` en 3 y lease `CLEAR`. 2.20T está cerrado;
-la recovery automática, scheduler/worker, missing reconciliation y soft-delete
-continúan `DEFERRED`.
+al cierre de ese bloque la recovery automática, scheduler/worker, missing
+reconciliation y soft-delete continuaban `DEFERRED`. W-B implementa después
+únicamente reconciliation interna reversible en local.
 
 ## Subfase 2.20U — recuperación administrativa de stale runs
 
@@ -354,3 +355,31 @@ terminal devuelve `already_terminal` sin duplicar eventos. La matriz local
 desde cero fue PASS. La migration también quedó aplicada y validada en remoto
 con fixtures sintéticos completamente limpiados: grants, boundaries, outcomes,
 audits e idempotencia pasaron, sin modificar runs ni datos reales.
+
+## Subfase 2.20W-B — reconciliación segura ligada al run
+
+La migration `20260827150000_safe_listing_reconciliation.sql` agrega a
+`listings` el vínculo nullable `last_seen_sync_run_id`, el estado estricto
+`seen|missing_candidate`, `not_seen_since` y
+`consecutive_not_seen_count`. Las filas históricas quedan `seen`, sin inventar
+un run previo. Una FK compuesta a
+`listing_sync_runs(id, connection_id, store_id, organization_id)` impide vínculos
+cross-tenant, cross-Store o cross-Connection.
+
+Los runs agregan `reconciliation_eligible`, `missing_candidate_count` y
+`reappeared_count`. El primer counter cuenta sólo nuevas transiciones a
+candidate; una ausencia repetida conserva `not_seen_since`, incrementa la
+evidencia consecutiva y no vuelve a contar el candidate. Reappearance reutiliza
+la fila, limpia la evidencia negativa y se cuenta una sola vez.
+
+`persist_listing_sync_batch_for_run` serializa batches positivos contra el run
+`running` y rechaza evidencia superada. La RPC
+`finalize_listing_sync_run_with_reconciliation` bloquea scope/run, valida
+counters y eligibility, reconcilia y emite el audit terminal dentro de una sola
+transacción; un retry terminal no repite efectos. Ambas funciones revocan
+EXECUTE a PUBLIC, `anon` y `authenticated` y conceden sólo a `service_role`.
+El status textual del provider nunca cambia por ausencia. La matriz local W-B
+pasó 14/14. W-C aplicó la migration una sola vez y confirmó remotamente
+estructura, backfill, grants, FK, RPCs, transiciones e idempotencia con fixtures
+sintéticos totalmente eliminados. Las huellas reales post-cleanup coincidieron
+con el baseline. **2.20W está cerrado.**

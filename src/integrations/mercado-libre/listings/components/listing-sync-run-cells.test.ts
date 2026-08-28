@@ -28,6 +28,7 @@ function adminRun(
     staleBefore: '2026-08-27T11:45:00.000Z',
     stale: false,
     terminalAuditPresent: true,
+    reconciliationEligible: true,
     classification: 'NOT_RECOVERABLE',
     eligibleTerminalStatuses: [],
     progress: {
@@ -37,7 +38,9 @@ function adminRun(
       persisted: 1,
       failed: 0,
       pages: 1,
-      batches: 1
+      batches: 1,
+      missingCandidates: 0,
+      reappeared: 0
     },
     errorCode: null,
     storeName: 'Main Store',

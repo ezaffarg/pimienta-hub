@@ -45,6 +45,9 @@ function runRow(overrides: Record<string, unknown> = {}) {
     batches_count: 0,
     error_code: null,
     error_summary: null,
+    reconciliation_eligible: false,
+    missing_candidate_count: 0,
+    reappeared_count: 0,
     updated_at: '2026-08-25T22:00:00.000Z',
     ...overrides
   };
@@ -274,6 +277,10 @@ describe('ListingSyncRunRepository', () => {
       status: 'partial',
       errorCode: 'partial_item_failure'
     });
+    expect(rpc).toHaveBeenCalledWith(
+      'finalize_listing_sync_run_with_reconciliation',
+      expect.objectContaining({ p_reconciliation_eligible: false })
+    );
     await expect(
       repository.finalize({
         scope,

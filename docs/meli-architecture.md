@@ -96,7 +96,7 @@ como limitación de automatización sin bug funcional.
 
 ## Capacidades futuras o diferidas
 
-- missing reconciliation y lifecycle/soft-delete;
+- lifecycle provider-confirmed y soft-delete;
 - scheduler/worker y ejecución periódica;
 - recovery automática de stale runs;
 - resumability con cursor persistente;
@@ -107,6 +107,21 @@ como limitación de automatización sin bug funcional.
 
 Checkpoint persistente no significa resumability: el run actual conserva
 contadores y timestamps, pero no offset, cursor ni `scroll_id`.
+
+## Reconciliation boundary — 2.20W-B
+
+La evidencia positiva sigue el boundary existente
+`integration service → ListingSyncService → ListingRepository → RPC`. El
+adapter de Mercado Libre decide completitud técnica; el dominio común conserva
+sólo `seen|missing_candidate` y nunca deriva estados del provider. La evidencia
+negativa se aplica una vez dentro del finalize atómico, scoped por Organization,
+Store y Connection. No se incorporaron deletes, scheduler, webhooks ni un
+repository paralelo.
+
+W-C confirmó remotamente FK/scopes, grants server-only, transiciones,
+idempotencia y old-run protection. Los fixtures quedaron en 0 y ningún recurso
+real ni provider fue modificado. Esta evidencia no amplía la semántica de
+`missing_candidate`. **2.20W está cerrado.**
 
 ## Contratos y referencias
 

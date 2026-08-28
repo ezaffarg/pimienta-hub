@@ -40,6 +40,7 @@ export interface MercadoLibreListingBackfillProgress {
 
 export interface MercadoLibreListingBackfillResult extends MercadoLibreListingBackfillProgress {
   failures: readonly MercadoLibreListingFailure[];
+  reconciliationEligible: boolean;
 }
 
 export type MercadoLibreListingProgressCallback = (
@@ -74,6 +75,7 @@ export class MercadoLibreListingsService {
       organizationId: string;
       storeId: string;
       connectionId: string;
+      runId?: string;
     },
     onProgress?: MercadoLibreListingProgressCallback
   ): Promise<MercadoLibreListingBackfillResult> {
@@ -91,6 +93,9 @@ export class MercadoLibreListingsService {
     let persisted = 0;
     let pages = 0;
     let batches = 0;
+    let discoveryMode: 'offset' | 'scan' | null = null;
+    let expectedTotal: number | null = null;
+    let discoveryExhausted = false;
 
     const reportProgress = async (): Promise<void> => {
       await onProgress?.({
@@ -113,6 +118,20 @@ export class MercadoLibreListingsService {
         sellerId: runtime.externalAccountId,
         cursor
       });
+      if (discoveryMode !== null && page.mode !== discoveryMode) {
+        throw new MercadoLibreListingsError('invalid_provider_response', 'discovery', false);
+      }
+      discoveryMode = page.mode;
+      if (page.total !== null) {
+        if (expectedTotal !== null && page.total !== expectedTotal) {
+          throw new MercadoLibreListingsError('invalid_provider_response', 'discovery', false);
+        }
+        expectedTotal = page.total;
+      }
+      if (page.exhausted && page.nextCursor !== null) {
+        throw new MercadoLibreListingsError('invalid_provider_response', 'discovery', false);
+      }
+      discoveryExhausted = page.exhausted;
       const newIds = page.itemIds.filter((itemId) => {
         if (discoveredIds.has(itemId)) return false;
         discoveredIds.add(itemId);
@@ -146,10 +165,9 @@ export class MercadoLibreListingsService {
         fetched += details.items.length;
         failures.push(...details.failures);
         if (details.items.length > 0) {
-          const records = await sync.syncAuthorizedConnection({
-            scope,
-            summaries: details.items
-          });
+          const records = parsed.runId
+            ? await sync.syncAuthorizedRun({ scope, runId: parsed.runId, summaries: details.items })
+            : await sync.syncAuthorizedConnection({ scope, summaries: details.items });
           persisted += records.length;
         }
         batches += 1;
@@ -159,7 +177,7 @@ export class MercadoLibreListingsService {
       pages += 1;
       await reportProgress();
       cursor = page.nextCursor;
-      if (cursor?.mode === 'offset') {
+      if (cursor) {
         const cursorKey = JSON.stringify(cursor);
         if (seenCursors.has(cursorKey)) {
           throw new MercadoLibreListingsError('invalid_provider_response', 'discovery', false);
@@ -167,6 +185,17 @@ export class MercadoLibreListingsService {
         seenCursors.add(cursorKey);
       }
     } while (cursor);
+
+    const reconciliationEligible =
+      parsed.runId !== undefined &&
+      discoveryMode !== null &&
+      discoveryExhausted &&
+      expectedTotal !== null &&
+      discoveredIds.size === expectedTotal &&
+      failures.length === 0 &&
+      discoveredIds.size === requested &&
+      requested === fetched &&
+      fetched === persisted;
 
     return {
       discovered: discoveredIds.size,
@@ -176,7 +205,8 @@ export class MercadoLibreListingsService {
       failed: failures.length,
       pages,
       batches,
-      failures
+      failures,
+      reconciliationEligible
     };
   }
 
@@ -211,6 +241,7 @@ const listingInputSchema = z
     organizationId: z.string().trim().min(1).max(255),
     storeId: z.uuid(),
     connectionId: z.uuid(),
+    runId: z.uuid().optional(),
     limit: z.number().int().min(1).max(20).optional()
   })
   .strict();

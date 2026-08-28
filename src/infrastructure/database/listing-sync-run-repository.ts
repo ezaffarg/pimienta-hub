@@ -81,6 +81,9 @@ export interface ListingSyncRunRecord extends ListingScope, ListingSyncProgress 
   lastCheckpointAt: string;
   errorCode: ListingSyncRunErrorCode | null;
   errorSummary: string | null;
+  reconciliationEligible: boolean;
+  missingCandidateCount: number;
+  reappearedCount: number;
   updatedAt: string;
 }
 
@@ -178,7 +181,7 @@ export class ListingSyncRunRepository {
     const outcome = listingSyncRunStartOutcomeSchema.safeParse(row?.outcome);
     try {
       if (!row || !outcome.success) throw new Error('invalid start outcome');
-      return { outcome: outcome.data, run: listingSyncRunRecord(row) };
+      return { outcome: outcome.data, run: listingSyncRunRecord(row, true) };
     } catch {
       throw new ListingSyncRunStartError('RUN_START_MAPPING_FAILED', {
         stage: 'mapping',
@@ -252,7 +255,10 @@ export class ListingSyncRunRepository {
       .limit(parsed.limit);
     if (error) throw new PersistenceError('Listing sync run recovery list failed');
 
-    const runs = z.array(runRowSchema).parse(data).map(listingSyncRunRecord);
+    const runs = z
+      .array(runRowSchema)
+      .parse(data)
+      .map((row) => listingSyncRunRecord(row));
     if (runs.length === 0) return [];
 
     const auditResponse = await this.client
@@ -302,7 +308,7 @@ export class ListingSyncRunRepository {
     const rows = recoveryRowsSchema.safeParse(response.data);
     if (!rows.success) throw new PersistenceError('Listing sync run recovery response invalid');
     const row = rows.data[0];
-    return { outcome: row.outcome, run: listingSyncRunRecord(row) };
+    return { outcome: row.outcome, run: listingSyncRunRecord(row, true) };
   }
 
   async checkpoint(input: {
@@ -332,19 +338,21 @@ export class ListingSyncRunRepository {
     runId: string;
     status: Exclude<ListingSyncRunStatus, 'running'>;
     progress: ListingSyncProgress;
+    reconciliationEligible?: boolean;
     errorCode?: ListingSyncRunOperationalErrorCode | null;
     errorSummary?: string | null;
   }): Promise<ListingSyncRunRecord> {
     const parsed = finalizeInputSchema.parse(input);
     let response;
     try {
-      response = await this.client.rpc('finalize_listing_sync_run', {
+      response = await this.client.rpc('finalize_listing_sync_run_with_reconciliation', {
         p_organization_id: parsed.scope.organizationId,
         p_store_id: parsed.scope.storeId,
         p_connection_id: parsed.scope.connectionId,
         p_run_id: parsed.runId,
         p_status: parsed.status,
         ...progressRpcArguments(parsed.progress),
+        p_reconciliation_eligible: parsed.reconciliationEligible,
         p_error_code: parsed.errorCode ?? null,
         p_error_summary: parsed.errorSummary ?? null
       });
@@ -415,6 +423,7 @@ const finalizeInputSchema = z
     runId: z.uuid(),
     status: z.enum(['succeeded', 'partial', 'failed']),
     progress: progressSchema,
+    reconciliationEligible: z.boolean().default(false),
     errorCode: listingSyncRunOperationalErrorCodeSchema.nullish(),
     errorSummary: z
       .string()
@@ -443,6 +452,12 @@ const finalizeInputSchema = z
       context.addIssue({
         code: 'custom',
         message: 'Partial and failed runs require an error code'
+      });
+    }
+    if (value.reconciliationEligible && value.status !== 'succeeded') {
+      context.addIssue({
+        code: 'custom',
+        message: 'Only succeeded runs can be reconciliation eligible'
       });
     }
   });
@@ -480,6 +495,9 @@ const runRowSchema = z.object({
   batches_count: counterSchema,
   error_code: listingSyncRunErrorCodeSchema.nullable(),
   error_summary: z.string().max(512).nullable(),
+  reconciliation_eligible: z.boolean(),
+  missing_candidate_count: counterSchema,
+  reappeared_count: counterSchema,
   updated_at: timestampSchema
 });
 
@@ -498,10 +516,19 @@ const terminalAuditActions = [
 ] as const;
 
 const listingSyncRunColumns =
-  'id, organization_id, store_id, connection_id, actor_membership_id, kind, idempotency_key, status, started_at, completed_at, last_checkpoint_at, discovered_count, requested_count, fetched_count, persisted_count, failed_count, pages_count, batches_count, error_code, error_summary, updated_at';
+  'id, organization_id, store_id, connection_id, actor_membership_id, kind, idempotency_key, status, started_at, completed_at, last_checkpoint_at, discovered_count, requested_count, fetched_count, persisted_count, failed_count, pages_count, batches_count, error_code, error_summary, reconciliation_eligible, missing_candidate_count, reappeared_count, updated_at';
 
-function listingSyncRunRecord(input: unknown): ListingSyncRunRecord {
-  const row = runRowSchema.parse(input);
+function listingSyncRunRecord(input: unknown, legacyRpcDefaults = false): ListingSyncRunRecord {
+  const row = runRowSchema.parse(
+    legacyRpcDefaults && typeof input === 'object' && input !== null
+      ? {
+          reconciliation_eligible: false,
+          missing_candidate_count: 0,
+          reappeared_count: 0,
+          ...input
+        }
+      : input
+  );
   return {
     id: row.id,
     organizationId: row.organization_id,
@@ -523,6 +550,9 @@ function listingSyncRunRecord(input: unknown): ListingSyncRunRecord {
     batches: row.batches_count,
     errorCode: row.error_code,
     errorSummary: row.error_summary,
+    reconciliationEligible: row.reconciliation_eligible,
+    missingCandidateCount: row.missing_candidate_count,
+    reappearedCount: row.reappeared_count,
     updatedAt: row.updated_at
   };
 }

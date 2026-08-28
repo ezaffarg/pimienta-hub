@@ -111,7 +111,7 @@ Validación base:
 | --- | --- | --- |
 | 0 | Decisiones, fuentes y boundaries | Completada |
 | 1 | Seguridad base server-side | Cerrada |
-| 2 | Persistencia multi-tenant e integración Mercado Libre incremental | **Activa — 2.20V cerrado** |
+| 2 | Persistencia multi-tenant e integración Mercado Libre incremental | **Activa — 2.20W cerrado** |
 | 3–7 | Evolución funcional y productiva posterior | No iniciadas como fases independientes |
 
 La Fase 2 evolucionó mediante subfases explícitamente aprobadas e incorporó
@@ -219,7 +219,7 @@ funcional. **2.20V-A, 2.20V-B y 2.20V están cerrados.**
 
 Permanece diferido y requiere planificación/aprobación propia:
 
-- missing reconciliation y lifecycle/soft-delete;
+- lifecycle provider-confirmed y soft-delete;
 - scheduler, worker/queue y ejecución periódica;
 - recovery automática de runs stale;
 - resumability con cursor persistente;
@@ -229,6 +229,15 @@ Permanece diferido y requiere planificación/aprobación propia:
 
 Checkpoint no equivale a resumability: los runs actuales no persisten offset,
 cursor ni `scroll_id` y una nueva ejecución reinicia discovery.
+
+## G.1 Cierre — 2.20W
+
+2.20W-B implementa evidencia positiva ligada al run, el estado reversible
+`missing_candidate`, counters agregados y reconciliation+finalize atómicos. La
+ausencia no cambia el status provider ni implica cierre, eliminación o removal.
+Runs parciales, fallidos, incompletos o recuperados quedan ineligible. W-C
+aplicó y validó remotamente la migration con cleanup total y recursos reales
+intactos. **2.20W-A, 2.20W-A2, 2.20W-B, 2.20W-C y 2.20W están cerrados.**
 
 ## H. Condiciones generales de avance
 

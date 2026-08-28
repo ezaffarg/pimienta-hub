@@ -77,6 +77,10 @@ export interface ListingRecord extends ListingScope {
   providerCreatedAt: string | null;
   providerUpdatedAt: string | null;
   lastSyncedAt: string;
+  lastSeenSyncRunId: string | null;
+  reconciliationState: 'seen' | 'missing_candidate';
+  notSeenSince: string | null;
+  consecutiveNotSeenCount: number;
 }
 
 export class PersistenceError extends Error {
@@ -422,6 +426,29 @@ export class ListingRepository {
     return requireData(data, error).map(listingRecord);
   }
 
+  async upsertManyForRun(
+    scope: ListingScope,
+    runId: string,
+    listings: readonly ExternalListingSummary[],
+    lastSyncedAt: string
+  ): Promise<ListingRecord[]> {
+    const parsedScope = listingScopeSchema.parse(scope);
+    const parsedRunId = z.uuid().parse(runId);
+    const syncedAt = z.iso.datetime().parse(lastSyncedAt);
+    if (listings.length === 0) return [];
+
+    const rows = listings.map((listing) => listingRow(parsedScope, listing, syncedAt));
+    const { data, error } = await this.client.rpc('persist_listing_sync_batch_for_run', {
+      p_organization_id: parsedScope.organizationId,
+      p_store_id: parsedScope.storeId,
+      p_connection_id: parsedScope.connectionId,
+      p_run_id: parsedRunId,
+      p_synced_at: syncedAt,
+      p_listings: rows
+    });
+    return requireData(data, error).map(listingRecord);
+  }
+
   async findByStore(organizationId: string, storeId: string): Promise<ListingRecord[]> {
     const scope = z
       .object({ organizationId: z.string().min(1).max(255), storeId: z.uuid() })
@@ -472,7 +499,7 @@ const listingScopeSchema = z.object({
 });
 
 const listingColumns =
-  'id, organization_id, store_id, connection_id, external_listing_id, title, status, price, currency_id, available_quantity, sold_quantity, seller_sku, listing_type_id, condition, permalink, thumbnail_url, catalog_product_id, provider_created_at, provider_updated_at, last_synced_at';
+  'id, organization_id, store_id, connection_id, external_listing_id, title, status, price, currency_id, available_quantity, sold_quantity, seller_sku, listing_type_id, condition, permalink, thumbnail_url, catalog_product_id, provider_created_at, provider_updated_at, last_synced_at, last_seen_sync_run_id, reconciliation_state, not_seen_since, consecutive_not_seen_count';
 
 function listingRow(scope: ListingScope, listing: ExternalListingSummary, lastSyncedAt: string) {
   const value = z
@@ -539,6 +566,10 @@ function listingRecord(record: {
   provider_created_at: string | null;
   provider_updated_at: string | null;
   last_synced_at: string;
+  last_seen_sync_run_id: string | null;
+  reconciliation_state: string;
+  not_seen_since: string | null;
+  consecutive_not_seen_count: number;
 }): ListingRecord {
   return {
     id: record.id,
@@ -560,7 +591,11 @@ function listingRecord(record: {
     catalogProductId: record.catalog_product_id,
     providerCreatedAt: record.provider_created_at,
     providerUpdatedAt: record.provider_updated_at,
-    lastSyncedAt: record.last_synced_at
+    lastSyncedAt: record.last_synced_at,
+    lastSeenSyncRunId: z.uuid().nullable().parse(record.last_seen_sync_run_id),
+    reconciliationState: z.enum(['seen', 'missing_candidate']).parse(record.reconciliation_state),
+    notSeenSince: z.iso.datetime({ offset: true }).nullable().parse(record.not_seen_since),
+    consecutiveNotSeenCount: z.number().int().nonnegative().parse(record.consecutive_not_seen_count)
   };
 }
 

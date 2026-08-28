@@ -56,6 +56,9 @@ function run(
     ...emptyProgress,
     errorCode: null,
     errorSummary: null,
+    reconciliationEligible: false,
+    missingCandidateCount: 0,
+    reappearedCount: 0,
     updatedAt: '2026-08-25T22:01:00.000Z',
     ...overrides
   };
@@ -83,7 +86,7 @@ describe('MercadoLibreListingSyncRunService', () => {
     const runs = startedRuns();
     const syncAllActiveConnectionListings = vi.fn(async (_scope, onProgress) => {
       await onProgress(completeProgress);
-      return { ...completeProgress, failures: [] };
+      return { ...completeProgress, failures: [], reconciliationEligible: true };
     });
     const service = new MercadoLibreListingSyncRunService(
       runs as never,
@@ -115,6 +118,7 @@ describe('MercadoLibreListingSyncRunService', () => {
       expect.objectContaining({
         status: 'succeeded',
         progress: completeProgress,
+        reconciliationEligible: true,
         errorCode: null,
         errorSummary: null
       })
@@ -248,35 +252,33 @@ describe('MercadoLibreListingSyncRunService', () => {
     });
   });
 
-  it.each([
-    'CAS_RPC_THROW',
-    'CAS_RPC_ERROR',
-    'CAS_RESPONSE_INVALID',
-    'CAS_REJECTED'
-  ] as const)('persists the safe CAS classification %s without raw material', async (casFailure) => {
-    const runs = startedRuns();
-    const credentialError = Object.assign(
-      new MercadoLibreCredentialError('REFRESH_COMPLETE_RPC_FAILED', 'CAS_COMPLETE', {
-        casFailure
-      }),
-      { rawError: 'raw database detail', ciphertext: 'ciphertext-material' }
-    );
-    const service = new MercadoLibreListingSyncRunService(
-      runs as never,
-      { syncAllActiveConnectionListings: vi.fn().mockRejectedValue(credentialError) } as never
-    );
+  it.each(['CAS_RPC_THROW', 'CAS_RPC_ERROR', 'CAS_RESPONSE_INVALID', 'CAS_REJECTED'] as const)(
+    'persists the safe CAS classification %s without raw material',
+    async (casFailure) => {
+      const runs = startedRuns();
+      const credentialError = Object.assign(
+        new MercadoLibreCredentialError('REFRESH_COMPLETE_RPC_FAILED', 'CAS_COMPLETE', {
+          casFailure
+        }),
+        { rawError: 'raw database detail', ciphertext: 'ciphertext-material' }
+      );
+      const service = new MercadoLibreListingSyncRunService(
+        runs as never,
+        { syncAllActiveConnectionListings: vi.fn().mockRejectedValue(credentialError) } as never
+      );
 
-    await expect(service.execute(input)).resolves.toMatchObject({
-      run: {
-        status: 'failed',
-        errorCode: 'credential_failure',
-        errorSummary: `Credential refresh failed during CAS_COMPLETE/${casFailure}`
-      }
-    });
-    const persisted = JSON.stringify(runs.finalize.mock.calls);
-    expect(persisted).not.toContain('raw database detail');
-    expect(persisted).not.toContain('ciphertext-material');
-  });
+      await expect(service.execute(input)).resolves.toMatchObject({
+        run: {
+          status: 'failed',
+          errorCode: 'credential_failure',
+          errorSummary: `Credential refresh failed during CAS_COMPLETE/${casFailure}`
+        }
+      });
+      const persisted = JSON.stringify(runs.finalize.mock.calls);
+      expect(persisted).not.toContain('raw database detail');
+      expect(persisted).not.toContain('ciphertext-material');
+    }
+  );
 
   it.each(['reused', 'already_running'] as const)(
     'returns %s without executing another backfill',
@@ -346,7 +348,7 @@ describe('MercadoLibreListingSyncRunService', () => {
       {
         syncAllActiveConnectionListings: vi.fn(async (_scope, onProgress) => {
           await onProgress(completeProgress);
-          return { ...completeProgress, failures: [] };
+          return { ...completeProgress, failures: [], reconciliationEligible: true };
         })
       } as never
     );
@@ -380,7 +382,7 @@ describe('MercadoLibreListingSyncRunService', () => {
       {
         syncAllActiveConnectionListings: vi
           .fn()
-          .mockResolvedValue({ ...completeProgress, failures: [] })
+          .mockResolvedValue({ ...completeProgress, failures: [], reconciliationEligible: true })
       } as never
     );
     const error = await service.execute(input).catch((cause: unknown) => cause);
@@ -405,7 +407,7 @@ describe('MercadoLibreListingSyncRunService', () => {
     });
     const syncAllActiveConnectionListings = vi
       .fn()
-      .mockResolvedValue({ ...completeProgress, failures: [] });
+      .mockResolvedValue({ ...completeProgress, failures: [], reconciliationEligible: true });
     const service = new MercadoLibreListingSyncRunService(
       runs as never,
       {

@@ -10,6 +10,7 @@ const scope = {
   storeId: '11111111-1111-4111-8111-111111111111',
   connectionId: '22222222-2222-4222-8222-222222222222'
 };
+const runId = '33333333-3333-4333-8333-333333333333';
 
 const summary = {
   externalId: 'external_listing_1',
@@ -83,6 +84,23 @@ describe('ListingRepository', () => {
       repository.upsertMany(scope, [summary], '2026-08-24T00:00:00.000Z')
     ).rejects.toBeInstanceOf(PersistenceError);
   });
+
+  it('persists positive evidence through the scoped run-aware RPC', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
+    const repository = new ListingRepository({ rpc } as never);
+
+    await expect(
+      repository.upsertManyForRun(scope, runId, [summary], '2026-08-24T00:00:00.000Z')
+    ).resolves.toEqual([]);
+    expect(rpc).toHaveBeenCalledWith('persist_listing_sync_batch_for_run', {
+      p_organization_id: scope.organizationId,
+      p_store_id: scope.storeId,
+      p_connection_id: scope.connectionId,
+      p_run_id: runId,
+      p_synced_at: '2026-08-24T00:00:00.000Z',
+      p_listings: [expect.objectContaining({ external_listing_id: summary.externalId })]
+    });
+  });
 });
 
 describe('ListingSyncService', () => {
@@ -97,5 +115,24 @@ describe('ListingSyncService', () => {
     });
 
     expect(upsertMany).toHaveBeenCalledWith(scope, [summary], '2026-08-24T00:00:00.000Z');
+  });
+
+  it('binds positive persistence to the current run when requested by the orchestrator', async () => {
+    const upsertManyForRun = vi.fn().mockResolvedValue([]);
+    const service = new ListingSyncService({ upsertManyForRun } as never);
+
+    await service.syncAuthorizedRun({
+      scope,
+      runId,
+      summaries: [summary],
+      syncedAt: '2026-08-24T00:00:00.000Z'
+    });
+
+    expect(upsertManyForRun).toHaveBeenCalledWith(
+      scope,
+      runId,
+      [summary],
+      '2026-08-24T00:00:00.000Z'
+    );
   });
 });

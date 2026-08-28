@@ -49,6 +49,14 @@ La 2.5 agrega el modelo de Connection: Store 1:N Connections y FK compuesta `(st
 - Permanecen diferidos los webhooks, otros dominios/providers y las capacidades
   de sync marcadas como futuras en la documentación vigente.
 
+2.20W-B extiende el mismo aislamiento a evidencia de reconciliation: un Listing
+sólo puede referenciar un sync run de su propia Organization, Store y Connection
+mediante FK compuesta. Los RPC positivos y terminales repiten los tres predicados
+y permanecen exclusivamente bajo `service_role`; no se agregó acceso directo
+desde browser. W-C confirmó remotamente los rechazos cross-Organization,
+cross-Store y cross-Connection; los fixtures quedaron en 0 y los recursos
+reales permanecieron intactos. **2.20W está cerrado.**
+
 # Bootstrap First Owner
 
 Flujo validado: Usuario autenticado → Clerk → Organization activa → `org:admin` server-side → IDs confiables → RPC bootstrap → advisory transaction lock por Organization → membership Owner persistente. Browser, body, query y formularios no eligen Organization, usuario ni rol. Bootstrap sólo crea el primer Owner; una Organization puede tener uno o más Owners mediante un futuro flujo administrativo. Una membership no-Owner existente no se promociona automáticamente.
