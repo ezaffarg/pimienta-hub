@@ -80,7 +80,8 @@ export class MercadoLibreListingsError extends Error {
     public readonly kind: MercadoLibreListingsErrorKind,
     public readonly stage: MercadoLibreListingsStage,
     public readonly retryable: boolean,
-    public readonly status: number | null = null
+    public readonly status: number | null = null,
+    public readonly retryAfterMilliseconds: number | null = null
   ) {
     super(kind);
     this.name = 'MercadoLibreListingsError';
@@ -365,9 +366,14 @@ export class MercadoLibreListingsClient {
       }
 
       if (!response.ok) {
-        const providerError = errorForStatus(response.status, stage);
+        const retryAfter = response.headers.get('retry-after');
+        const providerError = errorForStatus(
+          response.status,
+          stage,
+          parseRetryAfter(retryAfter, this.now())
+        );
         if (!providerError.retryable || attempt === this.maxAttempts) throw providerError;
-        await this.waitBeforeRetry(attempt, response.headers.get('retry-after'));
+        await this.waitBeforeRetry(attempt, retryAfter);
         continue;
       }
 
@@ -396,10 +402,17 @@ export class MercadoLibreListingsClient {
 
 function errorForStatus(
   status: number,
-  stage: MercadoLibreListingsStage
+  stage: MercadoLibreListingsStage,
+  retryAfterMilliseconds: number | null = null
 ): MercadoLibreListingsError {
   if (status === 429) {
-    return new MercadoLibreListingsError('provider_rate_limited', stage, true, status);
+    return new MercadoLibreListingsError(
+      'provider_rate_limited',
+      stage,
+      true,
+      status,
+      retryAfterMilliseconds
+    );
   }
   if (status >= 500) {
     return new MercadoLibreListingsError('provider_server_error', stage, true, status);

@@ -277,6 +277,38 @@ describe('MercadoLibreListingsClient', () => {
     expect(sleep).toHaveBeenCalledWith(2000);
   });
 
+  it('exposes only the parsed Retry-After duration after the final 429', async () => {
+    const client = new MercadoLibreListingsClient(
+      {
+        apiBaseUrl: 'https://api.example.test',
+        maxAttempts: 1,
+        now: () => Date.parse('2026-08-28T12:00:00.000Z')
+      },
+      vi
+        .fn()
+        .mockResolvedValue(new Response(null, { status: 429, headers: { 'retry-after': '120' } }))
+    );
+
+    const error = await client
+      .discoverSellerListingIds({ accessToken: 'token', sellerId: '123' })
+      .catch((cause) => cause);
+    expect(error).toBeInstanceOf(MercadoLibreListingsError);
+    expect(error).toMatchObject({ retryAfterMilliseconds: 120_000 });
+  });
+
+  it.each([null, 'invalid'])('falls back safely for Retry-After %s', async (retryAfter) => {
+    const headers = retryAfter === null ? undefined : { 'retry-after': retryAfter };
+    const client = new MercadoLibreListingsClient(
+      { apiBaseUrl: 'https://api.example.test', maxAttempts: 1 },
+      vi.fn().mockResolvedValue(new Response(null, { status: 429, headers }))
+    );
+
+    const error = await client
+      .discoverSellerListingIds({ accessToken: 'token', sellerId: '123' })
+      .catch((cause) => cause);
+    expect(error).toMatchObject({ retryAfterMilliseconds: null });
+  });
+
   it('retries 5xx with deterministic exponential backoff and jitter', async () => {
     const sleep = vi.fn().mockResolvedValue(undefined);
     const fetcher = vi

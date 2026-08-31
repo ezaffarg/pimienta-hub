@@ -17,7 +17,11 @@ const tokenSchema = z
 const currentUserSchema = z
   .object({
     id: z.union([z.string(), z.number()]),
-    nickname: z.string().trim().min(1).max(255).optional()
+    nickname: z.string().trim().min(1).max(255).optional(),
+    site_id: z
+      .string()
+      .trim()
+      .regex(/^[A-Z]{3}$/)
   })
   .passthrough();
 
@@ -49,6 +53,7 @@ export interface MercadoLibreTokenResponse {
 export interface MercadoLibreCurrentUser {
   externalAccountId: string;
   displayName?: string;
+  siteId: string;
 }
 
 export class MercadoLibreOAuthClient {
@@ -192,7 +197,8 @@ export class MercadoLibreOAuthClient {
 
     return {
       externalAccountId: String(parsed.data.id),
-      displayName: parsed.data.nickname
+      displayName: parsed.data.nickname,
+      siteId: parsed.data.site_id
     };
   }
 }

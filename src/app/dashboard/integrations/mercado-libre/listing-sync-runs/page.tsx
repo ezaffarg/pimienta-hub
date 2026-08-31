@@ -4,6 +4,8 @@ import type { SearchParams } from 'nuqs/server';
 import PageContainer from '@/components/layout/page-container';
 import { DataTableSkeleton } from '@/components/ui/table/data-table-skeleton';
 import { getQueryClient } from '@/lib/query-client';
+import { getMercadoLibreEventOperationsSummary } from '@/integrations/mercado-libre/events/admin-service';
+import { EventOperationsSummary } from '@/integrations/mercado-libre/events/components/event-operations-summary';
 import { listingSyncRunAdminQueryOptions } from '@/integrations/mercado-libre/listings/admin-queries';
 import {
   listingSyncRunAdminListQuerySchema,
@@ -29,21 +31,27 @@ export default async function ListingSyncRunsPage({
     sort: scalar(raw.sort)
   });
   const queryClient = getQueryClient();
-  await queryClient.fetchQuery({
-    ...listingSyncRunAdminQueryOptions(filters),
-    queryFn: () => listMercadoLibreListingSyncRuns(filters)
-  });
+  const [, eventOperations] = await Promise.all([
+    queryClient.fetchQuery({
+      ...listingSyncRunAdminQueryOptions(filters),
+      queryFn: () => listMercadoLibreListingSyncRuns(filters)
+    }),
+    getMercadoLibreEventOperationsSummary()
+  ]);
 
   return (
     <PageContainer
       pageTitle='Listing Sync Runs'
       pageDescription='Read-only operational history for Mercado Libre listing synchronization.'
     >
-      <HydrationBoundary state={dehydrate(queryClient)}>
-        <Suspense fallback={<DataTableSkeleton columnCount={11} rowCount={10} filterCount={4} />}>
-          <ListingSyncRunsTable />
-        </Suspense>
-      </HydrationBoundary>
+      <div className='flex flex-col gap-4'>
+        <EventOperationsSummary summary={eventOperations} />
+        <HydrationBoundary state={dehydrate(queryClient)}>
+          <Suspense fallback={<DataTableSkeleton columnCount={11} rowCount={10} filterCount={4} />}>
+            <ListingSyncRunsTable />
+          </Suspense>
+        </HydrationBoundary>
+      </div>
     </PageContainer>
   );
 }

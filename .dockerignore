@@ -1,6 +1,8 @@
 # Dependencies (installed inside Docker)
 node_modules/
 .pnpm-store/
+*.log
+logs/
 
 # Build outputs (generated during docker build)
 .next/
@@ -15,6 +17,9 @@ __tests__/
 __mocks__/
 *.test.*
 *.spec.*
+tmp/
+temp/
+.tmp/
 
 # Git and editors
 .git/
@@ -24,11 +29,7 @@ __mocks__/
 .idea/
 
 # Environment variables
-.env
-.env*.local
-.env.development
-.env.test
-.env.production.local
+.env*
 
 # Docker files
 Dockerfile*
@@ -50,6 +51,7 @@ docs/
 .eslintcache
 .swc/
 .turbo/
+graphify-out/
 
 # TypeScript build metadata
 *.tsbuildinfo

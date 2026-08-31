@@ -175,13 +175,16 @@ describe('MercadoLibreOAuthClient', () => {
   it('normalizes the current user identity and rejects malformed provider responses', async () => {
     const fetcher = vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 123, nickname: '  ML Test  ' })))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 123, nickname: '  ML Test  ', site_id: 'MLA' }))
+      )
       .mockResolvedValueOnce(new Response(JSON.stringify({ nickname: 'missing id' })));
     const client = new MercadoLibreOAuthClient(config, fetcher);
 
     await expect(client.getCurrentUser('test-access-token')).resolves.toEqual({
       externalAccountId: '123',
-      displayName: 'ML Test'
+      displayName: 'ML Test',
+      siteId: 'MLA'
     });
     await expect(client.getCurrentUser('test-access-token')).rejects.toThrow(
       MercadoLibreProviderError

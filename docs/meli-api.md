@@ -188,3 +188,96 @@ negativa y terminaliza el run en la misma transacción. Runs parciales, fallidos
 incompletos o recuperados administrativamente nunca producen candidates. W-C
 validó remotamente ambos boundaries con fixtures sintéticos eliminados, cero
 provider calls y recursos reales intactos. **2.20W está cerrado.**
+
+## Integration event intake foundation — 2.20X-B
+
+El contrato server-only recibe un envelope Mercado Libre `items` validado de
+forma estricta, verifica `application_id`, extrae sólo un resource
+`/items/{id}` canónico y resuelve la Connection activa por
+`provider + external_account_id`. Organization, Store y Connection se derivan
+de esa fila persistida; no son autoridad desde el evento.
+
+El repository usa `intake_integration_event` y devuelve `ACCEPTED` o
+`DUPLICATE`. La deduplicación durable no depende de `attempts` ni del
+timestamp local de recepción. X-B no expone callback HTTP, ACK público, worker,
+provider fetch ni actualización de Listings.
+
+## Public items callback — 2.20X-C
+
+`POST /api/integrations/mercado-libre/notifications/items` recibe JSON de hasta
+16 KiB y reutiliza íntegramente el service X-B. `ACCEPTED` y `DUPLICATE`
+responden 200 vacío. Payload, application o binding inválidos también reciben
+200 sin persistencia para cortar retries permanentes; fallos de configuración,
+resolución o intake responden 503 para preservar el retry del provider.
+
+La ruta no usa Clerk, no expone IDs internos y no llama a Mercado Libre. El
+contrato oficial disponible recomienda HMAC-SHA256, pero no publica header,
+canonicalización ni secreto implementable; no se inventó una firma. Rate
+limiting distribuido y procesamiento permanecen diferidos.
+
+## Incremental event processor — 2.20X-D
+
+El servicio server-only controlado procesa un `eventId` persistido; no existe
+route pública de procesamiento ni worker automático. Claim y lease son
+atómicos. Tras revalidar el binding del evento, reutiliza credenciales, client
+y normalización Mercado Libre canónicos para consultar únicamente el item
+canónico persistido.
+
+La persistencia terminal aplica freshness CAS por `provider_updated_at`:
+`APPLY`, `STALE_NOOP` o `EQUIVALENT_NOOP`. Timestamp ausente o igualdad con
+contenido conflictivo fallan cerrado. Un 404 no modifica Listing ni infiere
+status, ausencia, candidate o eliminación. Los fallos seguros distinguen
+retryable de permanentes sin exponer respuestas, tokens ni texto arbitrario.
+
+X-D quedó validado sólo en local con provider mockeado. Scheduler, retry
+dispatch, `missed_feeds`, endpoint administrativo y aplicación remota siguen
+fuera de alcance.
+
+## Retries y missed_feeds — 2.20X-E
+
+Los transient failures conservan status `failed`, código seguro, attempts y
+`next_retry_at`. La base calcula backoff determinista y el Retry-After
+normalizado por el client actúa como piso. `list_due_integration_event_retries`
+lista hasta 100 IDs ordenados, pero no reclama ni incrementa attempts; el batch
+server-only reutiliza el claim y processor X-D.
+
+La recuperación invocable usa el endpoint oficial
+`GET /missed_feeds?app_id={id}&topic=items&site_id={site}&offset={n}&limit=10`.
+Para `items`, `site_id` es obligatorio. La identidad `/users/me` se coteja con
+la Connection y aporta el site; cada mensaje se reduce a campos canónicos y
+vuelve al intake X-B. Un batch procesa hasta diez páginas y devuelve
+`exhausted=false + nextOffset` sin declarar completitud si queda trabajo. La
+retención oficial es de hasta dos días, por lo que el
+full scan y reconciliation siguen siendo la última red de seguridad.
+
+No existe scheduler, cron o loop activo. Toda la validación X-E fue local con
+fixtures y provider mockeado.
+
+## Event maintenance orchestration — 2.20X-F
+
+`runIncrementalEventMaintenance` coordina de forma server-only y acotada hasta
+10 Connections activas. Por ciclo dispone de 25 eventos `received`, 25 retries
+due, 10 páginas de `missed_feeds` y 45 segundos totales. El orden es received,
+retries, missed feeds y, si queda presupuesto, eventos recién recuperados. Una
+falla se aísla por evento o Connection y sólo persiste códigos y summaries
+seguros.
+
+El read model administrativo agrega backlog y el último maintenance run para
+Owner/Manager en la pantalla existente de Listing Sync Runs. Employee y Client
+quedan denegados por membership persistente. F3-B agregó
+`POST /api/internal/maintenance/incremental-events` como boundary técnico para
+el futuro job de Coolify: exige Bearer secret dedicado, rechaza bodies, no usa
+Clerk ni autoridad tenant del caller y sólo devuelve estados sanitizados. La
+ruta debe bloquearse en el ingress público; ningún trigger real está activo.
+
+## Maintenance stale reclaim — 2.20X-F2b
+
+El orquestador actualiza `last_checkpoint_at` sólo después de etapas naturales
+de progreso; no existe heartbeat loop. Si `start` encuentra un run existente,
+`reclaim_stale_integration_event_maintenance_run` puede terminalizarlo tras diez
+minutos sin checkpoint y el servicio reintenta start una sola vez.
+
+El cutoff se calcula dentro de PostgreSQL y no es input del caller. Reclaim no
+procesa eventos, retries o missed feeds, no reinicia leases y no escribe
+Listings ni provider. En F2b el deployment seguía sin seleccionar y no existía
+trigger; F3-A/F3-B seleccionaron Coolify e implementaron sólo el boundary local.

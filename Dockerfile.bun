@@ -1,3 +1,5 @@
+# DEPRECATED: kept temporarily for historical parity only.
+# Dockerfile is the sole canonical production image.
 # ============================================
 # Stage 1: Install dependencies
 # ============================================

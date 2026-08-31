@@ -76,9 +76,48 @@ Historial: [W-A audit](2.20w-a-listing-reconciliation-design-schema-audit.md),
 [W-B implementation](2.20w-b-safe-run-aware-listing-reconciliation.md).
 Estado: W-B IMPLEMENTATION + LOCAL VALIDATION y W-C REMOTE VALIDATION PASS;
 W-A, W-A2, W-B, W-C y 2.20W CLOSED.
+
+# 2.20X — Incremental Sync & Notifications
+
+[X-A](2.20x-a-incremental-sync-notifications-design-audit.md) resolvió el
+diseño. [X-B](2.20x-b-integration-event-intake-foundation.md) implementa y
+valida localmente la foundation server-only de intake durable para eventos
+Mercado Libre `items`. Estado: X-B LOCAL IMPLEMENTATION + VALIDATION PASS; el
+callback público específico quedó implementado en
+[X-C](2.20x-c-mercado-libre-items-public-callback.md) con validación local PASS.
+[X-D](2.20x-d-incremental-event-processing-freshness-cas.md) agrega
+procesamiento server-only controlado y freshness CAS, también con validación
+local PASS. Retry scheduling y `missed_feeds` quedaron implementados como
+foundation controlada en
+[X-E](2.20x-e-retries-missed-feeds-recovery.md), con validación local PASS.
+[X-F](2.20x-f-scheduler-event-observability.md) agrega orchestration acotada,
+maintenance runs persistentes y el resumen administrativo Owner/Manager, con
+validación local PASS. El trigger scheduler/cron permanece bloqueado hasta
+seleccionar el deployment productivo canónico; no existe ejecución automática
+ni route pública.
+[X-F2](2.20x-f2-deployment-scheduler-decision.md) confirmó que el deployment
+productivo no está seleccionado y dejó la decisión Vercel Pro vs Docker/VPS al
+usuario antes de F3. No implementó trigger.
+[X-F2b](2.20x-f2b-maintenance-run-stale-reclaim.md) implementó y validó
+localmente checkpoints y reclaim atómico de maintenance runs abandonados. El
+deployment fue seleccionado después en
+[X-F3-A](2.20x-f3a-coolify-docker-deployment-readiness-audit.md): Hostinger VPS,
+Docker y Coolify. El audit quedó PASS, con implementación de Dockerfile,
+healthcheck, migrations controladas y scheduler interno diferidos a F3-B.
+[X-F3-B](2.20x-f3b-coolify-docker-production-implementation.md) implementó y
+validó localmente el Dockerfile standalone canónico, healthcheck y boundary
+interno machine-authenticated. No aplicó migrations ni configuró Coolify,
+Traefik, scheduler o provider reales; esos gates quedan para F3-C.
+[X-F3-B2](2.20x-f3b2-product-rename-audit.md) auditó el rename propuesto a
+Pimienta Hub sin ejecutarlo. Recomienda resolver branding/dominio y completar el
+rename controlado antes de F3-C; código, migrations y sistemas externos quedaron
+intactos.
 [X-F3-B2-R1](2.20x-f3b2-r1-controlled-product-rename.md) aplica únicamente el
 branding activo y package identity de Pimienta Hub. Dominio, asset OpenGraph,
 GitHub, carpeta local, Supabase y sistemas externos permanecen diferidos.
 [X-F3-B2-R2](2.20x-f3b2-r2-structural-github-rename.md) renombra la skill propia
 a `pimienta-hub-architecture`; el repositorio GitHub y la carpeta local se
 mantienen pendientes hasta completar sus gates explícitos.
+[X-F3-B3](2.20x-f3b3-accumulated-x-closure.md) cierra el working tree acumulado
+X/F3-B después de completar R1/R2 y los renames de repositorio y carpeta local
+a Pimienta Hub. F3-C remoto todavía no inicia.

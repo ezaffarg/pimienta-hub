@@ -1,8 +1,18 @@
 # Deployment
 
-The starter deploys to Vercel out of the box, or anywhere Docker runs. `next.config.ts` sets `output: 'standalone'`, so production builds are optimized for self-hosting.
+The application can deploy to Vercel or anywhere Docker runs. When
+`BUILD_STANDALONE=true`, `next.config.ts` enables standalone output for
+self-hosting.
 
-## Vercel (Recommended)
+## Production decision status
+
+**Selected target:** Hostinger VPS → Ubuntu LTS → Docker → Coolify. The local
+Docker foundation is implemented and validated, but public production, TLS,
+domain, firewall, remote migrations and the real scheduler remain unvalidated.
+Vercel is not the canonical production platform unless a future decision
+explicitly changes this target.
+
+## Vercel (non-canonical alternative)
 
 1. Connect the repository to Vercel
 2. Add environment variables in the dashboard
@@ -12,40 +22,87 @@ For other platforms, see the [Next.js deployment docs](https://nextjs.org/docs/a
 
 ## Environment Variables for Production
 
-Ensure these are set in your deployment platform:
+Build-time values are limited to `BUILD_STANDALONE`, the required
+`NEXT_PUBLIC_*` values and optional Sentry public metadata. If source maps are
+uploaded, provide `SENTRY_AUTH_TOKEN` as a BuildKit secret; never pass it as an
+image `ARG`.
 
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-- `CLERK_SECRET_KEY`
-- All `NEXT_PUBLIC_*` variables for client-side access
-- `SENTRY_*` variables if using error tracking
-
-Sentry source maps are uploaded automatically in CI.
+Runtime-only configuration includes Clerk secrets, Supabase URL and
+`service_role`, Mercado Libre client/redirect settings, the credential master
+key, `INTERNAL_SCHEDULER_SECRET`, Sentry runtime settings, `PORT`, `HOSTNAME`
+and `NODE_ENV`. Coolify must inject these values at runtime; only variable
+names and safe examples belong in the repository.
 
 ## Docker
 
-Two production-ready Dockerfiles are included: `Dockerfile` (Node.js) and `Dockerfile.bun` (Bun). Pass `NEXT_PUBLIC_*` variables as `--build-arg` at build time and runtime secrets via `-e` at run time.
+`Dockerfile` is the single canonical path. It pins Bun 1.3.14 for locked
+installation and build, then runs the Next.js standalone output on the
+repository-declared Node 22 major as the non-root `node` user.
+`Dockerfile.bun` is deprecated and is not a production alternative.
 
-Build the image:
+Safe local build example:
 
 ```bash
-# Node.js
 docker build \
-  --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxx \
-  -t shadcn-dashboard .
-
-# OR Bun
-docker build -f Dockerfile.bun \
-  --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxx \
+  --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_safe_dummy \
+  --build-arg NEXT_PUBLIC_APP_URL=http://localhost:3000 \
   -t pimienta-hub .
 ```
 
-Run the container:
+The runtime image contains only `public`, `.next/standalone` and
+`.next/static`, binds `0.0.0.0:3000`, and runs `node server.js`. It declares a
+Node-native healthcheck against `GET /api/health`; no package installation,
+migration or privileged capability occurs at startup. Persistent volume:
+none; Supabase remains the persistence authority. Coolify owns restart and
+deployment lifecycle.
 
-```bash
-docker run -d -p 3000:3000 \
-  -e NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxx \
-  -e CLERK_SECRET_KEY=sk_live_xxxxx \
-  --restart unless-stopped \
-  --name shadcn-dashboard \
-  shadcn-dashboard
-```
+Future Coolify contract:
+
+- Build Pack: Dockerfile; path: `./Dockerfile`.
+- Port: `3000`; healthcheck: `GET /api/health`.
+- Persistent volume: none.
+- Scheduler cadence: every five minutes.
+- Invocation: `POST /api/internal/maintenance/incremental-events` over the
+  internal Docker/Coolify network with `Authorization: Bearer
+  <INTERNAL_SCHEDULER_SECRET>`.
+
+## Scheduler boundary — 2.20X-F3-B
+
+The app-side boundary exists at
+`POST /api/internal/maintenance/incremental-events`. It performs timing-safe
+Bearer validation with the dedicated runtime secret, rejects request bodies,
+does not use Clerk or caller tenant authority, and directly invokes
+`runIncrementalEventMaintenance`. Responses are limited to safe status values.
+
+The route is intended only for internal machine traffic. Production Traefik
+must block it from public ingress, while the Coolify job calls the service by
+its internal hostname every five minutes. The existing 45-second execution
+budget and ten-minute stale threshold remain unchanged. No real job has been
+configured or executed.
+
+Before enabling the job, use this controlled deployment order:
+
+1. Backup and preflight.
+2. Apply the pending migrations through the authorized migration gate.
+3. Verify schema, RPCs and security.
+4. Deploy the application image.
+5. Verify `GET /api/health`.
+6. Enable the scheduler.
+7. Observe the first bounded executions.
+
+Migrations never run during application startup.
+
+## Remaining production gates
+
+- Configure Coolify restart/resource/log retention and VPS firewall/backups.
+- Align the final HTTPS domain with Clerk, `NEXT_PUBLIC_APP_URL`, Mercado Libre
+  OAuth redirect and the items callback.
+- Apply and validate the pending X-B/D/E/F/F2b migrations through an explicitly
+  authorized remote gate.
+- Configure and validate private scheduler routing after the application and
+  database gates pass.
+
+The detailed audit is recorded in
+[2.20X-F3-A](./prompts/phase-02/2.20x-f3a-coolify-docker-deployment-readiness-audit.md).
+The local implementation checkpoint is recorded in
+[2.20X-F3-B](./prompts/phase-02/2.20x-f3b-coolify-docker-production-implementation.md).

@@ -78,3 +78,33 @@ El provisioning de datos reales permanece bloqueado hasta aprobar la matriz can�
 Para la transición del primer Owner, `bootstrap_first_owner` es la única primitive canónica: deriva actor y Organization de Clerk, exige `org:admin`, y no acepta autoridad desde el navegador. El provisioning normal sigue requiriendo un Owner persistente.
 
 La ruta temporal de 2.13 fue retirada tras validar la idempotencia. No queda endpoint operativo de provisioning inicial; `bootstrap_first_owner` y `provisionMembership()` permanecen como primitivas server-only con responsabilidades separadas.
+
+## Event intake scope — 2.20X-B
+
+La identidad externa localiza una única Connection activa; Organization y Store
+se derivan de ella. La FK compuesta y la RPC repiten el scope completo, rechazan
+cruces de tenant/Store/Connection y permanecen bajo `service_role`. El browser
+y el envelope del provider no eligen tenant ni Store.
+
+El callback X-C conserva ese boundary: no usa Clerk ni acepta IDs de tenant. Un
+body estricto entrega sólo la identidad provider a X-B, que resuelve una única
+Connection activa y deriva Organization, Store y Connection antes del intake.
+
+X-D preserva el mismo scope durante procesamiento: el caller entrega sólo el
+ID interno del evento; claim y completion revalidan Organization, Store,
+Connection, provider y cuenta externa desde filas persistidas. Las FKs
+compuestas y locks evitan aplicar un item a otro tenant o binding. El processor
+no admite IDs de scope aportados por browser o provider y las RPCs permanecen
+exclusivas de `service_role`.
+
+X-E recupera missed feeds para una Connection previamente identificada por
+Organization y vuelve a cargarla tenant-scoped. Store, cuenta externa y site no
+se aceptan como autoridad del caller: se derivan de Connection y `/users/me`,
+se cotejan antes del intake y luego X-B vuelve a resolver el scope persistido.
+Un mismatch de Organization, cuenta, aplicación o site falla antes de intake.
+
+X-F deriva cada maintenance run de una Connection activa persistida; el caller
+no aporta Organization ni Store. El lock, los selects de backlog y el resumen
+repiten el scope completo. La vista administrativa exige sesión, Organization
+y membership persistente Owner/Manager; Employee, Client y fallback quedan
+denegados. Browser y roles Clerk no obtienen acceso directo a tabla o RPCs.

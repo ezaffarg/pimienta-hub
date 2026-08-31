@@ -383,3 +383,98 @@ pasó 14/14. W-C aplicó la migration una sola vez y confirmó remotamente
 estructura, backfill, grants, FK, RPCs, transiciones e idempotencia con fixtures
 sintéticos totalmente eliminados. Las huellas reales post-cleanup coincidieron
 con el baseline. **2.20W está cerrado.**
+
+## Subfase 2.20X-B — intake durable de eventos de integración
+
+La migration `20260828120000_integration_event_intake_foundation.sql` crea
+`integration_events`, scoped por Organization, Store y Connection mediante FK
+compuesta. Conserva sólo metadata canónica segura; no almacena payload raw,
+headers, tokens ni texto libre de error.
+
+X-B creó los estados `received|processed|failed`. La unicidad
+`(provider, application_id, dedupe_key)` hace idempotentes las entregas.
+`intake_integration_event` valida Connection activa, provider, cuenta externa y
+scope antes de insertar; una repetición devuelve la fila como `DUPLICATE`.
+Tabla y RPC están revocadas a PUBLIC, `anon` y `authenticated`, con acceso
+exclusivo de `service_role`.
+
+X-B no define claim/lease, backlog ni procesamiento; quedan diferidos hasta un
+worker con semántica aprobada. La matriz SQL local pasó 9/9 desde reset completo.
+
+2.20X-C no cambia schema ni RPCs: el callback público sólo invoca el intake X-B
+server-only. Ninguna respuesta HTTP expone el ID de `integration_events`, el
+scope persistido ni detalles de base.
+
+## Subfase 2.20X-D — procesamiento incremental y freshness CAS
+
+La migration `20260828150000_incremental_event_processing_freshness_cas.sql`
+extiende el lifecycle a `received|processing|processed|failed` y agrega attempts,
+lease temporal, clasificación retryable y error seguro. Las RPCs
+`claim_integration_event_processing`, `complete_integration_event_listing` y
+`fail_integration_event_processing` están revocadas a PUBLIC, `anon` y
+`authenticated`; sólo `service_role` puede ejecutarlas.
+
+Completion bloquea evento y Listing y usa exclusivamente
+`provider_updated_at`: un dato más nuevo inserta/actualiza la misma fila, uno
+anterior es stale no-op y uno igual sólo es no-op si el payload normalizado es
+equivalente. Timestamp ausente o empate conflictivo no terminalizan ni mutan el
+Listing. Persistencia positiva y `processed` se confirman atómicamente; un 404
+se registra como failure permanente sin inferencia sobre el Listing.
+
+La matriz X-D pasó 16/16 sobre DB local, con regresiones X-B y W-B en verde.
+No hubo apply remoto. Expired-lease reclaim existe; dispatch de retries,
+`next_retry_at`, scheduler y `missed_feeds` permanecen diferidos.
+
+## Subfase 2.20X-E — retries durables
+
+La migration `20260828180000_event_retries_missed_feeds_foundation.sql` agrega
+`next_retry_at`, el índice parcial due y el código seguro `retry_exhausted`.
+No agrega estados: un transient permanece `failed + retryable`; un failure
+permanente o agotado queda `failed + retryable=false` y sin próxima fecha.
+
+`fail_integration_event_processing` programa atómicamente el próximo intento y
+respeta un Retry-After normalizado. El backoff local usa base 30 segundos,
+exponencial, jitter determinista 0–25 %, máximo una hora y máximo cinco claims.
+`list_due_integration_event_retries` valida limit 1..100, ordena por fecha e ID,
+exige Connection activa y no reclama ni modifica attempts. RPCs y tabla siguen
+revocadas a browser y exclusivas de `service_role`.
+
+Missed feeds no requiere tabla ni dedupe nuevos: sus mensajes pasan por
+`intake_integration_event`. La matriz X-E pasó 8/8 tras reset completo; X-D,
+X-B y W-B permanecieron en verde. No hubo apply remoto.
+
+## Subfase 2.20X-F — observabilidad de event maintenance
+
+La migration `20260828210000_event_maintenance_observability.sql` crea
+`integration_event_maintenance_runs`, tenant-bound por Organization, Store y
+Connection. Un índice parcial admite un único run `running` por Connection. El
+`run_number` identity ordena de forma determinista el último run y la selección
+justa aun cuando varias transacciones comparten timestamp.
+
+Los RPCs server-only listan Connections elegibles y backlogs acotados, inician
+y finalizan runs de forma atómica, y entregan el resumen administrativo. El run
+persiste cadence/continuación real de `missed_feeds`, timestamps, counters y
+los únicos códigos `event_processing_failed|missed_feed_failed`; no conserva
+payloads ni errores raw. Tabla, sequence y RPCs están revocados a PUBLIC,
+`anon` y `authenticated` y concedidos sólo a `service_role`.
+
+Reset local y matrices X-F/X-E/X-D/X-B/W-B pasaron 55/55. No hubo apply ni
+validación remota.
+
+## Subfase 2.20X-F2b — stale reclaim de maintenance runs
+
+La migration `20260828223000_maintenance_run_stale_reclaim.sql` reutiliza
+`last_checkpoint_at` y agrega dos RPCs `service_role`-only. La RPC de checkpoint
+acepta exclusivamente counters monotónicos y continuidad controlada. La RPC de
+reclaim recibe sólo el run ID: bloquea la fila, calcula internamente diez
+minutos y terminaliza un stale `running` como `failed` con el código seguro
+`maintenance_stale_reclaimed`.
+
+Counters, último checkpoint, scope y evidencia de missed feeds permanecen
+intactos durante reclaim; sólo cambian status, `completed_at`, error allowlisted
+y `updated_at`. El segundo reclaimer obtiene `already_terminal`. No se agrega
+audit porque maintenance no tenía un modelo de audit propio.
+
+Reset y matriz F2b pasaron 8/8; regresiones SQL X-F/X-E/X-D 32/32. Una carrera
+real con dos conexiones PostgreSQL produjo un ganador `reclaimed` y un perdedor
+`already_terminal`, seguida por cleanup completo. No hubo apply remoto.

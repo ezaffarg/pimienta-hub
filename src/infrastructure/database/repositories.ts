@@ -418,7 +418,7 @@ export class ListingRepository {
     throwOnError(connectionError);
     if (!connection) throw new PersistenceError('Listing scope does not match a connection');
 
-    const rows = listings.map((listing) => listingRow(parsedScope, listing, syncedAt));
+    const rows = listings.map((listing) => listingPersistenceRow(parsedScope, listing, syncedAt));
     const { data, error } = await this.client
       .from('listings')
       .upsert(rows, { onConflict: 'connection_id,external_listing_id' })
@@ -437,7 +437,7 @@ export class ListingRepository {
     const syncedAt = z.iso.datetime().parse(lastSyncedAt);
     if (listings.length === 0) return [];
 
-    const rows = listings.map((listing) => listingRow(parsedScope, listing, syncedAt));
+    const rows = listings.map((listing) => listingPersistenceRow(parsedScope, listing, syncedAt));
     const { data, error } = await this.client.rpc('persist_listing_sync_batch_for_run', {
       p_organization_id: parsedScope.organizationId,
       p_store_id: parsedScope.storeId,
@@ -501,7 +501,11 @@ const listingScopeSchema = z.object({
 const listingColumns =
   'id, organization_id, store_id, connection_id, external_listing_id, title, status, price, currency_id, available_quantity, sold_quantity, seller_sku, listing_type_id, condition, permalink, thumbnail_url, catalog_product_id, provider_created_at, provider_updated_at, last_synced_at, last_seen_sync_run_id, reconciliation_state, not_seen_since, consecutive_not_seen_count';
 
-function listingRow(scope: ListingScope, listing: ExternalListingSummary, lastSyncedAt: string) {
+export function listingPersistenceRow(
+  scope: ListingScope,
+  listing: ExternalListingSummary,
+  lastSyncedAt: string
+) {
   const value = z
     .object({
       externalId: z.string().trim().min(1).max(255),

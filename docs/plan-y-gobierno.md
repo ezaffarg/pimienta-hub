@@ -111,7 +111,7 @@ Validación base:
 | --- | --- | --- |
 | 0 | Decisiones, fuentes y boundaries | Completada |
 | 1 | Seguridad base server-side | Cerrada |
-| 2 | Persistencia multi-tenant e integración Mercado Libre incremental | **Activa — 2.20W cerrado** |
+| 2 | Persistencia multi-tenant e integración Mercado Libre incremental | **Activa — 2.20X-F3-B foundation local implementada; validación remota pendiente** |
 | 3–7 | Evolución funcional y productiva posterior | No iniciadas como fases independientes |
 
 La Fase 2 evolucionó mediante subfases explícitamente aprobadas e incorporó
@@ -238,6 +238,132 @@ ausencia no cambia el status provider ni implica cierre, eliminación o removal.
 Runs parciales, fallidos, incompletos o recuperados quedan ineligible. W-C
 aplicó y validó remotamente la migration con cleanup total y recursos reales
 intactos. **2.20W-A, 2.20W-A2, 2.20W-B, 2.20W-C y 2.20W están cerrados.**
+
+## G.2 Estado — 2.20X-B
+
+2.20X-B implementa localmente la foundation server-only para recibir y
+deduplicar envelopes Mercado Libre `items`: tabla tenant-bound, intake RPC,
+repository canónico y parser/resolver provider-specific. El intake deriva scope
+desde una Connection activa y persiste sólo metadata segura. Reset, matriz SQL,
+tests, suite, typecheck y lint pasaron localmente.
+
+No existe aún callback público, autenticación de entrega, worker, provider
+fetch, procesamiento incremental ni actualización de Listings. Tampoco hubo
+aplicación remota. Esos gates requieren autorización y bloques propios.
+
+## G.3 Estado — 2.20X-C
+
+Existe un único callback público `POST` para notifications Mercado Libre
+`items`. Limita el body, reutiliza validación/resolución/intake X-B y responde
+sin exponer scope ni IDs internos. Los éxitos durables reciben 200; los rechazos
+permanentes reciben ACK sin persistencia y los fallos transitorios reciben 503.
+
+X-C fue validado sólo localmente. No implementa firma propia sin contrato
+oficial verificable, provider fetch, worker, Listing mutation, `missed_feeds`,
+scheduler, rate limiter distribuido ni aplicación remota.
+
+## G.4 Estado — 2.20X-D
+
+X-D implementa localmente un processor server-only controlado con claim/lease,
+revalidación del binding persistido, fetch mediante el client canónico y
+persistencia atómica con freshness CAS por `provider_updated_at`. Soporta APPLY,
+STALE_NOOP y EQUIVALENT_NOOP; empates conflictivos y timestamps ausentes fallan
+cerrado. Un 404 no produce inferencias ni mutaciones de Listing.
+
+Reset, matriz X-D 16/16, regresiones X-B/W-B, 70/70 focalizados, suite 306/306,
+typecheck y lint pasaron. La validación fue local y con provider mockeado. No
+existe scheduler/worker automático, dispatch de retries, `next_retry_at`,
+`missed_feeds`, validación remota ni operación real.
+
+## G.5 Estado — 2.20X-E
+
+X-E agrega localmente retry scheduling durable, selección due limitada y batch
+controlado sobre el processor X-D. El modelo conserva `failed + retryable`,
+respeta Retry-After y terminaliza al quinto claim sin loops infinitos.
+
+También agrega client/service server-only para missed feeds `items`: resuelve
+site mediante identidad oficial de la Connection, pagina de forma acotada y
+reutiliza intake/dedupe X-B. Missed feeds no es source of truth ni reemplaza el
+full scan/reconciliation.
+
+Reset, matrices X-E/X-D/X-B/W-B, focalizados 85/85, suite 333/333, typecheck y
+lint pasaron. Todo fue local y mockeado. Scheduler, cron, ejecución automática,
+UI, validación remota y llamadas reales permanecen fuera de alcance.
+
+## G.6 Estado — 2.20X-F
+
+X-F implementa localmente `runIncrementalEventMaintenance`: un ciclo
+server-only, acotado por Connections, eventos, páginas y duración, con
+aislamiento de fallas y mantenimiento persistente por Connection. Reutiliza
+claim/lease/CAS y retry/missed-feeds existentes sin crear un segundo modelo de
+procesamiento.
+
+El read model Owner/Manager y su resumen se integran en Listing Sync Runs sin
+agregar una acción. Reset y matrices X-F/X-E/X-D/X-B/W-B pasaron 55/55; los
+focalizados X-F 50/50, la suite 351/351, typecheck y lint también pasaron. Todo
+fue local y mockeado.
+
+La decisión del trigger permanece pendiente: deployment documenta Vercel y
+Docker self-hosted sin una plataforma productiva canónica. No existe scheduler
+real, daemon, route pública ni trigger manual; tampoco hubo provider calls,
+apply remoto o Git closure.
+
+## G.7 Decisión pendiente — 2.20X-F2
+
+La auditoría confirmó `DEPLOYMENT_NOT_SELECTED`: Vercel y Docker son opciones
+soportadas, no una selección productiva. El trigger conservará el patrón
+`deployment scheduler → authenticated HTTP route → orchestration service`, sin
+IDs tenant-scoped desde el request. Vercel Cron requiere aprobar Vercel Pro para
+cadencia de pocos minutos; Docker/VPS requiere aprobar host y operación de
+cron/systemd. Supabase Cron queda como alternativa y Netlify Scheduled
+Functions no cubre directamente el budget de 45 segundos.
+
+Antes de F3 se requieren dos decisiones: plataforma productiva y semántica de
+recovery para un maintenance run abandonado entre start/finalize. Después del
+cierre completo de 2.20X, el siguiente bloque funcional es 2.20Y i18n:
+`es-419` principal, `pt-BR` soportado y `en` fallback.
+
+## G.8 Estado — 2.20X-F2b
+
+La semántica local de recovery quedó resuelta con checkpoints monotónicos y un
+reclaim atómico tras diez minutos sin evidencia de vida. El resultado es
+`failed/maintenance_stale_reclaimed`; preserva counters y no toca eventos,
+leases, Listings ni provider. El orquestador reintenta start una sola vez tras
+un reclaim exitoso.
+
+Reset, matriz F2b 8/8, regresiones SQL 32/32, focalizados 11/11, regresión
+TypeScript X-D/E/F 69/69, suite 353/353, typecheck y lint pasaron. El scheduler
+sigue ausente y la migration no fue aplicada remotamente. La decisión de
+deployment pendiente en ese momento fue resuelta después por F3-A.
+
+## G.9 Decisión y audit — 2.20X-F3-A
+
+El target canónico elegido es Hostinger VPS → Ubuntu LTS → Docker → Coolify. El
+laboratorio local WSL2/Coolify/Traefik/Next.js fue aceptado como evidencia de
+viabilidad, no como validación productiva.
+
+El audit recomienda consolidar una imagen Next.js standalone mediante
+`Dockerfile`, con Bun para install/build y Node.js para runtime. Antes de
+producción faltan healthcheck, hardening reproducible, configuración de
+dominio/TLS/secrets, apply controlado de X-B/D/E/F/F2b y el boundary scheduler.
+F3-B debe usar un Coolify scheduled job cada cinco minutos hacia una ruta
+interna machine-authenticated, sin IDs tenant-scoped y no expuesta por Traefik.
+No se implementó ni ejecutó ninguna de esas capacidades en F3-A.
+
+## G.10 Implementación local — 2.20X-F3-B
+
+La foundation local ya usa un único `Dockerfile` canónico: Bun 1.3.14 instala
+y construye con lockfile, y Node 22 ejecuta el standalone como usuario
+non-root. `GET /api/health` no depende de Clerk, DB ni provider. La ruta interna
+`POST /api/internal/maintenance/incremental-events` valida un Bearer secret
+dedicado con comparación timing-safe, no acepta autoridad tenant del caller y
+reutiliza el orquestador acotado existente.
+
+La build y el container locales pasaron; el scheduler real no fue configurado
+ni ejecutado. Coolify, Traefik, dominio/TLS, migrations remotas y deploy
+productivo siguen sujetos a gates explícitos. El orden futuro es
+backup/preflight → apply controlado → verificación → deploy → healthcheck →
+habilitar scheduler → observar. No hay migrations al startup.
 
 ## H. Condiciones generales de avance
 
