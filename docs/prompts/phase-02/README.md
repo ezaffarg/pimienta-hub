@@ -79,3 +79,6 @@ W-A, W-A2, W-B, W-C y 2.20W CLOSED.
 [X-F3-B2-R1](2.20x-f3b2-r1-controlled-product-rename.md) aplica únicamente el
 branding activo y package identity de Pimienta Hub. Dominio, asset OpenGraph,
 GitHub, carpeta local, Supabase y sistemas externos permanecen diferidos.
+[X-F3-B2-R2](2.20x-f3b2-r2-structural-github-rename.md) renombra la skill propia
+a `pimienta-hub-architecture`; el repositorio GitHub y la carpeta local se
+mantienen pendientes hasta completar sus gates explícitos.

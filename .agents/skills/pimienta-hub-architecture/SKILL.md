@@ -1,5 +1,5 @@
 ---
-name: e-ngenieria-architecture
+name: pimienta-hub-architecture
 description: Guía de invariantes arquitectónicas para cambios en rutas, features, servicios, persistencia o integraciones de Pimienta Hub. Úsala para preservar auth, tenancy, Store Scope, boundaries y seguridad server-only; el estado actual se consulta en el repo y sus docs canónicos.
 ---
 
