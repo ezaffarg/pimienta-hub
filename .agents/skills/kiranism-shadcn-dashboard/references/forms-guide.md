@@ -1,6 +1,6 @@
 # Forms Guide
 
-This reference describes the current e-Hub form composition retained from the
+This reference describes the current Pimienta Hub form composition retained from the
 dashboard UI. It is a frontend pattern, not an auth or persistence boundary.
 
 ## Architecture

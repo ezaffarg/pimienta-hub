@@ -14,7 +14,7 @@ Status: DRAFT — USER APPROVAL REQUIRED
 
 ## Membership Matrix
 
-| Person/Alias | Clerk membership | Current source | Proposed e-Hub role | Action | Approval |
+| Person/Alias | Clerk membership | Current source | Proposed Pimienta Hub role | Action | Approval |
 | --- | --- | --- | --- | --- | --- |
 | Current Clerk Admin (ID fuera de Git) | `org:admin` | Persistent | Owner | ALREADY PERSISTENT | COMPLETED |
 

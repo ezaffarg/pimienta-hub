@@ -1,4 +1,4 @@
-# Plan y gobierno de e-ngenieria Hub
+# Plan y gobierno de Pimienta Hub
 
 Este documento gobierna el avance del proyecto: define fases, gates, decisiones
 y alcance. El código y los tests demuestran el estado técnico; las
@@ -9,7 +9,7 @@ mantienen en la documentación especializada.
 
 ### Modelo y límites
 
-e-ngenieria Hub es un SaaS multi-tenant para operar múltiples Stores e
+Pimienta Hub es un SaaS multi-tenant para operar múltiples Stores e
 integraciones e-commerce. El modelo base es:
 
 ```text
@@ -22,7 +22,7 @@ Clerk Organization
 
 - Clerk aporta identidad, sesión, `userId`, Organization activa y membership
   técnica de Organization.
-- `hub_memberships` es la autoridad server-side del business role e-Hub.
+- `hub_memberships` es la autoridad server-side del business role Pimienta Hub.
 - Owner y Manager tienen Store Scope sobre todas las Stores de su Organization.
 - Employee y Client sólo tienen las Stores asignadas.
 - Permission y Store Scope son controles independientes.

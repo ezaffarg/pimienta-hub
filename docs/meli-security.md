@@ -22,7 +22,7 @@ Históricamente, la Subfase 1.2 introdujo el contexto server-side. El estado vig
 
 ## Subfase 1.3A — RBAC base
 
-Clerk continúa resolviendo la sesión, Organization y membership en servidor; e-Hub controla los roles de negocio y sus permisos. El mapping temporal es `org:admin -> Owner` y `org:member -> Employee`. Manager y Client son roles aprobados del e-Hub, pero no se resuelven automáticamente desde Clerk hasta que exista una fuente propia aprobada. Un rol Clerk desconocido se deniega por defecto.
+Clerk continúa resolviendo la sesión, Organization y membership en servidor; Pimienta Hub controla los roles de negocio y sus permisos. El mapping temporal es `org:admin -> Owner` y `org:member -> Employee`. Manager y Client son roles aprobados de Pimienta Hub, pero no se resuelven automáticamente desde Clerk hasta que exista una fuente propia aprobada. Un rol Clerk desconocido se deniega por defecto.
 
 La policy inicial usa permisos estables: `products.read`, `products.write`, `users.read` y `users.write`. Owner tiene todos; Manager tiene lectura/escritura de productos y lectura de usuarios; Employee solo lectura de productos; Client no recibe permisos globales antes de Resource Scope. Los handlers validan el permiso en servidor y devuelven `403 AUTHORIZATION_DENIED` cuando no está permitido. Resource Scope, Store y asignaciones siguen fuera de esta subfase.
 

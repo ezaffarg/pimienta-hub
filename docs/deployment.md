@@ -36,7 +36,7 @@ docker build \
 # OR Bun
 docker build -f Dockerfile.bun \
   --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxx \
-  -t shadcn-dashboard .
+  -t pimienta-hub .
 ```
 
 Run the container:

@@ -1,7 +1,7 @@
 ---
 name: kiranism-shadcn-dashboard
 description: >-
-  Guide for reusing the Kiranism-derived UI patterns in e-ngenieria Hub:
+  Guide for reusing the Kiranism-derived UI patterns in Pimienta Hub:
   dashboard pages, tables, forms, navigation, themes, React Query hydration,
   and shadcn composition. Use for frontend work under the dashboard; do not use
   it as authority for business auth, tenancy, Store Scope, integrations,
@@ -11,12 +11,12 @@ description: >-
 # Kiranism Dashboard UI Guide
 
 This skill captures reusable UI and starter conventions retained by
-e-ngenieria Hub. It is not an architecture or security skill.
+Pimienta Hub. It is not an architecture or security skill.
 
 ## Authority and scope
 
 Before applying a pattern, read `REGLAS.md`, `AGENTS.md` and the relevant code.
-If this skill conflicts with those sources or the approved e-Hub architecture,
+If this skill conflicts with those sources or the approved Pimienta Hub architecture,
 stop and report the contradiction.
 
 This skill may guide:
@@ -38,7 +38,7 @@ It does **not** govern:
 - OAuth, refresh, sync or provider writes.
 
 Client-side navigation filtering and `PageContainer` access props are UX only.
-Every protected operation must enforce the e-Hub server-side authorization
+Every protected operation must enforce the Pimienta Hub server-side authorization
 flow independently.
 
 ## Where UI code goes
@@ -191,7 +191,7 @@ boolean filters. Reuse current table examples before adding variants.
 
 Navigation lives in `src/config/nav-config.ts` and may hide items based on
 Clerk context for UX. That visibility does not authorize a route, resource or
-mutation. Do not model e-Hub business roles, Permission or Store Scope from
+mutation. Do not model Pimienta Hub business roles, Permission or Store Scope from
 Kiranism nav properties.
 
 Items without an access presentation rule may remain visible, but the server

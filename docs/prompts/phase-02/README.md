@@ -76,3 +76,6 @@ Historial: [W-A audit](2.20w-a-listing-reconciliation-design-schema-audit.md),
 [W-B implementation](2.20w-b-safe-run-aware-listing-reconciliation.md).
 Estado: W-B IMPLEMENTATION + LOCAL VALIDATION y W-C REMOTE VALIDATION PASS;
 W-A, W-A2, W-B, W-C y 2.20W CLOSED.
+[X-F3-B2-R1](2.20x-f3b2-r1-controlled-product-rename.md) aplica únicamente el
+branding activo y package identity de Pimienta Hub. Dominio, asset OpenGraph,
+GitHub, carpeta local, Supabase y sistemas externos permanecen diferidos.

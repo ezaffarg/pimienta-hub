@@ -1,6 +1,6 @@
 # Arquitectura Mercado Libre
 
-Mercado Libre es el primer provider de e-ngenieria Hub. Esta documentación
+Mercado Libre es el primer provider de Pimienta Hub. Esta documentación
 define invariantes y separa capacidades implementadas de trabajo futuro. El
 estado operativo actual se resume en [codex-handoff.md](./codex-handoff.md).
 
@@ -138,4 +138,4 @@ todos los providers a soportar los mismos recursos.
 - [OAuth](./meli-mercadolibre-OAuth/API.md)
 
 MercadoCuentas es sólo referencia funcional/producto. No es proveedor de datos,
-API, dependencia ni backend de e-Hub.
+API, dependencia ni backend de Pimienta Hub.

@@ -1,4 +1,4 @@
-# Handoff de Codex — e-ngenieria Hub
+# Handoff de Codex — Pimienta Hub
 
 Snapshot breve para iniciar una nueva sesión. No sustituye el código, los
 tests, [REGLAS.md](../REGLAS.md), [AGENTS.md](../AGENTS.md) ni el
@@ -6,7 +6,7 @@ tests, [REGLAS.md](../REGLAS.md), [AGENTS.md](../AGENTS.md) ni el
 
 ## Producto
 
-e-ngenieria Hub es un SaaS multi-tenant para operar múltiples Stores y
+Pimienta Hub es un SaaS multi-tenant para operar múltiples Stores y
 conexiones e-commerce. Mercado Libre es el primer provider implementado.
 
 ```text

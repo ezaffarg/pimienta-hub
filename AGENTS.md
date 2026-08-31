@@ -1,11 +1,11 @@
 # AGENTS.md — Manual operativo de agentes
 
-Este archivo define cómo trabajar en **e-ngenieria Hub**. Es una guía operativa:
+Este archivo define cómo trabajar en **Pimienta Hub**. Es una guía operativa:
 no reemplaza la arquitectura, el plan, las reglas ni la documentación técnica.
 
 ## 1. Snapshot del proyecto
 
-e-ngenieria Hub es un SaaS operativo multi-tenant para administrar múltiples
+Pimienta Hub es un SaaS operativo multi-tenant para administrar múltiples
 Stores e integraciones e-commerce con aislamiento por Organization.
 
 Stack vigente:
@@ -19,7 +19,7 @@ Stack vigente:
 - Bun como package manager preferido.
 
 El repositorio deriva de Kiranism como origen/upstream, pero el producto y sus
-reglas son los de e-ngenieria Hub.
+reglas son los de Pimienta Hub.
 
 ## 2. Fuentes, autoridad y conflictos
 
@@ -66,7 +66,7 @@ sistema, revisar y usar la skill relevante cuando exista.
 
 Una skill es una ayuda, no autoridad normativa. Debe subordinarse a
 `REGLAS.md`, al plan, a decisiones explícitamente aprobadas, a la arquitectura
-de e-Hub y a la evidencia vigente del código y los tests.
+de Pimienta Hub y a la evidencia vigente del código y los tests.
 
 Si una skill contradice alguna de esas fuentes, detenerse y reportarlo. No
 aplicar ciegamente patrones genéricos. Esto es especialmente importante para

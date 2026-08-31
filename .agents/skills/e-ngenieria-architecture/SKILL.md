@@ -1,11 +1,11 @@
 ---
 name: e-ngenieria-architecture
-description: Guía de invariantes arquitectónicas para cambios en rutas, features, servicios, persistencia o integraciones de e-ngenieria Hub. Úsala para preservar auth, tenancy, Store Scope, boundaries y seguridad server-only; el estado actual se consulta en el repo y sus docs canónicos.
+description: Guía de invariantes arquitectónicas para cambios en rutas, features, servicios, persistencia o integraciones de Pimienta Hub. Úsala para preservar auth, tenancy, Store Scope, boundaries y seguridad server-only; el estado actual se consulta en el repo y sus docs canónicos.
 ---
 
-# e-ngenieria Hub Architecture
+# Pimienta Hub Architecture
 
-Esta skill ayuda a aplicar las invariantes de e-ngenieria Hub. No es autoridad
+Esta skill ayuda a aplicar las invariantes de Pimienta Hub. No es autoridad
 normativa ni snapshot de fase. Antes de usarla, leer `REGLAS.md`, `AGENTS.md` y
 `docs/plan-y-gobierno.md`; ante una contradicción material, detenerse y
 reportarla.
@@ -34,7 +34,7 @@ provider sin autorización explícita.
 - Clerk aporta authentication, session, `userId`, Organization activa y
   membership técnica de Clerk Organization.
 - Clerk Organization representa el tenant de identidad.
-- `hub_memberships` es la autoridad server-side del business role e-Hub:
+- `hub_memberships` es la autoridad server-side del business role Pimienta Hub:
   Owner, Manager, Employee o Client.
 - Owner y Manager tienen Store Scope sobre todas las Stores de su Organization.
 - Employee y Client sólo tienen scope sobre Stores asignadas.

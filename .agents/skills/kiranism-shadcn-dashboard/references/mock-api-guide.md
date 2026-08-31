@@ -2,7 +2,7 @@
 
 > **Demo-only reference.** Use this guide only when the user explicitly asks
 > for mock/demo behavior. Mocks are not productive persistence, tenancy, RBAC,
-> Store Scope or provider access. New e-Hub product features must use their
+> Store Scope or provider access. New Pimienta Hub product features must use their
 > approved internal server/service boundary; Mercado Libre code belongs in
 > `src/integrations/` and DB access in `src/infrastructure/`.
 
@@ -264,6 +264,6 @@ const mutation = useMutation({
 });
 ```
 
-For productive e-Hub data, replace this demo source with the approved internal
+For productive Pimienta Hub data, replace this demo source with the approved internal
 endpoint/service boundary. Components must never import mock constants,
 provider DTOs or privileged repositories directly.

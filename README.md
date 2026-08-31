@@ -1,11 +1,11 @@
-# e-ngenieria Hub
+# Pimienta Hub
 
-e-ngenieria Hub es un SaaS/hub operativo multi-tenant para administrar
+Pimienta Hub es un SaaS/hub operativo multi-tenant para administrar
 múltiples Stores y conexiones e-commerce desde una única plataforma. Mercado
 Libre es el primer provider implementado; la arquitectura queda preparada para
 otros canales.
 
-## Qué es e-ngenieria Hub
+## Qué es Pimienta Hub
 
 El equipo interno gestiona clientes y sus Stores desde un mismo Hub. Cada
 cliente sólo accede a las Stores que tiene asignadas. La plataforma integra

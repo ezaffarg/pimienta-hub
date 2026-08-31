@@ -16,7 +16,7 @@ Debe centralizar:
 Flujo de datos:
 
 ```text
-Mercado Libre DTO -> mapper -> modelo canonico de e-Hub
+Mercado Libre DTO -> mapper -> modelo canonico de Pimienta Hub
 ```
 
 No usar `src/lib/api-client.ts` para llamar directamente a Mercado Libre; es solo referencia del BFF interno actual.

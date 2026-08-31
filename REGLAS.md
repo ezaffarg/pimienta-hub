@@ -1,6 +1,6 @@
 # Reglas de arquitectura y seguridad
 
-Estas reglas son obligatorias para cualquier cambio de e-ngenieria Hub.
+Estas reglas son obligatorias para cualquier cambio de Pimienta Hub.
 
 ## Prohibido
 
@@ -25,10 +25,10 @@ Estas reglas son obligatorias para cualquier cambio de e-ngenieria Hub.
 - Todas las integraciones externas viven en `src/integrations/`.
 - Clerk es la fuente de identidad, autenticación, sesión, `userId` y
   Organization activa; su membership técnica no sustituye los roles de
-  negocio e-Hub.
+  negocio Pimienta Hub.
 - Clerk Organizations representa el tenant.
 - `hub_memberships` es la fuente definitiva server-side del business role
-  e-Hub: `Owner`, `Manager`, `Employee` y `Client`.
+  Pimienta Hub: `Owner`, `Manager`, `Employee` y `Client`.
 - Supabase se usa únicamente como PostgreSQL/persistencia; Supabase Auth está
   prohibido. `service_role` es server-only y RLS/constraints complementan el
   aislamiento según el modelo vigente.

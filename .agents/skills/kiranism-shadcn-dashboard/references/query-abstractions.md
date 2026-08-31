@@ -31,7 +31,7 @@ export function invoiceListOptions(filters: InvoiceFilters) {
 ### Usage — compose at the call site
 
 ```ts
-// Current e-Hub standard
+// Current Pimienta Hub standard
 const { data } = useSuspenseQuery(invoiceOptions(id));
 
 // Extra options can be spread when compatible with suspense
@@ -146,7 +146,7 @@ const { mutate } = useMutation({
 | Compose extra options at the call site via spread             | Full TS inference without manual generics                              |
 | Import `getQueryClient()` in mutation files                   | Handles SSR/client correctly without prop drilling                     |
 | Co-locate `queryKey` inside `queryOptions`                    | Typed key reuse in `invalidateQueries`, `setQueryData`, `getQueryData` |
-| Use `useSuspenseQuery` in current e-Hub pages                | Matches server prefetch, hydration and Suspense boundaries             |
+| Use `useSuspenseQuery` in current Pimienta Hub pages         | Matches server prefetch, hydration and Suspense boundaries             |
 | Custom hooks may be built on `queryOptions` when useful      | Hooks for component convenience, options for shared configuration      |
 
 `useQuery` may still be valid for an exceptional non-Suspense flow, but it is

@@ -29,7 +29,7 @@ El único Resource Scope implementado es Organization. Los mocks tenantizados so
 
 ## Snapshot histórico — decisiones aprobadas para Fase 2
 
-`hub_memberships` es la autoridad de roles e-Hub por Organization; Clerk conserva AuthN e identidad. Owner y Manager tienen Store Scope implícito para todas las Stores de su Organization, sujeto a permissions. Employee y Client requieren `store_assignments` explícitos; sin membership o assignment aplicable, el resultado es deny. El bootstrap del primer Owner está implementado con estrategia concurrente; el mapping Clerk sigue como fallback transitorio para usuarios aún no provisionados y no inventa assignments.
+`hub_memberships` es la autoridad de roles Pimienta Hub por Organization; Clerk conserva AuthN e identidad. Owner y Manager tienen Store Scope implícito para todas las Stores de su Organization, sujeto a permissions. Employee y Client requieren `store_assignments` explícitos; sin membership o assignment aplicable, el resultado es deny. El bootstrap del primer Owner está implementado con estrategia concurrente; el mapping Clerk sigue como fallback transitorio para usuarios aún no provisionados y no inventa assignments.
 
 `store_assignments` deberá relacionar membership, Store y `organization_id` con FKs compuestas, de modo que no pueda unir entidades de tenants distintos. `storeId` del request solo identifica el objetivo: el servidor comprueba Organization, membership, permiso y Store Scope antes de operar. La defensa primaria será server-only + queries tenant-scoped + constraints; RLS se difiere porque el service role actual la bypassa.
 
@@ -63,7 +63,7 @@ Flujo validado: Usuario autenticado → Clerk → Organization activa → `org:a
 
 ## 2.10 — Autoridad primaria de roles persistentes
 
-El flujo canónico de autorización es `usuario autenticado → Organization activa de Clerk → consulta tenant-scoped de hub_memberships(organizationId, clerkUserId) → rol e-Hub → permission → Store Scope`. `hub_memberships` es la autoridad primaria: una membership válida devuelve Owner, Manager, Employee o Client y Clerk no puede sobrescribirla.
+El flujo canónico de autorización es `usuario autenticado → Organization activa de Clerk → consulta tenant-scoped de hub_memberships(organizationId, clerkUserId) → rol Pimienta Hub → permission → Store Scope`. `hub_memberships` es la autoridad primaria: una membership válida devuelve Owner, Manager, Employee o Client y Clerk no puede sobrescribirla.
 
 El mapping `org:admin → Owner` y `org:member → Employee` permanece sólo como fallback transitorio cuando la consulta de membership terminó correctamente y no encontró fila. Un error de persistencia no equivale a membership ausente: falla cerrado y no intenta fallback. Un rol persistente o Clerk desconocido se deniega. La fuente interna de rol es `persistent` o `clerk-fallback`; no constituye un input ni un dato controlable por el navegador.
 

@@ -2,15 +2,15 @@
 
 ## Límite de uso
 
-MercadoCuentas es **REFERENCIA FUNCIONAL / DE PRODUCTO**. No es API, backend, dependencia, proveedor ni fuente de datos de e-ngenieria Hub. La investigación observó pantallas, navegación, DevTools, HAR y 86 screenshots relevantes; no equivale a 86 módulos, porque incluye estados, menús, tooltips y continuaciones de pantallas.
+MercadoCuentas es **REFERENCIA FUNCIONAL / DE PRODUCTO**. No es API, backend, dependencia, proveedor ni fuente de datos de Pimienta Hub. La investigación observó pantallas, navegación, DevTools, HAR y 86 screenshots relevantes; no equivale a 86 módulos, porque incluye estados, menús, tooltips y continuaciones de pantallas.
 
 No se llaman, copian ni modelan contratos a partir de endpoints internos o rutas PHP/AJAX históricas. No se almacenan cookies, tokens, headers sensibles, credenciales ni secretos. Las rutas observadas solo sirvieron para inferir responsabilidades de producto.
 
-La traducción correcta es: necesidad observada -> feature propia del e-Hub -> API oficial del provider, datos propios o cálculo propio.
+La traducción correcta es: necesidad observada -> feature propia de Pimienta Hub -> API oficial del provider, datos propios o cálculo propio.
 
 ## Inventario funcional observado
 
-| Área | Necesidades observadas | Interpretación para e-Hub |
+| Área | Necesidades observadas | Interpretación para Pimienta Hub |
 | --- | --- | --- |
 | Dashboard | ventas, unidades, preguntas, visitas, dinero, pendientes y tiempos de respuesta | futuro centro operacional multi-Store |
 | Ventas | ventas abiertas, compradores, presupuestos, reportes, eficiencia, conversión, preparación y facturación | capacidad futura separada; no copiar tablas ni campos |

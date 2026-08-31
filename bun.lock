@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "next-shadcn-dashboard-starter",
+      "name": "pimienta-hub",
       "dependencies": {
         "@ai-sdk/react": "^4.0.47",
         "@base-ui/react": "^1.6.0",
