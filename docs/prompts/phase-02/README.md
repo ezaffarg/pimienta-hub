@@ -121,3 +121,20 @@ mantienen pendientes hasta completar sus gates explícitos.
 [X-F3-B3](2.20x-f3b3-accumulated-x-closure.md) cierra el working tree acumulado
 X/F3-B después de completar R1/R2 y los renames de repositorio y carpeta local
 a Pimienta Hub. F3-C remoto todavía no inicia.
+[X-F3-C1](2.20x-f3c1-remote-production-readiness-audit.md) audita en modo
+read-only la infraestructura productiva real y prepara el plan F3-C2. No
+realiza deployment, migrations remotas ni cambios de providers.
+[X-F3-C-LOCAL-1](2.20x-f3c-local1-coolify-supabase-readiness.md) reemplaza el
+supuesto de VPS por un laboratorio productivo local con Coolify y Supabase
+remoto. Es un preflight read-only; LOCAL-2 queda pendiente.
+[X-F3-C-LOCAL-2A](2.20x-f3c-local2a-pimienta-hub-coolify-deploy.md) autoriza un
+único deployment de Pimienta Hub en Coolify local, sin migrations, providers,
+scheduler ni tunnel. LOCAL-2B conserva el gate remoto separado.
+[X-F3-C-LOCAL-2B](2.20x-f3c-local2b-remote-supabase-migration-gate.md) aplica
+únicamente las cinco migrations X al Supabase remoto linked después de pasar
+backup, auditoría e historial. Providers y runtime funcional quedan fuera.
+[X-F3-C-LOCAL-2B2](2.20x-f3c-local2b2-supabase-key-incident-recovery.md) verifica
+la rotación de la credencial Supabase y corrige la portabilidad remota de la
+matriz de mantenimiento sin cambiar producto ni migrations.
+[X-F3-C-LOCAL-2C](2.20x-f3c-local2c-runtime-validation.md) valida el pipeline
+runtime X en el laboratorio Coolify local contra Supabase remoto.

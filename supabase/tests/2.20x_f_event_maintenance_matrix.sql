@@ -68,7 +68,12 @@ select pg_temp.assert_true(
   (select array_agg(connection_id order by connection_id) = array[
     '90000000-0000-4000-8000-000000000201'::uuid,
     '90000000-0000-4000-8000-000000000202'::uuid
-  ] from public.list_integration_event_maintenance_connections(10)),
+  ] from public.list_integration_event_maintenance_connections(10)
+     where connection_id in (
+       '90000000-0000-4000-8000-000000000201'::uuid,
+       '90000000-0000-4000-8000-000000000202'::uuid,
+       '90000000-0000-4000-8000-000000000203'::uuid
+     )),
   'only active Mercado Libre Connections with identity are candidates'
 );
 \echo 'B bounded Connection candidates: PASS'
