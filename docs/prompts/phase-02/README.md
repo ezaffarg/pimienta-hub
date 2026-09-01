@@ -138,5 +138,15 @@ la rotación de la credencial Supabase y corrige la portabilidad remota de la
 matriz de mantenimiento sin cambiar producto ni migrations.
 [X-F3-C-LOCAL-2C](2.20x-f3c-local2c-runtime-validation.md) valida el pipeline
 runtime X en el laboratorio Coolify local contra Supabase remoto.
+[X-F3-C-LOCAL-2D](2.20x-f3c-local2d-mercado-libre-provider-test.md) valida el
+boundary HTTPS temporal y un único mantenimiento real controlado.
+[X-F3-C-LOCAL-2D2](2.20x-f3c-local2d2-quick-tunnel-host-routing.md) corrige el
+Host de origin del Quick Tunnel sin cambiar Traefik ni Coolify.
+[X-F3-C-LOCAL-2D3](2.20x-f3c-local2d3-mercado-libre-real-provider-test.md)
+autoriza un provider test único sólo después de alinear tunnel y redirect.
+[X-F3-C-LOCAL-2D3A](2.20x-f3c-local2d3a-refresh-cas-persistence-gap.md)
+investiga el gap de persistencia CAS sin nuevas llamadas al provider.
 [X-F3-C-LOCAL-2D3B](2.20x-f3c-local2d3b-refresh-failure-observability.md)
 preserva subtipos seguros de fallo CAS y prepara la reautorización sin ejecutarla.
+[X-F3-C-LOCAL-2D3C7](2.20x-f3c-local2d3c7-maintenance-body-gate-fix.md)
+corrige la detección de body vacío del boundary interno sin ejecutar mantenimiento real.

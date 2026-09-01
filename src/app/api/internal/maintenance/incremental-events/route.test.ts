@@ -65,10 +65,40 @@ describe('incremental event maintenance route', () => {
     expect(clerkMock).not.toHaveBeenCalled();
   });
 
-  it('rejects caller-controlled scope instead of parsing it', async () => {
+  it('accepts Content-Length 0 into the orchestration boundary', async () => {
     const response = await POST(
-      request(`Bearer ${secret}`, JSON.stringify({ organizationId: 'org_untrusted' }))
+      new Request('http://internal/api/internal/maintenance/incremental-events', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${secret}`, 'content-length': '0' }
+      })
     );
+
+    expect(response.status).toBe(200);
+    expect(maintenanceMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts an existing zero-byte body stream into the orchestration boundary', async () => {
+    const response = await POST(
+      new Request('http://internal/api/internal/maintenance/incremental-events', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${secret}` },
+        body: new Uint8Array()
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(maintenanceMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an empty JSON object instead of parsing it', async () => {
+    const response = await POST(request(`Bearer ${secret}`, '{}'));
+
+    expect(response.status).toBe(400);
+    expect(maintenanceMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['arbitrary', '   '])('rejects non-empty body %j', async (body) => {
+    const response = await POST(request(`Bearer ${secret}`, body));
 
     expect(response.status).toBe(400);
     expect(maintenanceMock).not.toHaveBeenCalled();

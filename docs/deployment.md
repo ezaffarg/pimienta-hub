@@ -70,7 +70,7 @@ Future Coolify contract:
 
 The app-side boundary exists at
 `POST /api/internal/maintenance/incremental-events`. It performs timing-safe
-Bearer validation with the dedicated runtime secret, rejects request bodies,
+Bearer validation with the dedicated runtime secret, rejects non-empty request bodies,
 does not use Clerk or caller tenant authority, and directly invokes
 `runIncrementalEventMaintenance`. Responses are limited to safe status values.
 
@@ -79,6 +79,12 @@ must block it from public ingress, while the Coolify job calls the service by
 its internal hostname every five minutes. The existing 45-second execution
 budget and ten-minute stale threshold remain unchanged. No real job has been
 configured or executed.
+
+The future Owner status surface is initially read-only: it reports whether
+incremental sync is active, the five-minute cadence, last run timestamp and
+result, estimated next run, operational/error state and safe counters. Coolify
+executes the scheduler; Pimienta Hub only observes it. Pause, cadence changes
+and manual scheduler configuration are not Owner UI controls.
 
 Before enabling the job, use this controlled deployment order:
 

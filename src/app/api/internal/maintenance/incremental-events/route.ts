@@ -10,7 +10,11 @@ export async function POST(request: Request): Promise<Response> {
   if (!isAuthorized(request.headers.get('authorization'))) {
     return response('unauthorized', 401);
   }
-  if (request.body !== null) return response('invalid_request', 400);
+  try {
+    if ((await request.text()).length > 0) return response('invalid_request', 400);
+  } catch {
+    return response('invalid_request', 400);
+  }
 
   try {
     const result = await runIncrementalEventMaintenance();
