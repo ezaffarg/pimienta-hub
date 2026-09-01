@@ -478,3 +478,17 @@ audit porque maintenance no tenía un modelo de audit propio.
 Reset y matriz F2b pasaron 8/8; regresiones SQL X-F/X-E/X-D 32/32. Una carrera
 real con dos conexiones PostgreSQL produjo un ganador `reclaimed` y un perdedor
 `already_terminal`, seguida por cleanup completo. No hubo apply remoto.
+
+## Subfase 2.20X-F3-C — observabilidad durable de missed feeds
+
+La migration `20260901190000_durable_missed_feed_observability.sql` agrega a
+`integration_event_maintenance_runs` un stage seguro y counters attempted /
+succeeded. Los runs previos mantienen estos counters en NULL para expresar
+UNKNOWN; los nuevos reciben 0. Checkpoint/finalize preservan monotonicidad,
+validan `succeeded <= attempted` y exponen los campos mediante el summary
+tenant-bound. Las firmas nuevas conservan defaults para callers anteriores.
+
+La tabla mantiene RLS deny-by-default y las RPC siguen `SECURITY DEFINER`,
+`search_path=pg_catalog` y `service_role`-only. Reset, matrices local/regresión y
+callers reales `supabase-js -> PostgREST .rpc()` pasaron. La migration quedó
+aplicada al proyecto remoto; el run histórico conserva stage y calls UNKNOWN.

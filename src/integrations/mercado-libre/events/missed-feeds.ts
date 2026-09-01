@@ -53,23 +53,54 @@ export interface MercadoLibreMissedFeedMessage {
   received: string;
 }
 
+export const missedFeedFailureStages = [
+  'connection_resolution',
+  'credential_resolution',
+  'identity_request',
+  'identity_validation',
+  'configuration',
+  'missed_feed_request',
+  'missed_feed_response',
+  'missed_feed_pagination',
+  'event_intake',
+  'other'
+] as const;
+
+export type MercadoLibreMissedFeedFailureStage = (typeof missedFeedFailureStages)[number];
+
 export class MercadoLibreMissedFeedsError extends Error {
   constructor(
     public readonly code:
       | 'configuration_invalid'
       | 'connection_not_found'
       | 'connection_binding_invalid'
+      | 'credential_failed'
       | 'identity_lookup_failed'
       | 'provider_rate_limited'
       | 'provider_unavailable'
       | 'provider_timeout'
       | 'provider_response_invalid'
       | 'pagination_loop'
-      | 'intake_failed'
+      | 'intake_failed',
+    observability: {
+      failureStage?: MercadoLibreMissedFeedFailureStage;
+      providerCallsAttempted?: number;
+      providerCallsSucceeded?: number;
+      providerCallSucceeded?: boolean;
+    } = {}
   ) {
     super(code);
     this.name = 'MercadoLibreMissedFeedsError';
+    this.failureStage = observability.failureStage ?? 'other';
+    this.providerCallsAttempted = observability.providerCallsAttempted ?? 0;
+    this.providerCallsSucceeded = observability.providerCallsSucceeded ?? 0;
+    this.providerCallSucceeded = observability.providerCallSucceeded ?? false;
   }
+
+  readonly failureStage: MercadoLibreMissedFeedFailureStage;
+  readonly providerCallsAttempted: number;
+  readonly providerCallsSucceeded: number;
+  readonly providerCallSucceeded: boolean;
 }
 
 export class MercadoLibreMissedFeedsClient {
@@ -122,10 +153,16 @@ export class MercadoLibreMissedFeedsClient {
     try {
       payload = await response.json();
     } catch {
-      throw new MercadoLibreMissedFeedsError('provider_response_invalid');
+      throw new MercadoLibreMissedFeedsError('provider_response_invalid', {
+        providerCallSucceeded: true
+      });
     }
     const parsed = responseSchema.safeParse(payload);
-    if (!parsed.success) throw new MercadoLibreMissedFeedsError('provider_response_invalid');
+    if (!parsed.success) {
+      throw new MercadoLibreMissedFeedsError('provider_response_invalid', {
+        providerCallSucceeded: true
+      });
+    }
     return parsed.data.messages.map((message) => {
       const { _id: externalEventId } = message;
       return {
@@ -148,6 +185,8 @@ export interface MercadoLibreMissedFeedRecoveryResult {
   duplicates: number;
   exhausted: boolean;
   nextOffset: number | null;
+  providerCallsAttempted: number;
+  providerCallsSucceeded: number;
 }
 
 export interface MercadoLibreMissedFeedRecoveryDependencies {
@@ -177,24 +216,56 @@ export class MercadoLibreMissedFeedRecoveryService {
       })
       .strict()
       .parse(input);
-    const connection = await this.connection(scope.organizationId, scope.connectionId);
+    let providerCallsAttempted = 0;
+    let providerCallsSucceeded = 0;
+    const connection = await this.connection(scope.organizationId, scope.connectionId).catch(
+      (error) => {
+        throw observedFailure(error, 'connection_resolution', 0, 0);
+      }
+    );
     const credentials = this.dependencies.credentials ?? new MercadoLibreCredentialService();
-    const accessToken = await credentials.getValidAccessToken(scope);
+    const accessToken = await credentials.getValidAccessToken(scope).catch(() => {
+      throw observedFailure(
+        new MercadoLibreMissedFeedsError('credential_failed'),
+        'credential_resolution',
+        0,
+        0
+      );
+    });
     const identity = this.dependencies.identity ?? new MercadoLibreOAuthClient();
     let currentUser;
+    providerCallsAttempted += 1;
     try {
       currentUser = await identity.getCurrentUser(accessToken);
-    } catch {
-      throw new MercadoLibreMissedFeedsError('identity_lookup_failed');
+      providerCallsSucceeded += 1;
+    } catch (error) {
+      throw observedFailure(
+        error instanceof MercadoLibreMissedFeedsError
+          ? error
+          : new MercadoLibreMissedFeedsError('identity_lookup_failed'),
+        'identity_request',
+        providerCallsAttempted,
+        providerCallsSucceeded
+      );
     }
     if (currentUser.externalAccountId !== connection.externalAccountId) {
-      throw new MercadoLibreMissedFeedsError('connection_binding_invalid');
+      throw observedFailure(
+        new MercadoLibreMissedFeedsError('connection_binding_invalid'),
+        'identity_validation',
+        providerCallsAttempted,
+        providerCallsSucceeded
+      );
     }
     let siteId;
     try {
       siteId = siteIdSchema.parse(currentUser.siteId);
     } catch {
-      throw new MercadoLibreMissedFeedsError('identity_lookup_failed');
+      throw observedFailure(
+        new MercadoLibreMissedFeedsError('identity_lookup_failed'),
+        'identity_validation',
+        providerCallsAttempted,
+        providerCallsSucceeded
+      );
     }
     let applicationId;
     try {
@@ -202,7 +273,12 @@ export class MercadoLibreMissedFeedRecoveryService {
         (this.dependencies.applicationId ?? (() => getMercadoLibreOAuthConfig().clientId))()
       );
     } catch {
-      throw new MercadoLibreMissedFeedsError('configuration_invalid');
+      throw observedFailure(
+        new MercadoLibreMissedFeedsError('configuration_invalid'),
+        'configuration',
+        providerCallsAttempted,
+        providerCallsSucceeded
+      );
     }
 
     const feeds = this.dependencies.feeds ?? new MercadoLibreMissedFeedsClient();
@@ -214,18 +290,49 @@ export class MercadoLibreMissedFeedRecoveryService {
     const maxPages = scope.maxPages ?? MAX_PAGES;
 
     for (let page = 0; page < maxPages; page += 1) {
-      const messages = await feeds.getItemsPage({
-        accessToken,
-        applicationId,
-        siteId,
-        offset: startOffset + page * PAGE_LIMIT
-      });
+      let messages: readonly MercadoLibreMissedFeedMessage[];
+      providerCallsAttempted += 1;
+      try {
+        messages = await feeds.getItemsPage({
+          accessToken,
+          applicationId,
+          siteId,
+          offset: startOffset + page * PAGE_LIMIT
+        });
+        providerCallsSucceeded += 1;
+      } catch (error) {
+        const normalized =
+          error instanceof MercadoLibreMissedFeedsError
+            ? error
+            : new MercadoLibreMissedFeedsError('provider_unavailable');
+        if (normalized.providerCallSucceeded) providerCallsSucceeded += 1;
+        throw observedFailure(
+          normalized,
+          normalized.providerCallSucceeded ? 'missed_feed_response' : 'missed_feed_request',
+          providerCallsAttempted,
+          providerCallsSucceeded
+        );
+      }
       const signature = messages.map((message) => message.externalEventId).join('|');
       if (messages.length > 0 && pageSignatures.has(signature)) {
-        throw new MercadoLibreMissedFeedsError('pagination_loop');
+        throw observedFailure(
+          new MercadoLibreMissedFeedsError('pagination_loop'),
+          'missed_feed_pagination',
+          providerCallsAttempted,
+          providerCallsSucceeded
+        );
       }
       pageSignatures.add(signature);
-      this.assertPageBinding(messages, connection.externalAccountId!, applicationId, siteId);
+      try {
+        this.assertPageBinding(messages, connection.externalAccountId!, applicationId, siteId);
+      } catch (error) {
+        throw observedFailure(
+          error,
+          'missed_feed_response',
+          providerCallsAttempted,
+          providerCallsSucceeded
+        );
+      }
 
       for (const message of messages) {
         try {
@@ -234,7 +341,12 @@ export class MercadoLibreMissedFeedRecoveryService {
           if (result.outcome === 'ACCEPTED') accepted += 1;
           else duplicates += 1;
         } catch {
-          throw new MercadoLibreMissedFeedsError('intake_failed');
+          throw observedFailure(
+            new MercadoLibreMissedFeedsError('intake_failed'),
+            'event_intake',
+            providerCallsAttempted,
+            providerCallsSucceeded
+          );
         }
       }
       if (messages.length < PAGE_LIMIT) {
@@ -243,7 +355,9 @@ export class MercadoLibreMissedFeedRecoveryService {
           accepted,
           duplicates,
           exhausted: true,
-          nextOffset: null
+          nextOffset: null,
+          providerCallsAttempted,
+          providerCallsSucceeded
         };
       }
     }
@@ -252,7 +366,9 @@ export class MercadoLibreMissedFeedRecoveryService {
       accepted,
       duplicates,
       exhausted: false,
-      nextOffset: startOffset + maxPages * PAGE_LIMIT
+      nextOffset: startOffset + maxPages * PAGE_LIMIT,
+      providerCallsAttempted,
+      providerCallsSucceeded
     };
   }
 
@@ -294,4 +410,18 @@ export class MercadoLibreMissedFeedRecoveryService {
       throw new MercadoLibreMissedFeedsError('connection_binding_invalid');
     }
   }
+}
+
+function observedFailure(
+  error: unknown,
+  failureStage: MercadoLibreMissedFeedFailureStage,
+  providerCallsAttempted: number,
+  providerCallsSucceeded: number
+): MercadoLibreMissedFeedsError {
+  const code = error instanceof MercadoLibreMissedFeedsError ? error.code : 'provider_unavailable';
+  return new MercadoLibreMissedFeedsError(code, {
+    failureStage,
+    providerCallsAttempted,
+    providerCallsSucceeded
+  });
 }

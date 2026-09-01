@@ -26,7 +26,10 @@ describe('EventOperationsSummary', () => {
             processed: 2,
             failed: 1,
             missedFeedAccepted: 1,
-            missedFeedDuplicate: 0
+            missedFeedDuplicate: 0,
+            missedFeedFailureStage: null,
+            providerCallsAttempted: 2,
+            providerCallsSucceeded: 2
           }
         }
       })

@@ -18,15 +18,34 @@ export const integrationEventMaintenanceCountersSchema = z
     skipped: z.number().int().nonnegative(),
     missedFeedAccepted: z.number().int().nonnegative(),
     missedFeedDuplicate: z.number().int().nonnegative(),
-    missedFeedPages: z.number().int().nonnegative()
+    missedFeedPages: z.number().int().nonnegative(),
+    providerCallsAttempted: z.number().int().nonnegative(),
+    providerCallsSucceeded: z.number().int().nonnegative()
   })
-  .strict();
+  .strict()
+  .refine((value) => value.providerCallsSucceeded <= value.providerCallsAttempted, {
+    message: 'Provider call counters invalid'
+  });
 
 export type IntegrationEventMaintenanceCounters = z.infer<
   typeof integrationEventMaintenanceCountersSchema
 >;
 
 export const INTEGRATION_EVENT_MAINTENANCE_STALE_AFTER_MS = 10 * 60 * 1000;
+
+export const missedFeedFailureStageSchema = z.enum([
+  'connection_resolution',
+  'credential_resolution',
+  'identity_request',
+  'identity_validation',
+  'configuration',
+  'missed_feed_request',
+  'missed_feed_response',
+  'missed_feed_pagination',
+  'event_intake',
+  'other'
+]);
+export type MissedFeedFailureStage = z.infer<typeof missedFeedFailureStageSchema>;
 
 export interface IntegrationEventMaintenanceRunStart {
   outcome: 'STARTED' | 'ALREADY_RUNNING' | 'NOT_ELIGIBLE';
@@ -62,6 +81,9 @@ export interface IntegrationEventOperationsSummary {
     failed: number;
     missedFeedAccepted: number;
     missedFeedDuplicate: number;
+    missedFeedFailureStage: MissedFeedFailureStage | null;
+    providerCallsAttempted: number | null;
+    providerCallsSucceeded: number | null;
   };
 }
 
@@ -114,6 +136,7 @@ export class IntegrationEventMaintenanceRepository {
     counters: IntegrationEventMaintenanceCounters;
     missedFeedOffset: number | null;
     lastMissedFeedCheckAt: string | null;
+    missedFeedFailureStage: MissedFeedFailureStage | null;
     errorCode: 'event_processing_failed' | 'missed_feed_failed' | null;
     errorSummary:
       | 'One or more integration events could not be processed'
@@ -137,8 +160,11 @@ export class IntegrationEventMaintenanceRepository {
         p_missed_feed_accepted: parsed.counters.missedFeedAccepted,
         p_missed_feed_duplicate: parsed.counters.missedFeedDuplicate,
         p_missed_feed_pages: parsed.counters.missedFeedPages,
+        p_provider_calls_attempted: parsed.counters.providerCallsAttempted,
+        p_provider_calls_succeeded: parsed.counters.providerCallsSucceeded,
         p_missed_feed_offset: parsed.missedFeedOffset,
         p_last_missed_feed_check_at: parsed.lastMissedFeedCheckAt,
+        p_missed_feed_failure_stage: parsed.missedFeedFailureStage,
         p_error_code: parsed.errorCode,
         p_error_summary: parsed.errorSummary
       })
@@ -154,6 +180,7 @@ export class IntegrationEventMaintenanceRepository {
     counters: IntegrationEventMaintenanceCounters;
     missedFeedOffset: number | null;
     lastMissedFeedCheckAt: string | null;
+    missedFeedFailureStage: MissedFeedFailureStage | null;
   }): Promise<'CHECKPOINTED' | 'ALREADY_TERMINAL' | 'NOT_FOUND'> {
     const parsed = checkpointSchema.parse(input);
     const response = await safeRpc(() =>
@@ -171,8 +198,11 @@ export class IntegrationEventMaintenanceRepository {
         p_missed_feed_accepted: parsed.counters.missedFeedAccepted,
         p_missed_feed_duplicate: parsed.counters.missedFeedDuplicate,
         p_missed_feed_pages: parsed.counters.missedFeedPages,
+        p_provider_calls_attempted: parsed.counters.providerCallsAttempted,
+        p_provider_calls_succeeded: parsed.counters.providerCallsSucceeded,
         p_missed_feed_offset: parsed.missedFeedOffset,
-        p_last_missed_feed_check_at: parsed.lastMissedFeedCheckAt
+        p_last_missed_feed_check_at: parsed.lastMissedFeedCheckAt,
+        p_missed_feed_failure_stage: parsed.missedFeedFailureStage
       })
     );
     return z
@@ -231,7 +261,10 @@ export class IntegrationEventMaintenanceRepository {
             processed: row.last_run_processed!,
             failed: row.last_run_failed!,
             missedFeedAccepted: row.last_run_missed_feed_accepted!,
-            missedFeedDuplicate: row.last_run_missed_feed_duplicate!
+            missedFeedDuplicate: row.last_run_missed_feed_duplicate!,
+            missedFeedFailureStage: row.last_run_missed_feed_failure_stage,
+            providerCallsAttempted: row.last_run_provider_calls_attempted,
+            providerCallsSucceeded: row.last_run_provider_calls_succeeded
           }
         : null
     };
@@ -259,6 +292,7 @@ const finalizeSchema = z
     counters: integrationEventMaintenanceCountersSchema,
     missedFeedOffset: z.number().int().nonnegative().nullable(),
     lastMissedFeedCheckAt: z.iso.datetime({ offset: true }).nullable(),
+    missedFeedFailureStage: missedFeedFailureStageSchema.nullable(),
     errorCode: z.enum(['event_processing_failed', 'missed_feed_failed']).nullable(),
     errorSummary: z
       .enum([
@@ -280,7 +314,8 @@ const checkpointSchema = z
     runId: z.uuid(),
     counters: integrationEventMaintenanceCountersSchema,
     missedFeedOffset: z.number().int().nonnegative().nullable(),
-    lastMissedFeedCheckAt: z.iso.datetime({ offset: true }).nullable()
+    lastMissedFeedCheckAt: z.iso.datetime({ offset: true }).nullable(),
+    missedFeedFailureStage: missedFeedFailureStageSchema.nullable()
   })
   .strict();
 
@@ -307,7 +342,10 @@ const summaryRowsSchema = z
       last_run_processed: z.number().int().nonnegative().nullable(),
       last_run_failed: z.number().int().nonnegative().nullable(),
       last_run_missed_feed_accepted: z.number().int().nonnegative().nullable(),
-      last_run_missed_feed_duplicate: z.number().int().nonnegative().nullable()
+      last_run_missed_feed_duplicate: z.number().int().nonnegative().nullable(),
+      last_run_missed_feed_failure_stage: missedFeedFailureStageSchema.nullable(),
+      last_run_provider_calls_attempted: z.number().int().nonnegative().nullable(),
+      last_run_provider_calls_succeeded: z.number().int().nonnegative().nullable()
     })
   )
   .length(1);

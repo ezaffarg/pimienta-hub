@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import { EVENT_MAINTENANCE_BUDGET, runIncrementalEventMaintenance } from './maintenance-service';
+import { MercadoLibreMissedFeedsError } from './missed-feeds';
 
 const connectionId = '10000000-0000-4000-8000-000000000001';
 const runId = '10000000-0000-4000-8000-000000000002';
@@ -50,7 +51,9 @@ function setup() {
       accepted: 1,
       duplicates: 1,
       exhausted: false,
-      nextOffset: 10
+      nextOffset: 10,
+      providerCallsAttempted: 2,
+      providerCallsSucceeded: 2
     })
   };
   return { maintenance, events, processor, missedFeeds };
@@ -74,7 +77,9 @@ describe('runIncrementalEventMaintenance', () => {
         retryScheduled: 1,
         missedFeedAccepted: 1,
         missedFeedDuplicate: 1,
-        missedFeedPages: 1
+        missedFeedPages: 1,
+        providerCallsAttempted: 2,
+        providerCallsSucceeded: 2
       }
     });
     expect(test.processor.process.mock.calls.map(([id]) => id)).toEqual([
@@ -114,6 +119,47 @@ describe('runIncrementalEventMaintenance', () => {
     expect(test.processor.process).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(test.maintenance.finalize.mock.calls)).not.toContain('token');
     expect(JSON.stringify(test.maintenance.finalize.mock.calls)).not.toContain('feed body');
+  });
+
+  it('records a failed missed-feed attempt and reuses the cadence timestamp safely', async () => {
+    const test = setup();
+    test.events.listReceivedForConnection.mockReset().mockResolvedValue([]);
+    test.events.listDueRetriesForConnection.mockResolvedValue([]);
+    test.missedFeeds.recoverItems.mockRejectedValue(
+      new MercadoLibreMissedFeedsError('provider_unavailable', {
+        failureStage: 'missed_feed_request',
+        providerCallsAttempted: 2,
+        providerCallsSucceeded: 1
+      })
+    );
+
+    await expect(
+      runIncrementalEventMaintenance({
+        ...test,
+        now: () => new Date('2026-08-28T12:00:00Z')
+      })
+    ).resolves.toMatchObject({
+      status: 'failed',
+      counters: {
+        missedFeedAccepted: 0,
+        missedFeedDuplicate: 0,
+        missedFeedPages: 0,
+        providerCallsAttempted: 2,
+        providerCallsSucceeded: 1
+      },
+      safeErrors: ['missed_feed_failed']
+    });
+    expect(test.maintenance.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        missedFeedOffset: null,
+        lastMissedFeedCheckAt: '2026-08-28T12:00:00.000Z',
+        missedFeedFailureStage: 'missed_feed_request',
+        errorCode: 'missed_feed_failed',
+        errorSummary: 'Missed feeds recovery failed safely'
+      })
+    );
+    expect(JSON.stringify(test.maintenance.finalize.mock.calls)).not.toContain('payload');
   });
 
   it('respects total work budgets without an automatic loop', async () => {

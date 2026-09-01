@@ -2,10 +2,14 @@ import 'server-only';
 
 import {
   IntegrationEventMaintenanceRepository,
-  type IntegrationEventMaintenanceCounters
+  type IntegrationEventMaintenanceCounters,
+  type MissedFeedFailureStage
 } from '@/infrastructure/database/integration-event-maintenance-repository';
 import { IntegrationEventProcessingRepository } from '@/infrastructure/database/integration-event-processing-repository';
-import { MercadoLibreMissedFeedRecoveryService } from './missed-feeds';
+import {
+  MercadoLibreMissedFeedsError,
+  MercadoLibreMissedFeedRecoveryService
+} from './missed-feeds';
 import { MercadoLibreEventProcessor, type MercadoLibreEventProcessingResult } from './processor';
 
 export const EVENT_MAINTENANCE_BUDGET = {
@@ -108,6 +112,7 @@ export async function runIncrementalEventMaintenance(
       | null = null;
     let missedFeedOffset = run.missedFeedOffset;
     let lastMissedFeedCheckAt: string | null = null;
+    let missedFeedFailureStage: MissedFeedFailureStage | null = null;
 
     if (receivedRemaining > 0 && withinBudget(now, startedAt)) {
       const selection = await selectEvents(() =>
@@ -126,7 +131,8 @@ export async function runIncrementalEventMaintenance(
         run.runId,
         counters,
         missedFeedOffset,
-        lastMissedFeedCheckAt
+        lastMissedFeedCheckAt,
+        missedFeedFailureStage
       );
     }
 
@@ -149,7 +155,8 @@ export async function runIncrementalEventMaintenance(
         run.runId,
         counters,
         missedFeedOffset,
-        lastMissedFeedCheckAt
+        lastMissedFeedCheckAt,
+        missedFeedFailureStage
       );
     }
 
@@ -164,10 +171,19 @@ export async function runIncrementalEventMaintenance(
         counters.missedFeedPages += result.pages;
         counters.missedFeedAccepted += result.accepted;
         counters.missedFeedDuplicate += result.duplicates;
+        counters.providerCallsAttempted += result.providerCallsAttempted;
+        counters.providerCallsSucceeded += result.providerCallsSucceeded;
         missedPagesRemaining -= result.pages;
         missedFeedOffset = result.exhausted ? null : result.nextOffset;
         lastMissedFeedCheckAt = now().toISOString();
-      } catch {
+      } catch (error) {
+        if (error instanceof MercadoLibreMissedFeedsError) {
+          counters.providerCallsAttempted += error.providerCallsAttempted;
+          counters.providerCallsSucceeded += error.providerCallsSucceeded;
+          missedFeedFailureStage = error.failureStage;
+        } else {
+          missedFeedFailureStage = 'other';
+        }
         safeErrors.add('missed_feed_failed');
         if (errorCode === null) {
           errorCode = 'missed_feed_failed';
@@ -180,7 +196,8 @@ export async function runIncrementalEventMaintenance(
         run.runId,
         counters,
         missedFeedOffset,
-        lastMissedFeedCheckAt
+        lastMissedFeedCheckAt,
+        missedFeedFailureStage
       );
     }
 
@@ -203,7 +220,8 @@ export async function runIncrementalEventMaintenance(
         run.runId,
         counters,
         missedFeedOffset,
-        lastMissedFeedCheckAt
+        lastMissedFeedCheckAt,
+        missedFeedFailureStage
       );
     }
 
@@ -214,6 +232,7 @@ export async function runIncrementalEventMaintenance(
       counters,
       missedFeedOffset,
       lastMissedFeedCheckAt,
+      missedFeedFailureStage,
       errorCode,
       errorSummary
     });
@@ -241,14 +260,16 @@ async function checkpointRun(
   runId: string,
   counters: IntegrationEventMaintenanceCounters,
   missedFeedOffset: number | null,
-  lastMissedFeedCheckAt: string | null
+  lastMissedFeedCheckAt: string | null,
+  missedFeedFailureStage: MissedFeedFailureStage | null
 ): Promise<void> {
   try {
     const outcome = await maintenance.checkpoint({
       runId,
       counters,
       missedFeedOffset,
-      lastMissedFeedCheckAt
+      lastMissedFeedCheckAt,
+      missedFeedFailureStage
     });
     if (outcome !== 'CHECKPOINTED') {
       throw new IncrementalEventMaintenanceError('checkpoint_failed');
@@ -314,7 +335,9 @@ function emptyCounters(): IntegrationEventMaintenanceCounters {
     skipped: 0,
     missedFeedAccepted: 0,
     missedFeedDuplicate: 0,
-    missedFeedPages: 0
+    missedFeedPages: 0,
+    providerCallsAttempted: 0,
+    providerCallsSucceeded: 0
   };
 }
 

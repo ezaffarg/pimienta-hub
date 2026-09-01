@@ -59,7 +59,9 @@ describe('IntegrationEventMaintenanceRepository', () => {
       skipped: 0,
       missedFeedAccepted: 1,
       missedFeedDuplicate: 1,
-      missedFeedPages: 1
+      missedFeedPages: 1,
+      providerCallsAttempted: 2,
+      providerCallsSucceeded: 1
     };
 
     await expect(
@@ -69,6 +71,7 @@ describe('IntegrationEventMaintenanceRepository', () => {
         counters,
         missedFeedOffset: 10,
         lastMissedFeedCheckAt: '2026-08-28T12:00:00.000Z',
+        missedFeedFailureStage: 'missed_feed_request',
         errorCode: 'event_processing_failed',
         errorSummary: 'One or more integration events could not be processed'
       })
@@ -78,6 +81,9 @@ describe('IntegrationEventMaintenanceRepository', () => {
       expect.objectContaining({
         p_run_id: runId,
         p_received_selected: 1,
+        p_missed_feed_failure_stage: 'missed_feed_request',
+        p_provider_calls_attempted: 2,
+        p_provider_calls_succeeded: 1,
         p_error_code: 'event_processing_failed'
       })
     );
@@ -104,7 +110,10 @@ describe('IntegrationEventMaintenanceRepository', () => {
           last_run_processed: 3,
           last_run_failed: 0,
           last_run_missed_feed_accepted: 1,
-          last_run_missed_feed_duplicate: 1
+          last_run_missed_feed_duplicate: 1,
+          last_run_missed_feed_failure_stage: 'identity_request',
+          last_run_provider_calls_attempted: 1,
+          last_run_provider_calls_succeeded: 0
         }
       ],
       error: null
@@ -116,7 +125,14 @@ describe('IntegrationEventMaintenanceRepository', () => {
     await expect(repository.summary('org_test')).resolves.toMatchObject({
       receivedBacklog: 2,
       retryDue: 1,
-      lastRun: { id: runId, processed: 3, errorCode: 'maintenance_stale_reclaimed' }
+      lastRun: {
+        id: runId,
+        processed: 3,
+        errorCode: 'maintenance_stale_reclaimed',
+        missedFeedFailureStage: 'identity_request',
+        providerCallsAttempted: 1,
+        providerCallsSucceeded: 0
+      }
     });
     expect(rpc).toHaveBeenCalledWith('get_integration_event_operations_summary', {
       p_organization_id: 'org_test'
@@ -143,7 +159,9 @@ describe('IntegrationEventMaintenanceRepository', () => {
       skipped: 0,
       missedFeedAccepted: 0,
       missedFeedDuplicate: 0,
-      missedFeedPages: 0
+      missedFeedPages: 0,
+      providerCallsAttempted: 0,
+      providerCallsSucceeded: 0
     };
 
     await expect(
@@ -151,7 +169,8 @@ describe('IntegrationEventMaintenanceRepository', () => {
         runId,
         counters,
         missedFeedOffset: null,
-        lastMissedFeedCheckAt: null
+        lastMissedFeedCheckAt: null,
+        missedFeedFailureStage: null
       })
     ).resolves.toBe('CHECKPOINTED');
     await expect(repository.reclaimStale(runId)).resolves.toBe('RECLAIMED');

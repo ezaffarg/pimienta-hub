@@ -175,7 +175,9 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
       accepted,
       duplicates,
       exhausted: true,
-      nextOffset: null
+      nextOffset: null,
+      providerCallsAttempted: 2,
+      providerCallsSucceeded: 2
     });
     const { externalEventId: _id, ...notification } = message();
     expect(test.intake.intakeItemsNotification).toHaveBeenCalledWith({ _id, ...notification });
@@ -192,6 +194,96 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
       siteId: 'MLA',
       offset: 0
     });
+  });
+
+  it('preserves an identity request failure before any missed-feed page attempt', async () => {
+    const test = setup();
+    test.identity.getCurrentUser.mockRejectedValue(new Error('raw identity payload'));
+
+    const error = await test.service
+      .recoverItems({ organizationId, connectionId })
+      .catch((cause) => cause);
+
+    expect(error).toMatchObject({
+      code: 'identity_lookup_failed',
+      failureStage: 'identity_request',
+      providerCallsAttempted: 1,
+      providerCallsSucceeded: 0
+    });
+    expect(test.identity.getCurrentUser).toHaveBeenCalledTimes(1);
+    expect(test.feeds.getItemsPage).not.toHaveBeenCalled();
+    expect(JSON.stringify(error)).not.toContain('payload');
+  });
+
+  it('records credential failure before any provider call', async () => {
+    const test = setup();
+    test.credentials.getValidAccessToken.mockRejectedValue(new Error('raw credential material'));
+
+    const error = await test.service
+      .recoverItems({ organizationId, connectionId })
+      .catch((cause) => cause);
+
+    expect(error).toMatchObject({
+      code: 'credential_failed',
+      failureStage: 'credential_resolution',
+      providerCallsAttempted: 0,
+      providerCallsSucceeded: 0
+    });
+    expect(test.identity.getCurrentUser).not.toHaveBeenCalled();
+    expect(JSON.stringify(error)).not.toContain('material');
+  });
+
+  it('preserves a missed-feed HTTP failure after one identity and page attempt', async () => {
+    const test = setup();
+    test.feeds.getItemsPage.mockRejectedValue(
+      new MercadoLibreMissedFeedsError('provider_unavailable')
+    );
+
+    await expect(test.service.recoverItems({ organizationId, connectionId })).rejects.toMatchObject(
+      {
+        code: 'provider_unavailable',
+        failureStage: 'missed_feed_request',
+        providerCallsAttempted: 2,
+        providerCallsSucceeded: 1
+      }
+    );
+    expect(test.identity.getCurrentUser).toHaveBeenCalledTimes(1);
+    expect(test.feeds.getItemsPage).toHaveBeenCalledTimes(1);
+    expect(test.intake.intakeItemsNotification).not.toHaveBeenCalled();
+  });
+
+  it('counts an accepted HTTP response that fails missed-feed parsing', async () => {
+    const test = setup();
+    test.feeds.getItemsPage.mockRejectedValue(
+      new MercadoLibreMissedFeedsError('provider_response_invalid', {
+        providerCallSucceeded: true
+      })
+    );
+
+    await expect(test.service.recoverItems({ organizationId, connectionId })).rejects.toMatchObject(
+      {
+        failureStage: 'missed_feed_response',
+        providerCallsAttempted: 2,
+        providerCallsSucceeded: 2
+      }
+    );
+  });
+
+  it('records a successful zero-event page without intake work', async () => {
+    const test = setup([]);
+
+    await expect(test.service.recoverItems({ organizationId, connectionId })).resolves.toEqual({
+      pages: 1,
+      accepted: 0,
+      duplicates: 0,
+      exhausted: true,
+      nextOffset: null,
+      providerCallsAttempted: 2,
+      providerCallsSucceeded: 2
+    });
+    expect(test.identity.getCurrentUser).toHaveBeenCalledTimes(1);
+    expect(test.feeds.getItemsPage).toHaveBeenCalledTimes(1);
+    expect(test.intake.intakeItemsNotification).not.toHaveBeenCalled();
   });
 
   it('fails closed when authenticated identity has no usable site', async () => {

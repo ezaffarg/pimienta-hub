@@ -150,3 +150,7 @@ investiga el gap de persistencia CAS sin nuevas llamadas al provider.
 preserva subtipos seguros de fallo CAS y prepara la reautorización sin ejecutarla.
 [X-F3-C-LOCAL-2D3C7](2.20x-f3c-local2d3c7-maintenance-body-gate-fix.md)
 corrige la detección de body vacío del boundary interno sin ejecutar mantenimiento real.
+[X-F3-C-LOCAL-2D3C9](2.20x-f3c-local2d3c9-missed-feed-failure-diagnostics.md)
+audita stage, conteo provider y cadence del fallo `missed_feed_failed` sin nuevas llamadas reales.
+[X-F3-C-LOCAL-2D3C10](2.20x-f3c-local2d3c10-durable-missed-feed-observability.md)
+agrega observabilidad durable y segura de stage y provider calls mediante una migration forward.

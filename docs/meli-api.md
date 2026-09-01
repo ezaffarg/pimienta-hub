@@ -262,6 +262,13 @@ retries, missed feeds y, si queda presupuesto, eventos recién recuperados. Una
 falla se aísla por evento o Connection y sólo persiste códigos y summaries
 seguros.
 
+La observabilidad durable de missed feeds conserva un stage allowlisted y los
+conteos exactos de requests attempted/succeeded. El attempt se incrementa justo
+antes de `/users/me` o una página `/missed_feeds`; success sólo después de que el
+client boundary acepta la respuesta. Un HTTP exitoso con payload inválido cuenta
+como provider success y falla en `missed_feed_response`. No se conservan bodies,
+headers, tokens ni URLs sensibles.
+
 El read model administrativo agrega backlog y el último maintenance run para
 Owner/Manager en la pantalla existente de Listing Sync Runs. Employee y Client
 quedan denegados por membership persistente. F3-B agregó
