@@ -202,6 +202,16 @@ actual, presencia del lease y si coincide con el lease esperado; no expone el
 UUID del lease ni material de credenciales. El resultado histórico de 2.20K
 permanece **STILL_UNKNOWN**: no había evidencia suficiente para reclasificarlo.
 
+## 2.20X-F3-C-LOCAL-2D3B — observabilidad de completion
+
+El error interno conserva `CAS_RPC_THROW`, `CAS_RPC_ERROR` y
+`CAS_RESPONSE_INVALID`; un `false` normal se clasifica como `CAS_CONFLICT` y no
+como transporte. Para un error explícito de Supabase sólo puede conservar un
+`databaseCode` alfanumérico saneado; descarta `message`, `details`, `hint` y
+cualquier material de credenciales. Los summaries históricos con
+`CAS_REJECTED` siguen siendo legibles. Este cambio no altera SQL, versión,
+lease, atomicidad ni errores públicos.
+
 ## 2.20O — reconnect explícito sobre Connection activa
 
 Una reautorización requiere `purpose=reconnect` explícito. Puede continuar sobre

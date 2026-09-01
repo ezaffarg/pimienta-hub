@@ -252,7 +252,7 @@ describe('MercadoLibreListingSyncRunService', () => {
     });
   });
 
-  it.each(['CAS_RPC_THROW', 'CAS_RPC_ERROR', 'CAS_RESPONSE_INVALID', 'CAS_REJECTED'] as const)(
+  it.each(['CAS_RPC_THROW', 'CAS_RPC_ERROR', 'CAS_RESPONSE_INVALID', 'CAS_CONFLICT'] as const)(
     'persists the safe CAS classification %s without raw material',
     async (casFailure) => {
       const runs = startedRuns();

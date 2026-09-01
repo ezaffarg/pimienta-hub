@@ -162,7 +162,7 @@ const observableCasFailures = new Set<CasCompleteFailureCode>([
   'CAS_RPC_THROW',
   'CAS_RPC_ERROR',
   'CAS_RESPONSE_INVALID',
-  'CAS_REJECTED'
+  'CAS_CONFLICT'
 ]);
 
 function classifyRunFailure(error: unknown): {

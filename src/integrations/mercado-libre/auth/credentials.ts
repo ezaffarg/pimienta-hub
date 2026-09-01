@@ -36,13 +36,14 @@ export interface RefreshErrorDetails {
   httpStatus?: number;
   providerCode?: string;
   casFailure?: CasCompleteFailureCode;
+  databaseCode?: string;
   expectedVersion?: number;
   actualVersion?: number | null;
   leasePresent?: boolean;
   leaseMatches?: boolean;
 }
 
-export type CasCompleteFailureCode = CredentialRefreshCompleteFailureCode | 'CAS_REJECTED';
+export type CasCompleteFailureCode = CredentialRefreshCompleteFailureCode | 'CAS_CONFLICT';
 
 export type RefreshStage =
   | 'READ'
@@ -211,7 +212,12 @@ export class MercadoLibreCredentialService {
         throw new MercadoLibreCredentialError(
           'REFRESH_COMPLETE_RPC_FAILED',
           'CAS_COMPLETE',
-          error instanceof CredentialRefreshCompleteError ? { casFailure: error.code } : {}
+          error instanceof CredentialRefreshCompleteError
+            ? {
+                casFailure: error.code,
+                ...(error.databaseCode ? { databaseCode: error.databaseCode } : {})
+              }
+            : {}
         );
       }
       if (completed) return credentials.accessToken;
@@ -225,11 +231,10 @@ export class MercadoLibreCredentialService {
       if (latest.credentials && isCurrent(latest.credentials, refreshBefore)) {
         return latest.credentials.accessToken;
       }
-      throw new MercadoLibreCredentialError(
-        'REFRESH_CAS_REJECTED',
-        'CAS_COMPLETE',
-        { casFailure: 'CAS_REJECTED', ...latest.diagnostics }
-      );
+      throw new MercadoLibreCredentialError('REFRESH_CAS_REJECTED', 'CAS_COMPLETE', {
+        casFailure: 'CAS_CONFLICT',
+        ...latest.diagnostics
+      });
     } catch (error) {
       if (error instanceof MercadoLibreCredentialError) throw error;
       throw new MercadoLibreCredentialError('REFRESH_UNKNOWN_ERROR', 'PROVIDER_RESPONSE');

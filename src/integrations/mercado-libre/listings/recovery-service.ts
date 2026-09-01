@@ -396,7 +396,7 @@ const safeAdminErrorSummaries = new Set([
   'One or more listing items could not be synchronized'
 ]);
 const safeCredentialErrorSummary =
-  /^Credential refresh failed during (READ|DECRYPT|CLAIM|DOUBLE_CHECK|PROVIDER_REQUEST|PROVIDER_RESPONSE|ENCRYPT|CAS_COMPLETE(?:\/(?:CAS_RPC_THROW|CAS_RPC_ERROR|CAS_RESPONSE_INVALID|CAS_REJECTED))?)$/;
+  /^Credential refresh failed during (READ|DECRYPT|CLAIM|DOUBLE_CHECK|PROVIDER_REQUEST|PROVIDER_RESPONSE|ENCRYPT|CAS_COMPLETE(?:\/(?:CAS_RPC_THROW|CAS_RPC_ERROR|CAS_RESPONSE_INVALID|CAS_CONFLICT|CAS_REJECTED))?)$/;
 
 function sortAdminRuns(
   runs: ListingSyncRunAdminReadModel[],

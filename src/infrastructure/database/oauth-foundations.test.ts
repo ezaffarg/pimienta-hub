@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
-  CredentialRefreshCompleteError,
   OAuthFoundationRepository,
   auditMetadata,
   newOAuthAttemptState
@@ -106,7 +105,15 @@ describe('OAuth foundation validation', () => {
     ['CAS_RPC_THROW', vi.fn().mockRejectedValue(new Error('raw throw detail'))],
     [
       'CAS_RPC_ERROR',
-      vi.fn().mockResolvedValue({ data: null, error: { message: 'raw RPC detail' } })
+      vi.fn().mockResolvedValue({
+        data: null,
+        error: {
+          code: 'PGRST202',
+          message: 'raw RPC detail',
+          details: 'raw details',
+          hint: 'raw hint'
+        }
+      })
     ],
     ['CAS_RESPONSE_INVALID', vi.fn().mockResolvedValue({ data: 'unexpected', error: null })]
   ] as const)('classifies %s without retaining raw RPC material', async (code, rpc) => {
@@ -129,7 +136,10 @@ describe('OAuth foundation validation', () => {
       })
       .catch((caught: unknown) => caught);
 
-    expect(error).toEqual(new CredentialRefreshCompleteError(code));
+    expect(error).toMatchObject({
+      code,
+      databaseCode: code === 'CAS_RPC_ERROR' ? 'PGRST202' : undefined
+    });
     expect(JSON.stringify(error)).not.toContain('raw');
     expect(JSON.stringify(error)).not.toContain('token-plaintext');
     vi.unstubAllEnvs();

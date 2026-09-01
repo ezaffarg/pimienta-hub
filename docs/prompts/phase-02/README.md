@@ -138,3 +138,5 @@ la rotación de la credencial Supabase y corrige la portabilidad remota de la
 matriz de mantenimiento sin cambiar producto ni migrations.
 [X-F3-C-LOCAL-2C](2.20x-f3c-local2c-runtime-validation.md) valida el pipeline
 runtime X en el laboratorio Coolify local contra Supabase remoto.
+[X-F3-C-LOCAL-2D3B](2.20x-f3c-local2d3b-refresh-failure-observability.md)
+preserva subtipos seguros de fallo CAS y prepara la reautorización sin ejecutarla.

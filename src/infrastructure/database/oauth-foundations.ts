@@ -80,10 +80,22 @@ export type CredentialRefreshCompleteFailureCode =
   | 'CAS_RESPONSE_INVALID';
 
 export class CredentialRefreshCompleteError extends Error {
-  constructor(public readonly code: CredentialRefreshCompleteFailureCode) {
+  constructor(
+    public readonly code: CredentialRefreshCompleteFailureCode,
+    public readonly databaseCode?: string
+  ) {
     super(code);
     this.name = 'CredentialRefreshCompleteError';
   }
+}
+
+function safeDatabaseErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object' || !('code' in error)) return undefined;
+  const parsed = z
+    .string()
+    .regex(/^[A-Z0-9]{5,16}$/)
+    .safeParse(error.code);
+  return parsed.success ? parsed.data : undefined;
 }
 
 export interface OnboardingResult {
@@ -372,20 +384,25 @@ export class OAuthFoundationRepository {
     let response;
     try {
       response = await this.client.rpc('complete_integration_secret_refresh', {
-      p_organization_id: parsed.organizationId,
-      p_connection_id: parsed.connectionId,
-      p_expected_version: parsed.expectedVersion,
-      p_lease_id: parsed.leaseId,
-      p_encrypted_access_token: access.ciphertext,
-      p_encrypted_refresh_token: refresh.ciphertext,
-      p_access_token_expires_at: parsed.credentials.accessTokenExpiresAt,
-      p_token_metadata: parsed.credentials.tokenMetadata,
-      p_key_version: access.keyVersion
-    });
+        p_organization_id: parsed.organizationId,
+        p_connection_id: parsed.connectionId,
+        p_expected_version: parsed.expectedVersion,
+        p_lease_id: parsed.leaseId,
+        p_encrypted_access_token: access.ciphertext,
+        p_encrypted_refresh_token: refresh.ciphertext,
+        p_access_token_expires_at: parsed.credentials.accessTokenExpiresAt,
+        p_token_metadata: parsed.credentials.tokenMetadata,
+        p_key_version: access.keyVersion
+      });
     } catch {
       throw new CredentialRefreshCompleteError('CAS_RPC_THROW');
     }
-    if (response.error) throw new CredentialRefreshCompleteError('CAS_RPC_ERROR');
+    if (response.error) {
+      throw new CredentialRefreshCompleteError(
+        'CAS_RPC_ERROR',
+        safeDatabaseErrorCode(response.error)
+      );
+    }
     const completed = z.boolean().safeParse(response.data);
     if (!completed.success) throw new CredentialRefreshCompleteError('CAS_RESPONSE_INVALID');
     return completed.data;

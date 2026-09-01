@@ -261,7 +261,7 @@ describe('MercadoLibreCredentialService', () => {
       code: 'REFRESH_CAS_REJECTED',
       stage: 'CAS_COMPLETE',
       details: {
-        casFailure: 'CAS_REJECTED',
+        casFailure: 'CAS_CONFLICT',
         expectedVersion: 1,
         actualVersion: null,
         leasePresent: false,
@@ -269,10 +269,10 @@ describe('MercadoLibreCredentialService', () => {
       }
     });
 
-    for (const casFailure of [
-      'CAS_RPC_THROW',
-      'CAS_RPC_ERROR',
-      'CAS_RESPONSE_INVALID'
+    for (const [casFailure, databaseCode] of [
+      ['CAS_RPC_THROW', undefined],
+      ['CAS_RPC_ERROR', 'PGRST202'],
+      ['CAS_RESPONSE_INVALID', undefined]
     ] as const) {
       const rpcFailure = new MercadoLibreCredentialService(
         {
@@ -282,20 +282,26 @@ describe('MercadoLibreCredentialService', () => {
             .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
           completeCredentialRefresh: vi
             .fn()
-            .mockRejectedValue(new CredentialRefreshCompleteError(casFailure)),
+            .mockRejectedValue(new CredentialRefreshCompleteError(casFailure, databaseCode)),
           releaseCredentialRefresh: vi.fn().mockResolvedValue(true)
         } as never,
         { refreshAccessToken: vi.fn().mockResolvedValue(refreshResult()) } as never,
         () => now,
         () => connectionId
       );
-      await expect(
-        rpcFailure.getValidAccessToken({ organizationId, connectionId })
-      ).rejects.toMatchObject({
+      const error = await rpcFailure
+        .getValidAccessToken({ organizationId, connectionId })
+        .catch((caught: unknown) => caught);
+      expect(error).toMatchObject({
         code: 'REFRESH_COMPLETE_RPC_FAILED',
         stage: 'CAS_COMPLETE',
-        details: { casFailure }
+        details: {
+          casFailure,
+          ...(databaseCode ? { databaseCode } : {})
+        }
       });
+      expect(JSON.stringify(error)).not.toContain('refresh-token-v1');
+      expect(JSON.stringify(error)).not.toContain('rotated-access-token');
     }
   });
 
@@ -335,7 +341,7 @@ describe('MercadoLibreCredentialService', () => {
         .catch((caught: unknown) => caught);
       expect(error).toMatchObject({
         code: 'REFRESH_CAS_REJECTED',
-        details: { casFailure: 'CAS_REJECTED', expectedVersion: 1, ...testCase.expected }
+        details: { casFailure: 'CAS_CONFLICT', expectedVersion: 1, ...testCase.expected }
       });
       expect(JSON.stringify(error)).not.toContain('refresh-token-v1');
       expect(JSON.stringify(error)).not.toContain('rotated-access-token');
