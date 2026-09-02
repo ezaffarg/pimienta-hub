@@ -53,7 +53,11 @@ function setup() {
       exhausted: false,
       nextOffset: 10,
       providerCallsAttempted: 2,
-      providerCallsSucceeded: 2
+      providerCallsSucceeded: 2,
+      credentialRefreshFailureStage: null,
+      credentialRefreshCasFailure: null,
+      credentialRefreshCallsAttempted: 0,
+      credentialRefreshCallsSucceeded: 0
     })
   };
   return { maintenance, events, processor, missedFeeds };
@@ -155,11 +159,49 @@ describe('runIncrementalEventMaintenance', () => {
         missedFeedOffset: null,
         lastMissedFeedCheckAt: '2026-08-28T12:00:00.000Z',
         missedFeedFailureStage: 'missed_feed_request',
+        credentialRefresh: {
+          failureStage: null,
+          casFailure: null,
+          providerCallsAttempted: 0,
+          providerCallsSucceeded: 0
+        },
         errorCode: 'missed_feed_failed',
         errorSummary: 'Missed feeds recovery failed safely'
       })
     );
     expect(JSON.stringify(test.maintenance.finalize.mock.calls)).not.toContain('payload');
+  });
+
+  it('persists safe credential refresh stage, CAS subtype and separate OAuth counters', async () => {
+    const test = setup();
+    test.events.listReceivedForConnection.mockReset().mockResolvedValue([]);
+    test.events.listDueRetriesForConnection.mockResolvedValue([]);
+    test.missedFeeds.recoverItems.mockRejectedValue(
+      new MercadoLibreMissedFeedsError('credential_failed', {
+        failureStage: 'credential_resolution',
+        credentialRefreshFailureStage: 'refresh_cas',
+        credentialRefreshCasFailure: 'CAS_CONFLICT',
+        credentialRefreshCallsAttempted: 1,
+        credentialRefreshCallsSucceeded: 1
+      })
+    );
+
+    await runIncrementalEventMaintenance({
+      ...test,
+      now: () => new Date('2026-08-28T12:00:00Z')
+    });
+
+    expect(test.maintenance.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        missedFeedFailureStage: 'credential_resolution',
+        credentialRefresh: {
+          failureStage: 'refresh_cas',
+          casFailure: 'CAS_CONFLICT',
+          providerCallsAttempted: 1,
+          providerCallsSucceeded: 1
+        }
+      })
+    );
   });
 
   it('respects total work budgets without an automatic loop', async () => {

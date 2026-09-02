@@ -7,6 +7,7 @@ import {
   MercadoLibreMissedFeedsError,
   MercadoLibreMissedFeedRecoveryService
 } from './missed-feeds';
+import { MercadoLibreCredentialError } from '../auth';
 
 const organizationId = 'org_test';
 const connectionId = '10000000-0000-4000-8000-000000000001';
@@ -37,7 +38,29 @@ function message(id = 'feed-1', itemId = 'MLA123456') {
 
 function setup(messages = [message()]) {
   const connections = { getById: vi.fn().mockResolvedValue(connection) };
-  const credentials = { getValidAccessToken: vi.fn().mockResolvedValue('test-token') };
+  const credentials = {
+    getValidAccessToken: vi
+      .fn()
+      .mockImplementation(
+        async (
+          _scope: unknown,
+          observe?: (diagnostics: {
+            failureStage: null;
+            casFailure: null;
+            providerCallsAttempted: number;
+            providerCallsSucceeded: number;
+          }) => void
+        ) => {
+          observe?.({
+            failureStage: null,
+            casFailure: null,
+            providerCallsAttempted: 0,
+            providerCallsSucceeded: 0
+          });
+          return 'test-token';
+        }
+      )
+  };
   const identity = {
     getCurrentUser: vi.fn().mockResolvedValue({
       externalAccountId: '123',
@@ -177,7 +200,11 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
       exhausted: true,
       nextOffset: null,
       providerCallsAttempted: 2,
-      providerCallsSucceeded: 2
+      providerCallsSucceeded: 2,
+      credentialRefreshFailureStage: null,
+      credentialRefreshCasFailure: null,
+      credentialRefreshCallsAttempted: 0,
+      credentialRefreshCallsSucceeded: 0
     });
     const { externalEventId: _id, ...notification } = message();
     expect(test.intake.intakeItemsNotification).toHaveBeenCalledWith({ _id, ...notification });
@@ -201,10 +228,10 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
 
     await test.service.recoverItems({ organizationId, connectionId, offset: 20, maxPages: 1 });
 
-    expect(test.credentials.getValidAccessToken).toHaveBeenCalledWith({
-      organizationId,
-      connectionId
-    });
+    expect(test.credentials.getValidAccessToken).toHaveBeenCalledWith(
+      { organizationId, connectionId },
+      expect.any(Function)
+    );
   });
 
   it('preserves an identity request failure before any missed-feed page attempt', async () => {
@@ -228,7 +255,13 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
 
   it('records credential failure before any provider call', async () => {
     const test = setup();
-    test.credentials.getValidAccessToken.mockRejectedValue(new Error('raw credential material'));
+    test.credentials.getValidAccessToken.mockRejectedValue(
+      new MercadoLibreCredentialError('PROVIDER_HTTP_ERROR', 'PROVIDER_RESPONSE', {
+        refreshFailureStage: 'refresh_provider_response',
+        refreshCallsAttempted: 1,
+        refreshCallsSucceeded: 0
+      })
+    );
 
     const error = await test.service
       .recoverItems({ organizationId, connectionId })
@@ -238,7 +271,11 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
       code: 'credential_failed',
       failureStage: 'credential_resolution',
       providerCallsAttempted: 0,
-      providerCallsSucceeded: 0
+      providerCallsSucceeded: 0,
+      credentialRefreshFailureStage: 'refresh_provider_response',
+      credentialRefreshCasFailure: null,
+      credentialRefreshCallsAttempted: 1,
+      credentialRefreshCallsSucceeded: 0
     });
     expect(test.identity.getCurrentUser).not.toHaveBeenCalled();
     expect(test.feeds.getItemsPage).not.toHaveBeenCalled();
@@ -291,7 +328,11 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
       exhausted: true,
       nextOffset: null,
       providerCallsAttempted: 2,
-      providerCallsSucceeded: 2
+      providerCallsSucceeded: 2,
+      credentialRefreshFailureStage: null,
+      credentialRefreshCasFailure: null,
+      credentialRefreshCallsAttempted: 0,
+      credentialRefreshCallsSucceeded: 0
     });
     expect(test.identity.getCurrentUser).toHaveBeenCalledTimes(1);
     expect(test.feeds.getItemsPage).toHaveBeenCalledTimes(1);

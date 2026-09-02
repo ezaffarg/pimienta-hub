@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   IntegrationEventMaintenanceRepository,
+  type CredentialRefreshDiagnostics,
   type IntegrationEventMaintenanceCounters,
   type MissedFeedFailureStage
 } from '@/infrastructure/database/integration-event-maintenance-repository';
@@ -113,6 +114,7 @@ export async function runIncrementalEventMaintenance(
     let missedFeedOffset = run.missedFeedOffset;
     let lastMissedFeedCheckAt: string | null = null;
     let missedFeedFailureStage: MissedFeedFailureStage | null = null;
+    let credentialRefresh = emptyCredentialRefreshDiagnostics();
 
     if (receivedRemaining > 0 && withinBudget(now, startedAt)) {
       const selection = await selectEvents(() =>
@@ -132,7 +134,8 @@ export async function runIncrementalEventMaintenance(
         counters,
         missedFeedOffset,
         lastMissedFeedCheckAt,
-        missedFeedFailureStage
+        missedFeedFailureStage,
+        credentialRefresh
       );
     }
 
@@ -156,7 +159,8 @@ export async function runIncrementalEventMaintenance(
         counters,
         missedFeedOffset,
         lastMissedFeedCheckAt,
-        missedFeedFailureStage
+        missedFeedFailureStage,
+        credentialRefresh
       );
     }
 
@@ -173,6 +177,12 @@ export async function runIncrementalEventMaintenance(
         counters.missedFeedDuplicate += result.duplicates;
         counters.providerCallsAttempted += result.providerCallsAttempted;
         counters.providerCallsSucceeded += result.providerCallsSucceeded;
+        credentialRefresh = {
+          failureStage: result.credentialRefreshFailureStage,
+          casFailure: result.credentialRefreshCasFailure,
+          providerCallsAttempted: result.credentialRefreshCallsAttempted,
+          providerCallsSucceeded: result.credentialRefreshCallsSucceeded
+        };
         missedPagesRemaining -= result.pages;
         missedFeedOffset = result.exhausted ? null : result.nextOffset;
         lastMissedFeedCheckAt = now().toISOString();
@@ -181,6 +191,12 @@ export async function runIncrementalEventMaintenance(
           counters.providerCallsAttempted += error.providerCallsAttempted;
           counters.providerCallsSucceeded += error.providerCallsSucceeded;
           missedFeedFailureStage = error.failureStage;
+          credentialRefresh = {
+            failureStage: error.credentialRefreshFailureStage,
+            casFailure: error.credentialRefreshCasFailure,
+            providerCallsAttempted: error.credentialRefreshCallsAttempted,
+            providerCallsSucceeded: error.credentialRefreshCallsSucceeded
+          };
         } else {
           missedFeedFailureStage = 'other';
         }
@@ -197,7 +213,8 @@ export async function runIncrementalEventMaintenance(
         counters,
         missedFeedOffset,
         lastMissedFeedCheckAt,
-        missedFeedFailureStage
+        missedFeedFailureStage,
+        credentialRefresh
       );
     }
 
@@ -221,7 +238,8 @@ export async function runIncrementalEventMaintenance(
         counters,
         missedFeedOffset,
         lastMissedFeedCheckAt,
-        missedFeedFailureStage
+        missedFeedFailureStage,
+        credentialRefresh
       );
     }
 
@@ -233,6 +251,7 @@ export async function runIncrementalEventMaintenance(
       missedFeedOffset,
       lastMissedFeedCheckAt,
       missedFeedFailureStage,
+      credentialRefresh,
       errorCode,
       errorSummary
     });
@@ -261,7 +280,8 @@ async function checkpointRun(
   counters: IntegrationEventMaintenanceCounters,
   missedFeedOffset: number | null,
   lastMissedFeedCheckAt: string | null,
-  missedFeedFailureStage: MissedFeedFailureStage | null
+  missedFeedFailureStage: MissedFeedFailureStage | null,
+  credentialRefresh: CredentialRefreshDiagnostics
 ): Promise<void> {
   try {
     const outcome = await maintenance.checkpoint({
@@ -269,7 +289,8 @@ async function checkpointRun(
       counters,
       missedFeedOffset,
       lastMissedFeedCheckAt,
-      missedFeedFailureStage
+      missedFeedFailureStage,
+      credentialRefresh
     });
     if (outcome !== 'CHECKPOINTED') {
       throw new IncrementalEventMaintenanceError('checkpoint_failed');
@@ -336,6 +357,15 @@ function emptyCounters(): IntegrationEventMaintenanceCounters {
     missedFeedAccepted: 0,
     missedFeedDuplicate: 0,
     missedFeedPages: 0,
+    providerCallsAttempted: 0,
+    providerCallsSucceeded: 0
+  };
+}
+
+function emptyCredentialRefreshDiagnostics(): CredentialRefreshDiagnostics {
+  return {
+    failureStage: null,
+    casFailure: null,
     providerCallsAttempted: 0,
     providerCallsSucceeded: 0
   };

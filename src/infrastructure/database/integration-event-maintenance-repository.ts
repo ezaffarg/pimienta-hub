@@ -47,6 +47,46 @@ export const missedFeedFailureStageSchema = z.enum([
 ]);
 export type MissedFeedFailureStage = z.infer<typeof missedFeedFailureStageSchema>;
 
+export const credentialRefreshFailureStageSchema = z.enum([
+  'refresh_credential_read',
+  'refresh_credential_decrypt',
+  'refresh_lease',
+  'refresh_post_claim_validation',
+  'refresh_provider_request',
+  'refresh_provider_response',
+  'refresh_response_validation',
+  'refresh_encrypt',
+  'refresh_cas',
+  'refresh_post_persist_validation'
+]);
+export type CredentialRefreshFailureStage = z.infer<typeof credentialRefreshFailureStageSchema>;
+
+export const credentialRefreshCasFailureSchema = z.enum([
+  'CAS_RPC_THROW',
+  'CAS_RPC_ERROR',
+  'CAS_RESPONSE_INVALID',
+  'CAS_CONFLICT'
+]);
+export type CredentialRefreshCasFailure = z.infer<typeof credentialRefreshCasFailureSchema>;
+
+export const credentialRefreshDiagnosticsSchema = z
+  .object({
+    failureStage: credentialRefreshFailureStageSchema.nullable(),
+    casFailure: credentialRefreshCasFailureSchema.nullable(),
+    providerCallsAttempted: z.number().int().nonnegative(),
+    providerCallsSucceeded: z.number().int().nonnegative()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.providerCallsSucceeded > value.providerCallsAttempted) {
+      context.addIssue({ code: 'custom', message: 'Credential refresh counters invalid' });
+    }
+    if (value.casFailure !== null && value.failureStage !== 'refresh_cas') {
+      context.addIssue({ code: 'custom', message: 'Credential refresh CAS stage invalid' });
+    }
+  });
+export type CredentialRefreshDiagnostics = z.infer<typeof credentialRefreshDiagnosticsSchema>;
+
 export interface IntegrationEventMaintenanceRunStart {
   outcome: 'STARTED' | 'ALREADY_RUNNING' | 'NOT_ELIGIBLE';
   runId: string | null;
@@ -84,6 +124,10 @@ export interface IntegrationEventOperationsSummary {
     missedFeedFailureStage: MissedFeedFailureStage | null;
     providerCallsAttempted: number | null;
     providerCallsSucceeded: number | null;
+    credentialRefreshFailureStage: CredentialRefreshFailureStage | null;
+    credentialRefreshCasFailure: CredentialRefreshCasFailure | null;
+    credentialRefreshCallsAttempted: number | null;
+    credentialRefreshCallsSucceeded: number | null;
   };
 }
 
@@ -137,6 +181,7 @@ export class IntegrationEventMaintenanceRepository {
     missedFeedOffset: number | null;
     lastMissedFeedCheckAt: string | null;
     missedFeedFailureStage: MissedFeedFailureStage | null;
+    credentialRefresh: CredentialRefreshDiagnostics;
     errorCode: 'event_processing_failed' | 'missed_feed_failed' | null;
     errorSummary:
       | 'One or more integration events could not be processed'
@@ -165,6 +210,10 @@ export class IntegrationEventMaintenanceRepository {
         p_missed_feed_offset: parsed.missedFeedOffset,
         p_last_missed_feed_check_at: parsed.lastMissedFeedCheckAt,
         p_missed_feed_failure_stage: parsed.missedFeedFailureStage,
+        p_credential_refresh_failure_stage: parsed.credentialRefresh.failureStage,
+        p_credential_refresh_cas_failure: parsed.credentialRefresh.casFailure,
+        p_credential_refresh_calls_attempted: parsed.credentialRefresh.providerCallsAttempted,
+        p_credential_refresh_calls_succeeded: parsed.credentialRefresh.providerCallsSucceeded,
         p_error_code: parsed.errorCode,
         p_error_summary: parsed.errorSummary
       })
@@ -181,6 +230,7 @@ export class IntegrationEventMaintenanceRepository {
     missedFeedOffset: number | null;
     lastMissedFeedCheckAt: string | null;
     missedFeedFailureStage: MissedFeedFailureStage | null;
+    credentialRefresh: CredentialRefreshDiagnostics;
   }): Promise<'CHECKPOINTED' | 'ALREADY_TERMINAL' | 'NOT_FOUND'> {
     const parsed = checkpointSchema.parse(input);
     const response = await safeRpc(() =>
@@ -202,7 +252,11 @@ export class IntegrationEventMaintenanceRepository {
         p_provider_calls_succeeded: parsed.counters.providerCallsSucceeded,
         p_missed_feed_offset: parsed.missedFeedOffset,
         p_last_missed_feed_check_at: parsed.lastMissedFeedCheckAt,
-        p_missed_feed_failure_stage: parsed.missedFeedFailureStage
+        p_missed_feed_failure_stage: parsed.missedFeedFailureStage,
+        p_credential_refresh_failure_stage: parsed.credentialRefresh.failureStage,
+        p_credential_refresh_cas_failure: parsed.credentialRefresh.casFailure,
+        p_credential_refresh_calls_attempted: parsed.credentialRefresh.providerCallsAttempted,
+        p_credential_refresh_calls_succeeded: parsed.credentialRefresh.providerCallsSucceeded
       })
     );
     return z
@@ -264,7 +318,11 @@ export class IntegrationEventMaintenanceRepository {
             missedFeedDuplicate: row.last_run_missed_feed_duplicate!,
             missedFeedFailureStage: row.last_run_missed_feed_failure_stage,
             providerCallsAttempted: row.last_run_provider_calls_attempted,
-            providerCallsSucceeded: row.last_run_provider_calls_succeeded
+            providerCallsSucceeded: row.last_run_provider_calls_succeeded,
+            credentialRefreshFailureStage: row.last_run_credential_refresh_failure_stage,
+            credentialRefreshCasFailure: row.last_run_credential_refresh_cas_failure,
+            credentialRefreshCallsAttempted: row.last_run_credential_refresh_calls_attempted,
+            credentialRefreshCallsSucceeded: row.last_run_credential_refresh_calls_succeeded
           }
         : null
     };
@@ -293,6 +351,7 @@ const finalizeSchema = z
     missedFeedOffset: z.number().int().nonnegative().nullable(),
     lastMissedFeedCheckAt: z.iso.datetime({ offset: true }).nullable(),
     missedFeedFailureStage: missedFeedFailureStageSchema.nullable(),
+    credentialRefresh: credentialRefreshDiagnosticsSchema,
     errorCode: z.enum(['event_processing_failed', 'missed_feed_failed']).nullable(),
     errorSummary: z
       .enum([
@@ -307,6 +366,20 @@ const finalizeSchema = z
     if (success !== (value.errorCode === null && value.errorSummary === null)) {
       context.addIssue({ code: 'custom', message: 'Maintenance terminal error contract invalid' });
     }
+    if (
+      value.credentialRefresh.failureStage !== null &&
+      value.missedFeedFailureStage !== 'credential_resolution'
+    ) {
+      context.addIssue({ code: 'custom', message: 'Credential refresh context invalid' });
+    }
+    if (
+      success &&
+      (value.missedFeedFailureStage !== null ||
+        value.credentialRefresh.failureStage !== null ||
+        value.credentialRefresh.casFailure !== null)
+    ) {
+      context.addIssue({ code: 'custom', message: 'Successful maintenance diagnostics invalid' });
+    }
   });
 
 const checkpointSchema = z
@@ -315,9 +388,18 @@ const checkpointSchema = z
     counters: integrationEventMaintenanceCountersSchema,
     missedFeedOffset: z.number().int().nonnegative().nullable(),
     lastMissedFeedCheckAt: z.iso.datetime({ offset: true }).nullable(),
-    missedFeedFailureStage: missedFeedFailureStageSchema.nullable()
+    missedFeedFailureStage: missedFeedFailureStageSchema.nullable(),
+    credentialRefresh: credentialRefreshDiagnosticsSchema
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.credentialRefresh.failureStage !== null &&
+      value.missedFeedFailureStage !== 'credential_resolution'
+    ) {
+      context.addIssue({ code: 'custom', message: 'Credential refresh context invalid' });
+    }
+  });
 
 const nullableTimestamp = z.iso.datetime({ offset: true }).nullable();
 const summaryRowsSchema = z
@@ -345,7 +427,11 @@ const summaryRowsSchema = z
       last_run_missed_feed_duplicate: z.number().int().nonnegative().nullable(),
       last_run_missed_feed_failure_stage: missedFeedFailureStageSchema.nullable(),
       last_run_provider_calls_attempted: z.number().int().nonnegative().nullable(),
-      last_run_provider_calls_succeeded: z.number().int().nonnegative().nullable()
+      last_run_provider_calls_succeeded: z.number().int().nonnegative().nullable(),
+      last_run_credential_refresh_failure_stage: credentialRefreshFailureStageSchema.nullable(),
+      last_run_credential_refresh_cas_failure: credentialRefreshCasFailureSchema.nullable(),
+      last_run_credential_refresh_calls_attempted: z.number().int().nonnegative().nullable(),
+      last_run_credential_refresh_calls_succeeded: z.number().int().nonnegative().nullable()
     })
   )
   .length(1);

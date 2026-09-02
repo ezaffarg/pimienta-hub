@@ -8,6 +8,10 @@ export {
 export {
   MercadoLibreCredentialError,
   MercadoLibreCredentialService,
+  credentialRefreshFailureStages,
+  type CasCompleteFailureCode,
+  type CredentialRefreshDiagnostics,
+  type CredentialRefreshFailureStage,
   type MercadoLibreCredentialStore
 } from './credentials';
 export { createCodeChallenge, createCodeVerifier, createOAuthState } from './pkce';

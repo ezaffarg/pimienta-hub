@@ -71,7 +71,13 @@ describe('IntegrationEventMaintenanceRepository', () => {
         counters,
         missedFeedOffset: 10,
         lastMissedFeedCheckAt: '2026-08-28T12:00:00.000Z',
-        missedFeedFailureStage: 'missed_feed_request',
+        missedFeedFailureStage: 'credential_resolution',
+        credentialRefresh: {
+          failureStage: 'refresh_cas',
+          casFailure: 'CAS_RPC_ERROR',
+          providerCallsAttempted: 1,
+          providerCallsSucceeded: 1
+        },
         errorCode: 'event_processing_failed',
         errorSummary: 'One or more integration events could not be processed'
       })
@@ -81,9 +87,13 @@ describe('IntegrationEventMaintenanceRepository', () => {
       expect.objectContaining({
         p_run_id: runId,
         p_received_selected: 1,
-        p_missed_feed_failure_stage: 'missed_feed_request',
+        p_missed_feed_failure_stage: 'credential_resolution',
         p_provider_calls_attempted: 2,
         p_provider_calls_succeeded: 1,
+        p_credential_refresh_failure_stage: 'refresh_cas',
+        p_credential_refresh_cas_failure: 'CAS_RPC_ERROR',
+        p_credential_refresh_calls_attempted: 1,
+        p_credential_refresh_calls_succeeded: 1,
         p_error_code: 'event_processing_failed'
       })
     );
@@ -113,7 +123,11 @@ describe('IntegrationEventMaintenanceRepository', () => {
           last_run_missed_feed_duplicate: 1,
           last_run_missed_feed_failure_stage: 'identity_request',
           last_run_provider_calls_attempted: 1,
-          last_run_provider_calls_succeeded: 0
+          last_run_provider_calls_succeeded: 0,
+          last_run_credential_refresh_failure_stage: 'refresh_provider_request',
+          last_run_credential_refresh_cas_failure: null,
+          last_run_credential_refresh_calls_attempted: 1,
+          last_run_credential_refresh_calls_succeeded: 0
         }
       ],
       error: null
@@ -131,7 +145,11 @@ describe('IntegrationEventMaintenanceRepository', () => {
         errorCode: 'maintenance_stale_reclaimed',
         missedFeedFailureStage: 'identity_request',
         providerCallsAttempted: 1,
-        providerCallsSucceeded: 0
+        providerCallsSucceeded: 0,
+        credentialRefreshFailureStage: 'refresh_provider_request',
+        credentialRefreshCasFailure: null,
+        credentialRefreshCallsAttempted: 1,
+        credentialRefreshCallsSucceeded: 0
       }
     });
     expect(rpc).toHaveBeenCalledWith('get_integration_event_operations_summary', {
@@ -170,7 +188,13 @@ describe('IntegrationEventMaintenanceRepository', () => {
         counters,
         missedFeedOffset: null,
         lastMissedFeedCheckAt: null,
-        missedFeedFailureStage: null
+        missedFeedFailureStage: null,
+        credentialRefresh: {
+          failureStage: null,
+          casFailure: null,
+          providerCallsAttempted: 0,
+          providerCallsSucceeded: 0
+        }
       })
     ).resolves.toBe('CHECKPOINTED');
     await expect(repository.reclaimStale(runId)).resolves.toBe('RECLAIMED');
@@ -178,7 +202,14 @@ describe('IntegrationEventMaintenanceRepository', () => {
     expect(rpc).toHaveBeenNthCalledWith(
       1,
       'checkpoint_integration_event_maintenance_run',
-      expect.objectContaining({ p_run_id: runId, p_processed: 1 })
+      expect.objectContaining({
+        p_run_id: runId,
+        p_processed: 1,
+        p_credential_refresh_failure_stage: null,
+        p_credential_refresh_cas_failure: null,
+        p_credential_refresh_calls_attempted: 0,
+        p_credential_refresh_calls_succeeded: 0
+      })
     );
     expect(rpc).toHaveBeenNthCalledWith(2, 'reclaim_stale_integration_event_maintenance_run', {
       p_run_id: runId

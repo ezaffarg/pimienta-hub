@@ -3,9 +3,13 @@ import 'server-only';
 import { z } from 'zod';
 import { ConnectionRepository } from '@/infrastructure/database/repositories';
 import {
+  MercadoLibreCredentialError,
   getMercadoLibreOAuthConfig,
   MercadoLibreCredentialService,
-  MercadoLibreOAuthClient
+  MercadoLibreOAuthClient,
+  type CasCompleteFailureCode,
+  type CredentialRefreshDiagnostics,
+  type CredentialRefreshFailureStage
 } from '../auth';
 import { MercadoLibreEventIntakeService } from './intake';
 
@@ -87,6 +91,10 @@ export class MercadoLibreMissedFeedsError extends Error {
       providerCallsAttempted?: number;
       providerCallsSucceeded?: number;
       providerCallSucceeded?: boolean;
+      credentialRefreshFailureStage?: CredentialRefreshFailureStage | null;
+      credentialRefreshCasFailure?: CasCompleteFailureCode | null;
+      credentialRefreshCallsAttempted?: number;
+      credentialRefreshCallsSucceeded?: number;
     } = {}
   ) {
     super(code);
@@ -95,12 +103,20 @@ export class MercadoLibreMissedFeedsError extends Error {
     this.providerCallsAttempted = observability.providerCallsAttempted ?? 0;
     this.providerCallsSucceeded = observability.providerCallsSucceeded ?? 0;
     this.providerCallSucceeded = observability.providerCallSucceeded ?? false;
+    this.credentialRefreshFailureStage = observability.credentialRefreshFailureStage ?? null;
+    this.credentialRefreshCasFailure = observability.credentialRefreshCasFailure ?? null;
+    this.credentialRefreshCallsAttempted = observability.credentialRefreshCallsAttempted ?? 0;
+    this.credentialRefreshCallsSucceeded = observability.credentialRefreshCallsSucceeded ?? 0;
   }
 
   readonly failureStage: MercadoLibreMissedFeedFailureStage;
   readonly providerCallsAttempted: number;
   readonly providerCallsSucceeded: number;
   readonly providerCallSucceeded: boolean;
+  readonly credentialRefreshFailureStage: CredentialRefreshFailureStage | null;
+  readonly credentialRefreshCasFailure: CasCompleteFailureCode | null;
+  readonly credentialRefreshCallsAttempted: number;
+  readonly credentialRefreshCallsSucceeded: number;
 }
 
 export class MercadoLibreMissedFeedsClient {
@@ -187,6 +203,10 @@ export interface MercadoLibreMissedFeedRecoveryResult {
   nextOffset: number | null;
   providerCallsAttempted: number;
   providerCallsSucceeded: number;
+  credentialRefreshFailureStage: CredentialRefreshFailureStage | null;
+  credentialRefreshCasFailure: CasCompleteFailureCode | null;
+  credentialRefreshCallsAttempted: number;
+  credentialRefreshCallsSucceeded: number;
 }
 
 export interface MercadoLibreMissedFeedRecoveryDependencies {
@@ -228,14 +248,28 @@ export class MercadoLibreMissedFeedRecoveryService {
       organizationId: scope.organizationId,
       connectionId: scope.connectionId
     };
-    const accessToken = await credentials.getValidAccessToken(credentialScope).catch(() => {
+    let credentialRefreshDiagnostics = emptyCredentialRefreshDiagnostics();
+    let accessToken: string;
+    try {
+      accessToken = await credentials.getValidAccessToken(credentialScope, (diagnostics) => {
+        credentialRefreshDiagnostics = diagnostics;
+      });
+    } catch (error) {
+      credentialRefreshDiagnostics = credentialDiagnosticsFrom(error, credentialRefreshDiagnostics);
       throw observedFailure(
         new MercadoLibreMissedFeedsError('credential_failed'),
         'credential_resolution',
         0,
-        0
+        0,
+        credentialRefreshDiagnostics
       );
-    });
+    }
+    const failure = (
+      error: unknown,
+      failureStage: MercadoLibreMissedFeedFailureStage,
+      attempted: number,
+      succeeded: number
+    ) => observedFailure(error, failureStage, attempted, succeeded, credentialRefreshDiagnostics);
     const identity = this.dependencies.identity ?? new MercadoLibreOAuthClient();
     let currentUser;
     providerCallsAttempted += 1;
@@ -243,7 +277,7 @@ export class MercadoLibreMissedFeedRecoveryService {
       currentUser = await identity.getCurrentUser(accessToken);
       providerCallsSucceeded += 1;
     } catch (error) {
-      throw observedFailure(
+      throw failure(
         error instanceof MercadoLibreMissedFeedsError
           ? error
           : new MercadoLibreMissedFeedsError('identity_lookup_failed'),
@@ -253,7 +287,7 @@ export class MercadoLibreMissedFeedRecoveryService {
       );
     }
     if (currentUser.externalAccountId !== connection.externalAccountId) {
-      throw observedFailure(
+      throw failure(
         new MercadoLibreMissedFeedsError('connection_binding_invalid'),
         'identity_validation',
         providerCallsAttempted,
@@ -264,7 +298,7 @@ export class MercadoLibreMissedFeedRecoveryService {
     try {
       siteId = siteIdSchema.parse(currentUser.siteId);
     } catch {
-      throw observedFailure(
+      throw failure(
         new MercadoLibreMissedFeedsError('identity_lookup_failed'),
         'identity_validation',
         providerCallsAttempted,
@@ -277,7 +311,7 @@ export class MercadoLibreMissedFeedRecoveryService {
         (this.dependencies.applicationId ?? (() => getMercadoLibreOAuthConfig().clientId))()
       );
     } catch {
-      throw observedFailure(
+      throw failure(
         new MercadoLibreMissedFeedsError('configuration_invalid'),
         'configuration',
         providerCallsAttempted,
@@ -310,7 +344,7 @@ export class MercadoLibreMissedFeedRecoveryService {
             ? error
             : new MercadoLibreMissedFeedsError('provider_unavailable');
         if (normalized.providerCallSucceeded) providerCallsSucceeded += 1;
-        throw observedFailure(
+        throw failure(
           normalized,
           normalized.providerCallSucceeded ? 'missed_feed_response' : 'missed_feed_request',
           providerCallsAttempted,
@@ -319,7 +353,7 @@ export class MercadoLibreMissedFeedRecoveryService {
       }
       const signature = messages.map((message) => message.externalEventId).join('|');
       if (messages.length > 0 && pageSignatures.has(signature)) {
-        throw observedFailure(
+        throw failure(
           new MercadoLibreMissedFeedsError('pagination_loop'),
           'missed_feed_pagination',
           providerCallsAttempted,
@@ -330,7 +364,7 @@ export class MercadoLibreMissedFeedRecoveryService {
       try {
         this.assertPageBinding(messages, connection.externalAccountId!, applicationId, siteId);
       } catch (error) {
-        throw observedFailure(
+        throw failure(
           error,
           'missed_feed_response',
           providerCallsAttempted,
@@ -345,7 +379,7 @@ export class MercadoLibreMissedFeedRecoveryService {
           if (result.outcome === 'ACCEPTED') accepted += 1;
           else duplicates += 1;
         } catch {
-          throw observedFailure(
+          throw failure(
             new MercadoLibreMissedFeedsError('intake_failed'),
             'event_intake',
             providerCallsAttempted,
@@ -361,7 +395,11 @@ export class MercadoLibreMissedFeedRecoveryService {
           exhausted: true,
           nextOffset: null,
           providerCallsAttempted,
-          providerCallsSucceeded
+          providerCallsSucceeded,
+          credentialRefreshFailureStage: credentialRefreshDiagnostics.failureStage,
+          credentialRefreshCasFailure: credentialRefreshDiagnostics.casFailure,
+          credentialRefreshCallsAttempted: credentialRefreshDiagnostics.providerCallsAttempted,
+          credentialRefreshCallsSucceeded: credentialRefreshDiagnostics.providerCallsSucceeded
         };
       }
     }
@@ -372,7 +410,11 @@ export class MercadoLibreMissedFeedRecoveryService {
       exhausted: false,
       nextOffset: startOffset + maxPages * PAGE_LIMIT,
       providerCallsAttempted,
-      providerCallsSucceeded
+      providerCallsSucceeded,
+      credentialRefreshFailureStage: credentialRefreshDiagnostics.failureStage,
+      credentialRefreshCasFailure: credentialRefreshDiagnostics.casFailure,
+      credentialRefreshCallsAttempted: credentialRefreshDiagnostics.providerCallsAttempted,
+      credentialRefreshCallsSucceeded: credentialRefreshDiagnostics.providerCallsSucceeded
     };
   }
 
@@ -420,12 +462,39 @@ function observedFailure(
   error: unknown,
   failureStage: MercadoLibreMissedFeedFailureStage,
   providerCallsAttempted: number,
-  providerCallsSucceeded: number
+  providerCallsSucceeded: number,
+  credentialRefreshDiagnostics = emptyCredentialRefreshDiagnostics()
 ): MercadoLibreMissedFeedsError {
   const code = error instanceof MercadoLibreMissedFeedsError ? error.code : 'provider_unavailable';
   return new MercadoLibreMissedFeedsError(code, {
     failureStage,
     providerCallsAttempted,
-    providerCallsSucceeded
+    providerCallsSucceeded,
+    credentialRefreshFailureStage: credentialRefreshDiagnostics.failureStage,
+    credentialRefreshCasFailure: credentialRefreshDiagnostics.casFailure,
+    credentialRefreshCallsAttempted: credentialRefreshDiagnostics.providerCallsAttempted,
+    credentialRefreshCallsSucceeded: credentialRefreshDiagnostics.providerCallsSucceeded
   });
+}
+
+function emptyCredentialRefreshDiagnostics(): CredentialRefreshDiagnostics {
+  return {
+    failureStage: null,
+    casFailure: null,
+    providerCallsAttempted: 0,
+    providerCallsSucceeded: 0
+  };
+}
+
+function credentialDiagnosticsFrom(
+  error: unknown,
+  observed: CredentialRefreshDiagnostics
+): CredentialRefreshDiagnostics {
+  if (!(error instanceof MercadoLibreCredentialError)) return observed;
+  return {
+    failureStage: error.details.refreshFailureStage ?? observed.failureStage,
+    casFailure: error.details.casFailure ?? observed.casFailure,
+    providerCallsAttempted: error.details.refreshCallsAttempted ?? observed.providerCallsAttempted,
+    providerCallsSucceeded: error.details.refreshCallsSucceeded ?? observed.providerCallsSucceeded
+  };
 }

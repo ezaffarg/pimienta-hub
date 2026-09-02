@@ -156,3 +156,5 @@ audita stage, conteo provider y cadence del fallo `missed_feed_failed` sin nueva
 agrega observabilidad durable y segura de stage y provider calls mediante una migration forward.
 [X-F3-C-LOCAL-2D3C12](2.20x-f3c-local2d3c12-credential-resolution-runtime-gap.md)
 diagnostica y corrige localmente el scope estricto de resolución de credenciales sin nuevas llamadas reales.
+[X-F3-C-LOCAL-2D3C14](2.20x-f3c-local2d3c14-durable-credential-refresh-diagnostics.md)
+agrega diagnósticos durables y seguros del refresh OAuth sin llamadas reales.

@@ -41,9 +41,38 @@ export interface RefreshErrorDetails {
   actualVersion?: number | null;
   leasePresent?: boolean;
   leaseMatches?: boolean;
+  refreshFailureStage?: CredentialRefreshFailureStage;
+  refreshCallsAttempted?: number;
+  refreshCallsSucceeded?: number;
 }
 
 export type CasCompleteFailureCode = CredentialRefreshCompleteFailureCode | 'CAS_CONFLICT';
+
+export const credentialRefreshFailureStages = [
+  'refresh_credential_read',
+  'refresh_credential_decrypt',
+  'refresh_lease',
+  'refresh_post_claim_validation',
+  'refresh_provider_request',
+  'refresh_provider_response',
+  'refresh_response_validation',
+  'refresh_encrypt',
+  'refresh_cas',
+  'refresh_post_persist_validation'
+] as const;
+
+export type CredentialRefreshFailureStage = (typeof credentialRefreshFailureStages)[number];
+
+export interface CredentialRefreshDiagnostics {
+  failureStage: CredentialRefreshFailureStage | null;
+  casFailure: CasCompleteFailureCode | null;
+  providerCallsAttempted: number;
+  providerCallsSucceeded: number;
+}
+
+export type CredentialRefreshDiagnosticsObserver = (
+  diagnostics: CredentialRefreshDiagnostics
+) => void;
 
 export type RefreshStage =
   | 'READ'
@@ -115,10 +144,47 @@ export class MercadoLibreCredentialService {
     private readonly newLeaseId: () => string = randomUUID
   ) {}
 
-  async getValidAccessToken(input: {
-    organizationId: string;
-    connectionId: string;
-  }): Promise<string> {
+  async getValidAccessToken(
+    input: {
+      organizationId: string;
+      connectionId: string;
+    },
+    observe?: CredentialRefreshDiagnosticsObserver
+  ): Promise<string> {
+    const activity = { providerCallsAttempted: 0, providerCallsSucceeded: 0 };
+    try {
+      const accessToken = await this.resolveValidAccessToken(input, activity);
+      publishRefreshDiagnostics(observe, {
+        failureStage: null,
+        casFailure: null,
+        ...activity
+      });
+      return accessToken;
+    } catch (error) {
+      if (!(error instanceof MercadoLibreCredentialError)) throw error;
+      const observed = new MercadoLibreCredentialError(error.code, error.stage, {
+        ...error.details,
+        refreshFailureStage:
+          error.details.refreshFailureStage ?? credentialRefreshFailureStage(error),
+        refreshCallsAttempted: activity.providerCallsAttempted,
+        refreshCallsSucceeded: activity.providerCallsSucceeded
+      });
+      publishRefreshDiagnostics(observe, {
+        failureStage: observed.details.refreshFailureStage ?? null,
+        casFailure: observed.details.casFailure ?? null,
+        ...activity
+      });
+      throw observed;
+    }
+  }
+
+  private async resolveValidAccessToken(
+    input: { organizationId: string; connectionId: string },
+    activity: Pick<
+      CredentialRefreshDiagnostics,
+      'providerCallsAttempted' | 'providerCallsSucceeded'
+    >
+  ): Promise<string> {
     const parsed = z
       .object({ organizationId: z.string().trim().min(1).max(255), connectionId: z.uuid() })
       .strict()
@@ -127,7 +193,8 @@ export class MercadoLibreCredentialService {
     const current = await this.requireCredentials(
       parsed.organizationId,
       parsed.connectionId,
-      'READ'
+      'READ',
+      'refresh_credential_read'
     );
     if (isCurrent(current, refreshBefore)) return current.accessToken;
 
@@ -142,11 +209,15 @@ export class MercadoLibreCredentialService {
         leaseId
       });
     } catch {
-      throw new MercadoLibreCredentialError('REFRESH_CLAIM_FAILED', 'CLAIM');
+      throw new MercadoLibreCredentialError('REFRESH_CLAIM_FAILED', 'CLAIM', {
+        refreshFailureStage: 'refresh_lease'
+      });
     }
 
     if (claim.outcome === 'not_found')
-      throw new MercadoLibreCredentialError('CREDENTIALS_NOT_FOUND', 'CLAIM');
+      throw new MercadoLibreCredentialError('CREDENTIALS_NOT_FOUND', 'CLAIM', {
+        refreshFailureStage: 'refresh_lease'
+      });
     if (claim.outcome === 'busy') {
       const refreshedByPeer = await this.waitForPeerRefresh(
         parsed.organizationId,
@@ -154,16 +225,21 @@ export class MercadoLibreCredentialService {
         refreshBefore
       );
       if (refreshedByPeer) return refreshedByPeer.accessToken;
-      throw new MercadoLibreCredentialError('REFRESH_BUSY', 'CLAIM');
+      throw new MercadoLibreCredentialError('REFRESH_BUSY', 'CLAIM', {
+        refreshFailureStage: 'refresh_lease'
+      });
     }
     if (claim.outcome === 'already_refreshed') {
       const latest = await this.requireCredentials(
         parsed.organizationId,
         parsed.connectionId,
-        'DOUBLE_CHECK'
+        'DOUBLE_CHECK',
+        'refresh_post_persist_validation'
       );
       if (isCurrent(latest, refreshBefore)) return latest.accessToken;
-      throw new MercadoLibreCredentialError('REFRESH_DOUBLE_CHECK_FAILED', 'DOUBLE_CHECK');
+      throw new MercadoLibreCredentialError('REFRESH_DOUBLE_CHECK_FAILED', 'DOUBLE_CHECK', {
+        refreshFailureStage: 'refresh_post_persist_validation'
+      });
     }
 
     let completed = false;
@@ -172,7 +248,8 @@ export class MercadoLibreCredentialService {
       const afterClaim = await this.requireCredentials(
         parsed.organizationId,
         parsed.connectionId,
-        'DOUBLE_CHECK'
+        'DOUBLE_CHECK',
+        'refresh_post_claim_validation'
       );
       if (isCurrent(afterClaim, refreshBefore)) return afterClaim.accessToken;
 
@@ -181,13 +258,19 @@ export class MercadoLibreCredentialService {
       try {
         oauth = this.oauth ?? new MercadoLibreOAuthClient();
       } catch {
-        throw new MercadoLibreCredentialError('CONFIGURATION_ERROR', 'PROVIDER_REQUEST');
+        throw new MercadoLibreCredentialError('CONFIGURATION_ERROR', 'PROVIDER_REQUEST', {
+          refreshFailureStage: 'refresh_provider_request'
+        });
       }
+      activity.providerCallsAttempted += 1;
       try {
         refreshed = await oauth.refreshAccessToken(afterClaim.refreshToken);
+        activity.providerCallsSucceeded += 1;
       } catch (error) {
         if (error instanceof MercadoLibreProviderError) throw providerRefreshError(error);
-        throw new MercadoLibreCredentialError('PROVIDER_NETWORK_ERROR', 'PROVIDER_REQUEST');
+        throw new MercadoLibreCredentialError('PROVIDER_NETWORK_ERROR', 'PROVIDER_REQUEST', {
+          refreshFailureStage: 'refresh_provider_request'
+        });
       }
       const expiresAt = new Date(this.now().getTime() + refreshed.expiresInSeconds * 1000);
       const credentials: DecryptedCredentials = {
@@ -207,7 +290,9 @@ export class MercadoLibreCredentialService {
         });
       } catch (error) {
         if (error instanceof SecretCipherError) {
-          throw new MercadoLibreCredentialError('CREDENTIAL_ENCRYPTION_FAILED', 'ENCRYPT');
+          throw new MercadoLibreCredentialError('CREDENTIAL_ENCRYPTION_FAILED', 'ENCRYPT', {
+            refreshFailureStage: 'refresh_encrypt'
+          });
         }
         throw new MercadoLibreCredentialError(
           'REFRESH_COMPLETE_RPC_FAILED',
@@ -215,9 +300,10 @@ export class MercadoLibreCredentialService {
           error instanceof CredentialRefreshCompleteError
             ? {
                 casFailure: error.code,
+                refreshFailureStage: 'refresh_cas',
                 ...(error.databaseCode ? { databaseCode: error.databaseCode } : {})
               }
-            : {}
+            : { refreshFailureStage: 'refresh_cas' }
         );
       }
       if (completed) return credentials.accessToken;
@@ -233,11 +319,14 @@ export class MercadoLibreCredentialService {
       }
       throw new MercadoLibreCredentialError('REFRESH_CAS_REJECTED', 'CAS_COMPLETE', {
         casFailure: 'CAS_CONFLICT',
+        refreshFailureStage: 'refresh_cas',
         ...latest.diagnostics
       });
     } catch (error) {
       if (error instanceof MercadoLibreCredentialError) throw error;
-      throw new MercadoLibreCredentialError('REFRESH_UNKNOWN_ERROR', 'PROVIDER_RESPONSE');
+      throw new MercadoLibreCredentialError('REFRESH_UNKNOWN_ERROR', 'PROVIDER_RESPONSE', {
+        refreshFailureStage: 'refresh_provider_response'
+      });
     } finally {
       if (!completed) {
         try {
@@ -260,20 +349,28 @@ export class MercadoLibreCredentialService {
   private async requireCredentials(
     organizationId: string,
     connectionId: string,
-    stage: Extract<RefreshStage, 'READ' | 'DOUBLE_CHECK' | 'CAS_COMPLETE'>
+    stage: Extract<RefreshStage, 'READ' | 'DOUBLE_CHECK' | 'CAS_COMPLETE'>,
+    failureStage: CredentialRefreshFailureStage
   ): Promise<DecryptedCredentials> {
     try {
       const credentials = await this.secrets.readDecryptedCredentials(organizationId, connectionId);
-      if (!credentials) throw new MercadoLibreCredentialError('CREDENTIALS_NOT_FOUND', stage);
+      if (!credentials) {
+        throw new MercadoLibreCredentialError('CREDENTIALS_NOT_FOUND', stage, {
+          refreshFailureStage: failureStage
+        });
+      }
       return credentials;
     } catch (error) {
       if (error instanceof MercadoLibreCredentialError) throw error;
       if (error instanceof SecretCipherError) {
-        throw new MercadoLibreCredentialError('CREDENTIAL_DECRYPT_FAILED', 'DECRYPT');
+        throw new MercadoLibreCredentialError('CREDENTIAL_DECRYPT_FAILED', 'DECRYPT', {
+          refreshFailureStage: 'refresh_credential_decrypt'
+        });
       }
       throw new MercadoLibreCredentialError(
         stage === 'DOUBLE_CHECK' ? 'REFRESH_DOUBLE_CHECK_FAILED' : 'CREDENTIAL_READ_FAILED',
-        stage
+        stage,
+        { refreshFailureStage: failureStage }
       );
     }
   }
@@ -298,7 +395,8 @@ export class MercadoLibreCredentialService {
       credentials = await this.requireCredentials(
         input.organizationId,
         input.connectionId,
-        'CAS_COMPLETE'
+        'CAS_COMPLETE',
+        'refresh_post_persist_validation'
       );
     } catch {
       // The safe metadata below is sufficient to classify the rejected CAS.
@@ -320,7 +418,12 @@ export class MercadoLibreCredentialService {
     refreshBefore: Date
   ): Promise<DecryptedCredentials | null> {
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const latest = await this.requireCredentials(organizationId, connectionId, 'DOUBLE_CHECK');
+      const latest = await this.requireCredentials(
+        organizationId,
+        connectionId,
+        'DOUBLE_CHECK',
+        'refresh_post_persist_validation'
+      );
       if (isCurrent(latest, refreshBefore)) return latest;
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
@@ -347,7 +450,45 @@ function providerRefreshError(error: MercadoLibreProviderError): MercadoLibreCre
     error.kind === 'provider_http_error' || error.kind === 'invalid_refresh_token'
       ? 'PROVIDER_RESPONSE'
       : 'PROVIDER_REQUEST';
-  return new MercadoLibreCredentialError(code, stage, error.details);
+  const refreshFailureStage: CredentialRefreshFailureStage =
+    error.kind === 'provider_response_invalid'
+      ? 'refresh_response_validation'
+      : stage === 'PROVIDER_RESPONSE'
+        ? 'refresh_provider_response'
+        : 'refresh_provider_request';
+  return new MercadoLibreCredentialError(code, stage, {
+    ...error.details,
+    refreshFailureStage
+  });
+}
+
+function credentialRefreshFailureStage(
+  error: MercadoLibreCredentialError
+): CredentialRefreshFailureStage {
+  if (error.stage === 'READ') return 'refresh_credential_read';
+  if (error.stage === 'DECRYPT') return 'refresh_credential_decrypt';
+  if (error.stage === 'CLAIM') return 'refresh_lease';
+  if (error.stage === 'DOUBLE_CHECK') return 'refresh_post_persist_validation';
+  if (error.stage === 'PROVIDER_REQUEST') {
+    return error.code === 'PROVIDER_RESPONSE_INVALID'
+      ? 'refresh_response_validation'
+      : 'refresh_provider_request';
+  }
+  if (error.stage === 'PROVIDER_RESPONSE') return 'refresh_provider_response';
+  if (error.stage === 'ENCRYPT') return 'refresh_encrypt';
+  if (error.stage === 'CAS_COMPLETE') return 'refresh_cas';
+  return 'refresh_post_claim_validation';
+}
+
+function publishRefreshDiagnostics(
+  observe: CredentialRefreshDiagnosticsObserver | undefined,
+  diagnostics: CredentialRefreshDiagnostics
+): void {
+  try {
+    observe?.(diagnostics);
+  } catch {
+    // Observability must never change credential behavior.
+  }
 }
 
 function refreshedTokenMetadata(

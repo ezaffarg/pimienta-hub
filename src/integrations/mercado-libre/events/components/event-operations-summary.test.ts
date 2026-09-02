@@ -29,7 +29,11 @@ describe('EventOperationsSummary', () => {
             missedFeedDuplicate: 0,
             missedFeedFailureStage: null,
             providerCallsAttempted: 2,
-            providerCallsSucceeded: 2
+            providerCallsSucceeded: 2,
+            credentialRefreshFailureStage: null,
+            credentialRefreshCasFailure: null,
+            credentialRefreshCallsAttempted: 0,
+            credentialRefreshCallsSucceeded: 0
           }
         }
       })
