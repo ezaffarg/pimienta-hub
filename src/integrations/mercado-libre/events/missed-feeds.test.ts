@@ -118,6 +118,82 @@ describe('MercadoLibreMissedFeedsClient', () => {
     expect(init.headers.authorization).toBe('Bearer test-token');
   });
 
+  it('accepts an items missed-feed message without provider _id', async () => {
+    const { externalEventId: _externalEventId, ...notification } = message();
+    const client = new MercadoLibreMissedFeedsClient(
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            messages: [{ ...notification, request: null, response: { http_code: 503 } }]
+          })
+        )
+      )
+    );
+
+    await expect(
+      client.getItemsPage({
+        accessToken: 'test-token',
+        applicationId: '456',
+        siteId: 'MLA',
+        offset: 0
+      })
+    ).resolves.toEqual([notification]);
+  });
+
+  it('normalizes numeric provider identities while ignoring provider-owned fields', async () => {
+    const client = new MercadoLibreMissedFeedsClient(
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            messages: [
+              {
+                ...message(),
+                _id: 'feed-1',
+                user_id: 123,
+                application_id: 456,
+                request: { headers: { authorization: 'not-projected' } },
+                response: null
+              }
+            ],
+            paging: { offset: 0, limit: 10, total: 1 }
+          })
+        )
+      )
+    );
+
+    await expect(
+      client.getItemsPage({
+        accessToken: 'test-token',
+        applicationId: '456',
+        siteId: 'MLA',
+        offset: 0
+      })
+    ).resolves.toEqual([message()]);
+  });
+
+  it.each([
+    ['malformed JSON', '{'],
+    ['empty response', ''],
+    ['provider error envelope', JSON.stringify({ message: 'invalid app', error: 'bad_request' })],
+    ['unexpected wrapper', JSON.stringify({ results: [] })]
+  ])('fails closed on a 2xx %s as an accepted provider response', async (_label, body) => {
+    const client = new MercadoLibreMissedFeedsClient(
+      vi.fn().mockResolvedValue(new Response(body, { status: 200 }))
+    );
+
+    await expect(
+      client.getItemsPage({
+        accessToken: 'test-token',
+        applicationId: '456',
+        siteId: 'MLA',
+        offset: 0
+      })
+    ).rejects.toMatchObject({
+      code: 'provider_response_invalid',
+      providerCallSucceeded: true
+    });
+  });
+
   it.each([
     [429, 'provider_rate_limited'],
     [503, 'provider_unavailable'],
@@ -371,6 +447,35 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
     expect(test.intake.intakeItemsNotification).not.toHaveBeenCalled();
   });
 
+  it('accepts the runtime-shaped 2xx response without _id through recovery', async () => {
+    const test = setup();
+    const { externalEventId: _externalEventId, ...notification } = message();
+    const service = new MercadoLibreMissedFeedRecoveryService({
+      connections: test.connections as never,
+      credentials: test.credentials,
+      identity: test.identity,
+      feeds: new MercadoLibreMissedFeedsClient(
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              messages: [{ ...notification, request: null, response: { http_code: 503 } }]
+            })
+          )
+        )
+      ),
+      intake: test.intake,
+      applicationId: () => '456'
+    });
+
+    await expect(service.recoverItems({ organizationId, connectionId })).resolves.toMatchObject({
+      pages: 1,
+      accepted: 1,
+      providerCallsAttempted: 2,
+      providerCallsSucceeded: 2
+    });
+    expect(test.intake.intakeItemsNotification).toHaveBeenCalledWith(notification);
+  });
+
   it('fails closed when authenticated identity has no usable site', async () => {
     const test = setup();
     test.identity.getCurrentUser.mockResolvedValue({
@@ -440,9 +545,14 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
     );
     const test = setup(fullPage);
 
-    await expect(
-      test.service.recoverItems({ organizationId, connectionId })
-    ).rejects.toBeInstanceOf(MercadoLibreMissedFeedsError);
+    await expect(test.service.recoverItems({ organizationId, connectionId })).rejects.toMatchObject(
+      {
+        code: 'pagination_loop',
+        failureStage: 'missed_feed_pagination',
+        providerCallsAttempted: 3,
+        providerCallsSucceeded: 3
+      }
+    );
     expect(test.feeds.getItemsPage).toHaveBeenCalledTimes(2);
   });
 

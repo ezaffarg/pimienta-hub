@@ -29,7 +29,7 @@ const siteIdSchema = z
   .regex(/^[A-Z]{3}$/);
 const missedFeedMessageSchema = z
   .object({
-    _id: z.string().trim().min(1).max(255),
+    _id: z.string().trim().min(1).max(255).optional(),
     resource: z
       .string()
       .trim()
@@ -47,7 +47,7 @@ const responseSchema = z
   .passthrough();
 
 export interface MercadoLibreMissedFeedMessage {
-  externalEventId: string;
+  externalEventId?: string;
   resource: string;
   user_id: string;
   topic: 'items';
@@ -182,7 +182,7 @@ export class MercadoLibreMissedFeedsClient {
     return parsed.data.messages.map((message) => {
       const { _id: externalEventId } = message;
       return {
-        externalEventId,
+        ...(externalEventId === undefined ? {} : { externalEventId }),
         resource: message.resource,
         user_id: message.user_id,
         topic: message.topic,
@@ -351,7 +351,7 @@ export class MercadoLibreMissedFeedRecoveryService {
           providerCallsSucceeded
         );
       }
-      const signature = messages.map((message) => message.externalEventId).join('|');
+      const signature = messages.map(messageSignature).join('|');
       if (messages.length > 0 && pageSignatures.has(signature)) {
         throw failure(
           new MercadoLibreMissedFeedsError('pagination_loop'),
@@ -375,7 +375,10 @@ export class MercadoLibreMissedFeedRecoveryService {
       for (const message of messages) {
         try {
           const { externalEventId: _id, ...notification } = message;
-          const result = await intake.intakeItemsNotification({ _id, ...notification });
+          const result = await intake.intakeItemsNotification({
+            ...(_id === undefined ? {} : { _id }),
+            ...notification
+          });
           if (result.outcome === 'ACCEPTED') accepted += 1;
           else duplicates += 1;
         } catch {
@@ -456,6 +459,19 @@ export class MercadoLibreMissedFeedRecoveryService {
       throw new MercadoLibreMissedFeedsError('connection_binding_invalid');
     }
   }
+}
+
+function messageSignature(message: MercadoLibreMissedFeedMessage): string {
+  return (
+    message.externalEventId ??
+    [
+      message.resource,
+      message.user_id,
+      message.application_id,
+      message.sent,
+      message.received
+    ].join('\u001f')
+  );
 }
 
 function observedFailure(
