@@ -172,27 +172,35 @@ describe('MercadoLibreMissedFeedsClient', () => {
   });
 
   it.each([
-    ['malformed JSON', '{'],
-    ['empty response', ''],
-    ['provider error envelope', JSON.stringify({ message: 'invalid app', error: 'bad_request' })],
-    ['unexpected wrapper', JSON.stringify({ results: [] })]
-  ])('fails closed on a 2xx %s as an accepted provider response', async (_label, body) => {
-    const client = new MercadoLibreMissedFeedsClient(
-      vi.fn().mockResolvedValue(new Response(body, { status: 200 }))
-    );
+    ['malformed JSON', '{', 'RESPONSE_JSON'],
+    ['empty response', '', 'RESPONSE_JSON'],
+    [
+      'provider error envelope',
+      JSON.stringify({ message: 'invalid app', error: 'bad_request' }),
+      'RESPONSE_SCHEMA'
+    ],
+    ['unexpected wrapper', JSON.stringify({ results: [] }), 'RESPONSE_SCHEMA']
+  ] as const)(
+    'fails closed on a 2xx %s as an accepted provider response',
+    async (_label, body, responseSubdiagnostic) => {
+      const client = new MercadoLibreMissedFeedsClient(
+        vi.fn().mockResolvedValue(new Response(body, { status: 200 }))
+      );
 
-    await expect(
-      client.getItemsPage({
-        accessToken: 'test-token',
-        applicationId: '456',
-        siteId: 'MLA',
-        offset: 0
-      })
-    ).rejects.toMatchObject({
-      code: 'provider_response_invalid',
-      providerCallSucceeded: true
-    });
-  });
+      await expect(
+        client.getItemsPage({
+          accessToken: 'test-token',
+          applicationId: '456',
+          siteId: 'MLA',
+          offset: 0
+        })
+      ).rejects.toMatchObject({
+        code: 'provider_response_invalid',
+        providerCallSucceeded: true,
+        responseSubdiagnostic
+      });
+    }
+  );
 
   it.each([
     [429, 'provider_rate_limited'],
@@ -224,7 +232,10 @@ describe('MercadoLibreMissedFeedsClient', () => {
         offset: 0
       })
       .catch((cause) => cause);
-    expect(error).toMatchObject({ code: 'provider_response_invalid' });
+    expect(error).toMatchObject({
+      code: 'provider_response_invalid',
+      responseSubdiagnostic: 'RESPONSE_SCHEMA'
+    });
     expect(JSON.stringify(error)).not.toContain('secret');
   });
 
@@ -411,9 +422,11 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
 
   it('counts an accepted HTTP response that fails missed-feed parsing', async () => {
     const test = setup();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     test.feeds.getItemsPage.mockRejectedValue(
       new MercadoLibreMissedFeedsError('provider_response_invalid', {
-        providerCallSucceeded: true
+        providerCallSucceeded: true,
+        responseSubdiagnostic: 'RESPONSE_SCHEMA'
       })
     );
 
@@ -421,9 +434,15 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
       {
         failureStage: 'missed_feed_response',
         providerCallsAttempted: 2,
-        providerCallsSucceeded: 2
+        providerCallsSucceeded: 2,
+        responseSubdiagnostic: 'RESPONSE_SCHEMA'
       }
     );
+    expect(log).toHaveBeenCalledWith('[meli-missed-feed]', {
+      failureStage: 'missed_feed_response',
+      responseSubdiagnostic: 'RESPONSE_SCHEMA'
+    });
+    log.mockRestore();
   });
 
   it('records a successful zero-event page without intake work', async () => {
@@ -496,10 +515,20 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
     ['site', { resource: '/items/MLB123456' }]
   ] as const)('denies a wrong %s binding before intake', async (_label, change) => {
     const test = setup([{ ...message(), ...change }]);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await expect(test.service.recoverItems({ organizationId, connectionId })).rejects.toMatchObject(
-      { code: 'connection_binding_invalid' }
+      {
+        code: 'connection_binding_invalid',
+        failureStage: 'missed_feed_response',
+        responseSubdiagnostic: 'RESPONSE_BINDING'
+      }
     );
     expect(test.intake.intakeItemsNotification).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith('[meli-missed-feed]', {
+      failureStage: 'missed_feed_response',
+      responseSubdiagnostic: 'RESPONSE_BINDING'
+    });
+    log.mockRestore();
   });
 
   it('denies a cross-tenant Connection lookup before credentials', async () => {

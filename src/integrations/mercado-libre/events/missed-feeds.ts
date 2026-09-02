@@ -72,6 +72,15 @@ export const missedFeedFailureStages = [
 
 export type MercadoLibreMissedFeedFailureStage = (typeof missedFeedFailureStages)[number];
 
+export const missedFeedResponseSubdiagnostics = [
+  'RESPONSE_JSON',
+  'RESPONSE_SCHEMA',
+  'RESPONSE_BINDING'
+] as const;
+
+export type MercadoLibreMissedFeedResponseSubdiagnostic =
+  (typeof missedFeedResponseSubdiagnostics)[number];
+
 export class MercadoLibreMissedFeedsError extends Error {
   constructor(
     public readonly code:
@@ -95,6 +104,7 @@ export class MercadoLibreMissedFeedsError extends Error {
       credentialRefreshCasFailure?: CasCompleteFailureCode | null;
       credentialRefreshCallsAttempted?: number;
       credentialRefreshCallsSucceeded?: number;
+      responseSubdiagnostic?: MercadoLibreMissedFeedResponseSubdiagnostic | null;
     } = {}
   ) {
     super(code);
@@ -107,6 +117,7 @@ export class MercadoLibreMissedFeedsError extends Error {
     this.credentialRefreshCasFailure = observability.credentialRefreshCasFailure ?? null;
     this.credentialRefreshCallsAttempted = observability.credentialRefreshCallsAttempted ?? 0;
     this.credentialRefreshCallsSucceeded = observability.credentialRefreshCallsSucceeded ?? 0;
+    this.responseSubdiagnostic = observability.responseSubdiagnostic ?? null;
   }
 
   readonly failureStage: MercadoLibreMissedFeedFailureStage;
@@ -117,6 +128,7 @@ export class MercadoLibreMissedFeedsError extends Error {
   readonly credentialRefreshCasFailure: CasCompleteFailureCode | null;
   readonly credentialRefreshCallsAttempted: number;
   readonly credentialRefreshCallsSucceeded: number;
+  readonly responseSubdiagnostic: MercadoLibreMissedFeedResponseSubdiagnostic | null;
 }
 
 export class MercadoLibreMissedFeedsClient {
@@ -170,13 +182,15 @@ export class MercadoLibreMissedFeedsClient {
       payload = await response.json();
     } catch {
       throw new MercadoLibreMissedFeedsError('provider_response_invalid', {
-        providerCallSucceeded: true
+        providerCallSucceeded: true,
+        responseSubdiagnostic: 'RESPONSE_JSON'
       });
     }
     const parsed = responseSchema.safeParse(payload);
     if (!parsed.success) {
       throw new MercadoLibreMissedFeedsError('provider_response_invalid', {
-        providerCallSucceeded: true
+        providerCallSucceeded: true,
+        responseSubdiagnostic: 'RESPONSE_SCHEMA'
       });
     }
     return parsed.data.messages.map((message) => {
@@ -456,7 +470,9 @@ export class MercadoLibreMissedFeedRecoveryService {
           message.resource.slice('/items/'.length, '/items/'.length + 3) !== siteId
       )
     ) {
-      throw new MercadoLibreMissedFeedsError('connection_binding_invalid');
+      throw new MercadoLibreMissedFeedsError('connection_binding_invalid', {
+        responseSubdiagnostic: 'RESPONSE_BINDING'
+      });
     }
   }
 }
@@ -482,6 +498,11 @@ function observedFailure(
   credentialRefreshDiagnostics = emptyCredentialRefreshDiagnostics()
 ): MercadoLibreMissedFeedsError {
   const code = error instanceof MercadoLibreMissedFeedsError ? error.code : 'provider_unavailable';
+  const responseSubdiagnostic =
+    error instanceof MercadoLibreMissedFeedsError ? error.responseSubdiagnostic : null;
+  if (failureStage === 'missed_feed_response' && responseSubdiagnostic !== null) {
+    console.error('[meli-missed-feed]', { failureStage, responseSubdiagnostic });
+  }
   return new MercadoLibreMissedFeedsError(code, {
     failureStage,
     providerCallsAttempted,
@@ -489,7 +510,8 @@ function observedFailure(
     credentialRefreshFailureStage: credentialRefreshDiagnostics.failureStage,
     credentialRefreshCasFailure: credentialRefreshDiagnostics.casFailure,
     credentialRefreshCallsAttempted: credentialRefreshDiagnostics.providerCallsAttempted,
-    credentialRefreshCallsSucceeded: credentialRefreshDiagnostics.providerCallsSucceeded
+    credentialRefreshCallsSucceeded: credentialRefreshDiagnostics.providerCallsSucceeded,
+    responseSubdiagnostic
   });
 }
 
