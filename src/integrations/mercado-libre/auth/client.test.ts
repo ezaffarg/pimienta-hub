@@ -86,6 +86,82 @@ describe('MercadoLibreOAuthClient', () => {
     expect(String(request.body)).toContain('refresh_token=test-refresh-token-v1');
   });
 
+  it('accepts provider-owned extra fields and projects only the canonical token DTO', async () => {
+    const client = new MercadoLibreOAuthClient(
+      config,
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            access_token: 'test-access-token-v2',
+            refresh_token: 'test-refresh-token-v2',
+            expires_in: 10800,
+            token_type: 'bearer',
+            scope: 'offline_access read write',
+            user_id: 1234567,
+            provider_owned_field: { ignored: true }
+          })
+        )
+      )
+    );
+
+    await expect(client.refreshAccessToken('test-refresh-token-v1')).resolves.toEqual({
+      accessToken: 'test-access-token-v2',
+      refreshToken: 'test-refresh-token-v2',
+      expiresInSeconds: 10800,
+      tokenType: 'bearer',
+      scope: 'offline_access read write',
+      userId: '1234567'
+    });
+  });
+
+  it.each([
+    [{ expires_in: 10800, token_type: 'bearer', refresh_token: 'test-refresh-token' }],
+    [
+      {
+        access_token: 'test-access-token',
+        expires_in: '10800',
+        token_type: 'bearer',
+        refresh_token: 'test-refresh-token'
+      }
+    ],
+    [
+      {
+        access_token: 'test-access-token',
+        expires_in: 0,
+        token_type: 'bearer',
+        refresh_token: 'test-refresh-token'
+      }
+    ]
+  ])('rejects an invalid refresh success contract', async (payload) => {
+    const client = new MercadoLibreOAuthClient(
+      config,
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(payload)))
+    );
+
+    await expect(client.refreshAccessToken('test-refresh-token')).rejects.toMatchObject({
+      kind: 'provider_response_invalid'
+    });
+  });
+
+  it('rejects malformed JSON and a provider error envelope returned with HTTP 2xx', async () => {
+    const client = new MercadoLibreOAuthClient(
+      config,
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response('{not-json'))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: 'invalid_grant', message: 'safe fixture' }))
+        )
+    );
+
+    await expect(client.refreshAccessToken('test-refresh-token')).rejects.toMatchObject({
+      kind: 'provider_response_invalid'
+    });
+    await expect(client.refreshAccessToken('test-refresh-token')).rejects.toMatchObject({
+      kind: 'provider_response_invalid'
+    });
+  });
+
   it('rejects a refresh response that omits the rotated refresh token', async () => {
     const client = new MercadoLibreOAuthClient(
       config,

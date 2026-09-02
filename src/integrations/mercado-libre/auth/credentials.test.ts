@@ -244,16 +244,19 @@ describe('MercadoLibreCredentialService', () => {
   });
 
   it.each([
+    ['provider_http_error', 'refresh_provider_response'],
     ['invalid_refresh_token', 'refresh_provider_response'],
     ['provider_response_invalid', 'refresh_response_validation']
   ] as const)('observes %s at the exact accepted-response boundary', async (kind, stage) => {
     const observe = vi.fn();
+    const completeCredentialRefresh = vi.fn();
     const service = new MercadoLibreCredentialService(
       {
         readDecryptedCredentials: vi.fn().mockResolvedValue(credentials()),
         claimCredentialRefresh: vi
           .fn()
           .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
+        completeCredentialRefresh,
         releaseCredentialRefresh: vi.fn().mockResolvedValue(true)
       } as never,
       {
@@ -269,15 +272,58 @@ describe('MercadoLibreCredentialService', () => {
       details: {
         refreshFailureStage: stage,
         refreshCallsAttempted: 1,
-        refreshCallsSucceeded: 0
+        refreshCallsSucceeded: 1
       }
     });
     expect(observe).toHaveBeenCalledWith({
       failureStage: stage,
       casFailure: null,
       providerCallsAttempted: 1,
-      providerCallsSucceeded: 0
+      providerCallsSucceeded: 1
     });
+    expect(completeCredentialRefresh).not.toHaveBeenCalled();
+  });
+
+  it('classifies canonical mapping failures as response validation after a received response', async () => {
+    const observe = vi.fn();
+    const completeCredentialRefresh = vi.fn();
+    const service = new MercadoLibreCredentialService(
+      {
+        readDecryptedCredentials: vi.fn().mockResolvedValue(credentials()),
+        claimCredentialRefresh: vi
+          .fn()
+          .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
+        completeCredentialRefresh,
+        releaseCredentialRefresh: vi.fn().mockResolvedValue(true)
+      } as never,
+      {
+        refreshAccessToken: vi.fn().mockResolvedValue(
+          refreshResult({
+            expiresInSeconds: Number.POSITIVE_INFINITY
+          })
+        )
+      } as never,
+      () => now,
+      () => connectionId
+    );
+
+    await expect(
+      service.getValidAccessToken({ organizationId, connectionId }, observe)
+    ).rejects.toMatchObject({
+      code: 'PROVIDER_RESPONSE_INVALID',
+      details: {
+        refreshFailureStage: 'refresh_response_validation',
+        refreshCallsAttempted: 1,
+        refreshCallsSucceeded: 1
+      }
+    });
+    expect(observe).toHaveBeenCalledWith({
+      failureStage: 'refresh_response_validation',
+      casFailure: null,
+      providerCallsAttempted: 1,
+      providerCallsSucceeded: 1
+    });
+    expect(completeCredentialRefresh).not.toHaveBeenCalled();
   });
 
   it('does not overwrite credentials after a failed stale CAS and uses the newer token', async () => {
@@ -482,8 +528,8 @@ describe('MercadoLibreCredentialService', () => {
     [
       new Error('untyped completion error'),
       'REFRESH_UNKNOWN_ERROR',
-      'PROVIDER_RESPONSE',
-      'refresh_provider_response'
+      'CAS_COMPLETE',
+      'refresh_post_claim_validation'
     ],
     [
       new MercadoLibreCredentialError('REFRESH_COMPLETE_RPC_FAILED', 'CAS_COMPLETE', {
