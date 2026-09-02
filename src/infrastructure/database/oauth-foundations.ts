@@ -16,21 +16,28 @@ import { PersistenceError } from './repositories';
 const providerSchema = z.enum(['mercado-libre', 'shopify', 'tiendanube', 'woocommerce']);
 const uuidSchema = z.uuid();
 const oauthPurposeSchema = z.enum(['admin_connect', 'client_self_onboard', 'reconnect']);
+const prohibitedMetadataKeys = [
+  'access_token',
+  'refresh_token',
+  'authorization_code',
+  'code',
+  'password',
+  'cookie',
+  'authorization'
+];
+const excludesProhibitedMetadataKeys = (metadata: Record<string, string>) =>
+  !prohibitedMetadataKeys.some((key) => key in metadata);
 const auditMetadataSchema = z
   .record(z.string().max(64), z.string().max(256))
+  .refine(excludesProhibitedMetadataKeys, 'Audit metadata contains a prohibited key');
+const tokenMetadataSchema = z
+  .record(z.string().max(64), z.string().max(1000))
   .refine(
     (metadata) =>
-      ![
-        'access_token',
-        'refresh_token',
-        'authorization_code',
-        'code',
-        'password',
-        'cookie',
-        'authorization'
-      ].some((key) => key in metadata),
-    'Audit metadata contains a prohibited key'
-  );
+      Object.entries(metadata).every(([key, value]) => key === 'scope' || value.length <= 256),
+    'Token metadata contains an oversized value'
+  )
+  .refine(excludesProhibitedMetadataKeys, 'Token metadata contains a prohibited key');
 
 export type OAuthPurpose = z.infer<typeof oauthPurposeSchema>;
 export type OnboardingOutcome =
@@ -269,7 +276,7 @@ export class OAuthFoundationRepository {
             accessToken: z.string().min(1).max(8192),
             refreshToken: z.string().min(1).max(8192),
             accessTokenExpiresAt: z.iso.datetime(),
-            tokenMetadata: auditMetadataSchema
+            tokenMetadata: tokenMetadataSchema
           })
           .strict()
       })
@@ -372,7 +379,7 @@ export class OAuthFoundationRepository {
             accessToken: z.string().min(1).max(8192),
             refreshToken: z.string().min(1).max(8192),
             accessTokenExpiresAt: z.iso.datetime(),
-            tokenMetadata: auditMetadataSchema,
+            tokenMetadata: tokenMetadataSchema,
             credentialVersion: z.number().int().positive()
           })
           .strict()

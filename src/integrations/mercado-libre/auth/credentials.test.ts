@@ -4,6 +4,7 @@ vi.mock('server-only', () => ({}));
 
 import {
   CredentialRefreshCompleteError,
+  OAuthFoundationRepository,
   type DecryptedCredentials
 } from '@/infrastructure/database/oauth-foundations';
 import { SecretCipherError } from '@/lib/crypto/integration-secrets';
@@ -165,14 +166,19 @@ describe('MercadoLibreCredentialService', () => {
 
   it('claims, refreshes and atomically persists rotated credentials', async () => {
     const original = credentials();
-    const completeCredentialRefresh = vi.fn().mockResolvedValue(true);
+    let leasePresent = false;
+    const completeCredentialRefresh = vi.fn().mockImplementation(async () => {
+      leasePresent = false;
+      return true;
+    });
     const releaseCredentialRefresh = vi.fn();
     const service = new MercadoLibreCredentialService(
       {
         readDecryptedCredentials: vi.fn().mockResolvedValue(original),
-        claimCredentialRefresh: vi
-          .fn()
-          .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
+        claimCredentialRefresh: vi.fn().mockImplementation(async () => {
+          leasePresent = true;
+          return { outcome: 'claimed', credentialVersion: 1 } as const;
+        }),
         completeCredentialRefresh,
         releaseCredentialRefresh
       } as never,
@@ -202,7 +208,96 @@ describe('MercadoLibreCredentialService', () => {
     });
     expect(completeCredentialRefresh).toHaveBeenCalledOnce();
     expect(releaseCredentialRefresh).not.toHaveBeenCalled();
+    expect(leasePresent).toBe(false);
   });
+
+  it('projects provider metadata into a valid completion input before the CAS RPC', async () => {
+    vi.stubEnv('INTEGRATION_SECRETS_MASTER_KEY', Buffer.alloc(32, 7).toString('base64url'));
+    const scope = 's'.repeat(299);
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null });
+    const repository = new OAuthFoundationRepository({ rpc } as never);
+    const service = new MercadoLibreCredentialService(
+      {
+        readDecryptedCredentials: vi
+          .fn()
+          .mockResolvedValue(credentials({ tokenMetadata: { legacy: 'value' } })),
+        claimCredentialRefresh: vi
+          .fn()
+          .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
+        completeCredentialRefresh: repository.completeCredentialRefresh.bind(repository),
+        releaseCredentialRefresh: vi.fn().mockResolvedValue(true)
+      } as never,
+      {
+        refreshAccessToken: vi.fn().mockResolvedValue(
+          refreshResult({
+            scope,
+            userId: '1234567',
+            providerOwnedField: 'ignored'
+          })
+        )
+      } as never,
+      () => now,
+      () => connectionId
+    );
+
+    try {
+      await expect(service.getValidAccessToken({ organizationId, connectionId })).resolves.toBe(
+        'rotated-access-token'
+      );
+      expect(rpc).toHaveBeenCalledOnce();
+      expect(rpc).toHaveBeenCalledWith(
+        'complete_integration_secret_refresh',
+        expect.objectContaining({
+          p_access_token_expires_at: '2030-01-01T01:00:00.000Z',
+          p_token_metadata: {
+            legacy: 'value',
+            scope,
+            token_type: 'bearer',
+            user_id: '1234567'
+          }
+        })
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.each([null, 2])(
+    'rejects an invalid claimed credential version before the provider call (%s)',
+    async (credentialVersion) => {
+      const refreshAccessToken = vi.fn();
+      const completeCredentialRefresh = vi.fn();
+      const releaseCredentialRefresh = vi.fn().mockResolvedValue(true);
+      const service = new MercadoLibreCredentialService(
+        {
+          readDecryptedCredentials: vi.fn().mockResolvedValue(credentials()),
+          claimCredentialRefresh: vi
+            .fn()
+            .mockResolvedValue({ outcome: 'claimed', credentialVersion }),
+          completeCredentialRefresh,
+          releaseCredentialRefresh
+        } as never,
+        { refreshAccessToken } as never,
+        () => now,
+        () => connectionId
+      );
+
+      await expect(
+        service.getValidAccessToken({ organizationId, connectionId })
+      ).rejects.toMatchObject({
+        code: 'REFRESH_DOUBLE_CHECK_FAILED',
+        stage: 'DOUBLE_CHECK',
+        details: {
+          refreshFailureStage: 'refresh_post_claim_validation',
+          refreshCallsAttempted: 0,
+          refreshCallsSucceeded: 0
+        }
+      });
+      expect(refreshAccessToken).not.toHaveBeenCalled();
+      expect(completeCredentialRefresh).not.toHaveBeenCalled();
+      expect(releaseCredentialRefresh).toHaveBeenCalledOnce();
+    }
+  );
 
   it('preserves prior credentials when the provider refresh fails', async () => {
     const completeCredentialRefresh = vi.fn();

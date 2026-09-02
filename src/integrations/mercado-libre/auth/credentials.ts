@@ -13,6 +13,8 @@ import { SecretCipherError } from '@/lib/crypto/integration-secrets';
 import { MercadoLibreOAuthClient, MercadoLibreProviderError } from './client';
 
 const EXPIRY_SAFETY_WINDOW_MS = 120_000;
+const TOKEN_METADATA_VALUE_MAX_LENGTH = 256;
+const TOKEN_SCOPE_MAX_LENGTH = 1000;
 
 export class MercadoLibreCredentialError extends Error {
   constructor(
@@ -247,6 +249,11 @@ export class MercadoLibreCredentialService {
         'DOUBLE_CHECK',
         'refresh_post_claim_validation'
       );
+      if (claim.credentialVersion !== afterClaim.credentialVersion) {
+        throw new MercadoLibreCredentialError('REFRESH_DOUBLE_CHECK_FAILED', 'DOUBLE_CHECK', {
+          refreshFailureStage: 'refresh_post_claim_validation'
+        });
+      }
       if (isCurrent(afterClaim, refreshBefore)) return afterClaim.accessToken;
 
       let refreshed: Awaited<ReturnType<MercadoLibreOAuthClient['refreshAccessToken']>>;
@@ -532,8 +539,10 @@ function refreshedTokenMetadata(
   return {
     ...previous,
     token_type: token.tokenType,
-    ...(token.scope ? { scope: token.scope } : {}),
-    ...(token.userId ? { user_id: token.userId } : {})
+    ...(token.scope && token.scope.length <= TOKEN_SCOPE_MAX_LENGTH ? { scope: token.scope } : {}),
+    ...(token.userId && token.userId.length <= TOKEN_METADATA_VALUE_MAX_LENGTH
+      ? { user_id: token.userId }
+      : {})
   };
 }
 

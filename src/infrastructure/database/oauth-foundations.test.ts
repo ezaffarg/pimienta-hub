@@ -8,6 +8,26 @@ import {
   newOAuthAttemptState
 } from './oauth-foundations';
 
+function completeWithTokenMetadata(tokenMetadata: Record<string, string>) {
+  const rpc = vi.fn().mockResolvedValue({ data: true, error: null });
+  return {
+    promise: new OAuthFoundationRepository({ rpc } as never).completeCredentialRefresh({
+      organizationId: 'org_test',
+      connectionId: '10000000-0000-4000-8000-000000000001',
+      expectedVersion: 1,
+      leaseId: '10000000-0000-4000-8000-000000000002',
+      credentials: {
+        accessToken: 'rotated-access-token-plaintext',
+        refreshToken: 'rotated-refresh-token-plaintext',
+        accessTokenExpiresAt: '2030-01-01T00:00:00.000Z',
+        tokenMetadata,
+        credentialVersion: 2
+      }
+    }),
+    rpc
+  };
+}
+
 describe('OAuth foundation validation', () => {
   it('generates opaque state with sufficient entropy representation', () => {
     const state = newOAuthAttemptState();
@@ -99,6 +119,38 @@ describe('OAuth foundation validation', () => {
     expect(payload.p_encrypted_access_token).not.toContain('rotated-access-token-plaintext');
     expect(payload.p_encrypted_refresh_token).not.toContain('rotated-refresh-token-plaintext');
     vi.unstubAllEnvs();
+  });
+
+  it('bounds token metadata by field before the compare-and-swap RPC', async () => {
+    vi.stubEnv('INTEGRATION_SECRETS_MASTER_KEY', Buffer.alloc(32, 7).toString('base64url'));
+    const accepted: Record<string, string>[] = [
+      { scope: 's'.repeat(299) },
+      { scope: 's'.repeat(1000) },
+      { user_id: 'u'.repeat(256) }
+    ];
+    const rejected: Record<string, string>[] = [
+      { scope: 's'.repeat(1001) },
+      { user_id: 'u'.repeat(257) }
+    ];
+
+    try {
+      for (const tokenMetadata of accepted) {
+        const { promise, rpc } = completeWithTokenMetadata(tokenMetadata);
+        await expect(promise).resolves.toBe(true);
+        expect(rpc).toHaveBeenCalledWith(
+          'complete_integration_secret_refresh',
+          expect.objectContaining({ p_token_metadata: tokenMetadata })
+        );
+      }
+
+      for (const tokenMetadata of rejected) {
+        const { promise, rpc } = completeWithTokenMetadata(tokenMetadata);
+        await expect(promise).rejects.toThrow();
+        expect(rpc).not.toHaveBeenCalled();
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it.each([
