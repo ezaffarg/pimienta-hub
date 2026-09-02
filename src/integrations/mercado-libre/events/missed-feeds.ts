@@ -224,7 +224,11 @@ export class MercadoLibreMissedFeedRecoveryService {
       }
     );
     const credentials = this.dependencies.credentials ?? new MercadoLibreCredentialService();
-    const accessToken = await credentials.getValidAccessToken(scope).catch(() => {
+    const credentialScope = {
+      organizationId: scope.organizationId,
+      connectionId: scope.connectionId
+    };
+    const accessToken = await credentials.getValidAccessToken(credentialScope).catch(() => {
       throw observedFailure(
         new MercadoLibreMissedFeedsError('credential_failed'),
         'credential_resolution',

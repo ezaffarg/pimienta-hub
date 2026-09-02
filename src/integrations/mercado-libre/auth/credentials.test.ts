@@ -56,6 +56,21 @@ describe('MercadoLibreCredentialService', () => {
     expect(refreshAccessToken).not.toHaveBeenCalled();
   });
 
+  it('fails safely when the stored credential is missing', async () => {
+    const refreshAccessToken = vi.fn();
+    const service = new MercadoLibreCredentialService(
+      { readDecryptedCredentials: vi.fn().mockResolvedValue(null) } as never,
+      { refreshAccessToken } as never,
+      () => now,
+      () => connectionId
+    );
+
+    await expect(
+      service.getValidAccessToken({ organizationId, connectionId })
+    ).rejects.toMatchObject({ code: 'CREDENTIALS_NOT_FOUND', stage: 'READ' });
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+  });
+
   it('claims, refreshes and atomically persists rotated credentials', async () => {
     const original = credentials();
     const completeCredentialRefresh = vi.fn().mockResolvedValue(true);

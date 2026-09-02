@@ -154,3 +154,5 @@ corrige la detección de body vacío del boundary interno sin ejecutar mantenimi
 audita stage, conteo provider y cadence del fallo `missed_feed_failed` sin nuevas llamadas reales.
 [X-F3-C-LOCAL-2D3C10](2.20x-f3c-local2d3c10-durable-missed-feed-observability.md)
 agrega observabilidad durable y segura de stage y provider calls mediante una migration forward.
+[X-F3-C-LOCAL-2D3C12](2.20x-f3c-local2d3c12-credential-resolution-runtime-gap.md)
+diagnostica y corrige localmente el scope estricto de resolución de credenciales sin nuevas llamadas reales.

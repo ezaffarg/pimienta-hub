@@ -196,6 +196,17 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
     });
   });
 
+  it('passes only the canonical credential scope when pagination is present', async () => {
+    const test = setup([]);
+
+    await test.service.recoverItems({ organizationId, connectionId, offset: 20, maxPages: 1 });
+
+    expect(test.credentials.getValidAccessToken).toHaveBeenCalledWith({
+      organizationId,
+      connectionId
+    });
+  });
+
   it('preserves an identity request failure before any missed-feed page attempt', async () => {
     const test = setup();
     test.identity.getCurrentUser.mockRejectedValue(new Error('raw identity payload'));
@@ -230,6 +241,7 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
       providerCallsSucceeded: 0
     });
     expect(test.identity.getCurrentUser).not.toHaveBeenCalled();
+    expect(test.feeds.getItemsPage).not.toHaveBeenCalled();
     expect(JSON.stringify(error)).not.toContain('material');
   });
 
