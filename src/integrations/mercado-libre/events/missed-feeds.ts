@@ -501,7 +501,13 @@ function observedFailure(
   const responseSubdiagnostic =
     error instanceof MercadoLibreMissedFeedsError ? error.responseSubdiagnostic : null;
   if (failureStage === 'missed_feed_response' && responseSubdiagnostic !== null) {
-    console.error('[meli-missed-feed]', { failureStage, responseSubdiagnostic });
+    process.stderr.write(
+      `${JSON.stringify({
+        component: 'meli-missed-feed',
+        failureStage,
+        subdiagnostic: responseSubdiagnostic
+      })}\n`
+    );
   }
   return new MercadoLibreMissedFeedsError(code, {
     failureStage,

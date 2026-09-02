@@ -420,28 +420,38 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
     expect(test.intake.intakeItemsNotification).not.toHaveBeenCalled();
   });
 
-  it('counts an accepted HTTP response that fails missed-feed parsing', async () => {
+  it.each([
+    ['RESPONSE_JSON', '{'],
+    ['RESPONSE_SCHEMA', JSON.stringify({ results: [] })]
+  ] as const)('emits one safe %s diagnostic before rejecting', async (subdiagnostic, body) => {
     const test = setup();
-    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    test.feeds.getItemsPage.mockRejectedValue(
-      new MercadoLibreMissedFeedsError('provider_response_invalid', {
-        providerCallSucceeded: true,
-        responseSubdiagnostic: 'RESPONSE_SCHEMA'
-      })
-    );
-
-    await expect(test.service.recoverItems({ organizationId, connectionId })).rejects.toMatchObject(
-      {
-        failureStage: 'missed_feed_response',
-        providerCallsAttempted: 2,
-        providerCallsSucceeded: 2,
-        responseSubdiagnostic: 'RESPONSE_SCHEMA'
-      }
-    );
-    expect(log).toHaveBeenCalledWith('[meli-missed-feed]', {
-      failureStage: 'missed_feed_response',
-      responseSubdiagnostic: 'RESPONSE_SCHEMA'
+    const log = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const service = new MercadoLibreMissedFeedRecoveryService({
+      connections: test.connections as never,
+      credentials: test.credentials,
+      identity: test.identity,
+      feeds: new MercadoLibreMissedFeedsClient(
+        vi.fn().mockResolvedValue(new Response(body, { status: 200 }))
+      ),
+      intake: test.intake,
+      applicationId: () => '456'
     });
+
+    await expect(service.recoverItems({ organizationId, connectionId })).rejects.toMatchObject({
+      code: 'provider_response_invalid',
+      failureStage: 'missed_feed_response',
+      providerCallsAttempted: 2,
+      providerCallsSucceeded: 2,
+      responseSubdiagnostic: subdiagnostic
+    });
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith(
+      `${JSON.stringify({
+        component: 'meli-missed-feed',
+        failureStage: 'missed_feed_response',
+        subdiagnostic
+      })}\n`
+    );
     log.mockRestore();
   });
 
@@ -515,7 +525,7 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
     ['site', { resource: '/items/MLB123456' }]
   ] as const)('denies a wrong %s binding before intake', async (_label, change) => {
     const test = setup([{ ...message(), ...change }]);
-    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const log = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     await expect(test.service.recoverItems({ organizationId, connectionId })).rejects.toMatchObject(
       {
         code: 'connection_binding_invalid',
@@ -524,10 +534,14 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
       }
     );
     expect(test.intake.intakeItemsNotification).not.toHaveBeenCalled();
-    expect(log).toHaveBeenCalledWith('[meli-missed-feed]', {
-      failureStage: 'missed_feed_response',
-      responseSubdiagnostic: 'RESPONSE_BINDING'
-    });
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith(
+      `${JSON.stringify({
+        component: 'meli-missed-feed',
+        failureStage: 'missed_feed_response',
+        subdiagnostic: 'RESPONSE_BINDING'
+      })}\n`
+    );
     log.mockRestore();
   });
 
