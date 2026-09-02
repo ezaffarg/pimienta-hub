@@ -99,6 +99,121 @@ describe('IntegrationEventMaintenanceRepository', () => {
     );
   });
 
+  it.each(['CAS_RPC_THROW', 'CAS_RPC_ERROR', 'CAS_RESPONSE_INVALID', 'CAS_CONFLICT'] as const)(
+    'preserves %s in checkpoint and finalize RPC payloads',
+    async (casFailure) => {
+      const rpc = vi
+        .fn()
+        .mockResolvedValueOnce({ data: 'checkpointed', error: null })
+        .mockResolvedValueOnce({ data: 'finalized', error: null });
+      const repository = new IntegrationEventMaintenanceRepository({
+        rpc
+      } as unknown as SupabaseClient);
+      const counters = {
+        receivedSelected: 0,
+        retrySelected: 0,
+        processed: 0,
+        staleNoop: 0,
+        equivalentNoop: 0,
+        retryScheduled: 0,
+        retryExhausted: 0,
+        failedPermanent: 0,
+        skipped: 0,
+        missedFeedAccepted: 0,
+        missedFeedDuplicate: 0,
+        missedFeedPages: 0,
+        providerCallsAttempted: 0,
+        providerCallsSucceeded: 0
+      };
+      const credentialRefresh = {
+        failureStage: 'refresh_cas' as const,
+        casFailure,
+        providerCallsAttempted: 1,
+        providerCallsSucceeded: 1
+      };
+
+      await expect(
+        repository.checkpoint({
+          runId,
+          counters,
+          missedFeedOffset: null,
+          lastMissedFeedCheckAt: '2026-08-28T12:00:00.000Z',
+          missedFeedFailureStage: 'credential_resolution',
+          credentialRefresh
+        })
+      ).resolves.toBe('CHECKPOINTED');
+      await expect(
+        repository.finalize({
+          runId,
+          status: 'failed',
+          counters,
+          missedFeedOffset: null,
+          lastMissedFeedCheckAt: '2026-08-28T12:00:00.000Z',
+          missedFeedFailureStage: 'credential_resolution',
+          credentialRefresh,
+          errorCode: 'missed_feed_failed',
+          errorSummary: 'Missed feeds recovery failed safely'
+        })
+      ).resolves.toBe('FINALIZED');
+
+      expect(rpc).toHaveBeenNthCalledWith(
+        1,
+        'checkpoint_integration_event_maintenance_run',
+        expect.objectContaining({
+          p_credential_refresh_failure_stage: 'refresh_cas',
+          p_credential_refresh_cas_failure: casFailure
+        })
+      );
+      expect(rpc).toHaveBeenNthCalledWith(
+        2,
+        'finalize_integration_event_maintenance_run',
+        expect.objectContaining({
+          p_credential_refresh_failure_stage: 'refresh_cas',
+          p_credential_refresh_cas_failure: casFailure
+        })
+      );
+    }
+  );
+
+  it('rejects an incomplete refresh_cas diagnostic before persistence', async () => {
+    const rpc = vi.fn();
+    const repository = new IntegrationEventMaintenanceRepository({
+      rpc
+    } as unknown as SupabaseClient);
+
+    await expect(
+      repository.checkpoint({
+        runId,
+        counters: {
+          receivedSelected: 0,
+          retrySelected: 0,
+          processed: 0,
+          staleNoop: 0,
+          equivalentNoop: 0,
+          retryScheduled: 0,
+          retryExhausted: 0,
+          failedPermanent: 0,
+          skipped: 0,
+          missedFeedAccepted: 0,
+          missedFeedDuplicate: 0,
+          missedFeedPages: 0,
+          providerCallsAttempted: 0,
+          providerCallsSucceeded: 0
+        },
+        missedFeedOffset: null,
+        lastMissedFeedCheckAt: '2026-08-28T12:00:00.000Z',
+        missedFeedFailureStage: 'credential_resolution',
+        credentialRefresh: {
+          failureStage: 'refresh_cas',
+          casFailure: null,
+          providerCallsAttempted: 1,
+          providerCallsSucceeded: 1
+        }
+      })
+    ).rejects.toThrow('Credential refresh CAS subtype missing');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it('maps a tenant-scoped operations summary', async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [

@@ -442,15 +442,17 @@ describe('MercadoLibreCredentialService', () => {
       ['CAS_RPC_ERROR', 'PGRST202'],
       ['CAS_RESPONSE_INVALID', undefined]
     ] as const) {
+      const completionError =
+        casFailure === 'CAS_RPC_THROW'
+          ? { name: 'CredentialRefreshCompleteError', code: casFailure }
+          : new CredentialRefreshCompleteError(casFailure, databaseCode);
       const rpcFailure = new MercadoLibreCredentialService(
         {
           readDecryptedCredentials: vi.fn().mockResolvedValue(credentials()),
           claimCredentialRefresh: vi
             .fn()
             .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
-          completeCredentialRefresh: vi
-            .fn()
-            .mockRejectedValue(new CredentialRefreshCompleteError(casFailure, databaseCode)),
+          completeCredentialRefresh: vi.fn().mockRejectedValue(completionError),
           releaseCredentialRefresh: vi.fn().mockResolvedValue(true)
         } as never,
         { refreshAccessToken: vi.fn().mockResolvedValue(refreshResult()) } as never,
@@ -475,6 +477,59 @@ describe('MercadoLibreCredentialService', () => {
       expect(JSON.stringify(error)).not.toContain('rotated-access-token');
     }
   });
+
+  it.each([
+    [
+      new Error('untyped completion error'),
+      'REFRESH_UNKNOWN_ERROR',
+      'PROVIDER_RESPONSE',
+      'refresh_provider_response'
+    ],
+    [
+      new MercadoLibreCredentialError('REFRESH_COMPLETE_RPC_FAILED', 'CAS_COMPLETE', {
+        refreshFailureStage: 'refresh_cas'
+      }),
+      'REFRESH_COMPLETE_RPC_FAILED',
+      'CAS_COMPLETE',
+      'refresh_post_claim_validation'
+    ]
+  ] as const)(
+    'does not classify a completion rejection without a subtype as refresh_cas',
+    async (cause, code, stage, failureStage) => {
+      const observe = vi.fn();
+      const service = new MercadoLibreCredentialService(
+        {
+          readDecryptedCredentials: vi.fn().mockResolvedValue(credentials()),
+          claimCredentialRefresh: vi
+            .fn()
+            .mockResolvedValue({ outcome: 'claimed', credentialVersion: 1 }),
+          completeCredentialRefresh: vi.fn().mockRejectedValue(cause),
+          releaseCredentialRefresh: vi.fn().mockResolvedValue(true)
+        } as never,
+        { refreshAccessToken: vi.fn().mockResolvedValue(refreshResult()) } as never,
+        () => now,
+        () => connectionId
+      );
+
+      await expect(
+        service.getValidAccessToken({ organizationId, connectionId }, observe)
+      ).rejects.toMatchObject({
+        code,
+        stage,
+        details: {
+          refreshFailureStage: failureStage,
+          refreshCallsAttempted: 1,
+          refreshCallsSucceeded: 1
+        }
+      });
+      expect(observe).toHaveBeenCalledWith({
+        failureStage,
+        casFailure: null,
+        providerCallsAttempted: 1,
+        providerCallsSucceeded: 1
+      });
+    }
+  );
 
   it('reports version, lease mismatch, and missing lease as safe CAS diagnostics', async () => {
     const cases = [

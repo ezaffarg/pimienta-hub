@@ -8,10 +8,7 @@ import type {
   CredentialRefreshState,
   DecryptedCredentials
 } from '@/infrastructure/database/oauth-foundations';
-import {
-  CredentialRefreshCompleteError,
-  OAuthFoundationRepository
-} from '@/infrastructure/database/oauth-foundations';
+import { OAuthFoundationRepository } from '@/infrastructure/database/oauth-foundations';
 import { SecretCipherError } from '@/lib/crypto/integration-secrets';
 import { MercadoLibreOAuthClient, MercadoLibreProviderError } from './client';
 
@@ -164,8 +161,7 @@ export class MercadoLibreCredentialService {
       if (!(error instanceof MercadoLibreCredentialError)) throw error;
       const observed = new MercadoLibreCredentialError(error.code, error.stage, {
         ...error.details,
-        refreshFailureStage:
-          error.details.refreshFailureStage ?? credentialRefreshFailureStage(error),
+        refreshFailureStage: credentialRefreshFailureStage(error),
         refreshCallsAttempted: activity.providerCallsAttempted,
         refreshCallsSucceeded: activity.providerCallsSucceeded
       });
@@ -294,17 +290,13 @@ export class MercadoLibreCredentialService {
             refreshFailureStage: 'refresh_encrypt'
           });
         }
-        throw new MercadoLibreCredentialError(
-          'REFRESH_COMPLETE_RPC_FAILED',
-          'CAS_COMPLETE',
-          error instanceof CredentialRefreshCompleteError
-            ? {
-                casFailure: error.code,
-                refreshFailureStage: 'refresh_cas',
-                ...(error.databaseCode ? { databaseCode: error.databaseCode } : {})
-              }
-            : { refreshFailureStage: 'refresh_cas' }
-        );
+        const casFailure = credentialRefreshCompleteFailure(error);
+        if (!casFailure) throw error;
+        throw new MercadoLibreCredentialError('REFRESH_COMPLETE_RPC_FAILED', 'CAS_COMPLETE', {
+          casFailure: casFailure.code,
+          refreshFailureStage: 'refresh_cas',
+          ...(casFailure.databaseCode ? { databaseCode: casFailure.databaseCode } : {})
+        });
       }
       if (completed) return credentials.accessToken;
 
@@ -462,9 +454,32 @@ function providerRefreshError(error: MercadoLibreProviderError): MercadoLibreCre
   });
 }
 
+function credentialRefreshCompleteFailure(error: unknown): {
+  code: CredentialRefreshCompleteFailureCode;
+  databaseCode?: string;
+} | null {
+  const parsed = z
+    .object({
+      name: z.literal('CredentialRefreshCompleteError'),
+      code: z.enum(['CAS_RPC_THROW', 'CAS_RPC_ERROR', 'CAS_RESPONSE_INVALID']),
+      databaseCode: z
+        .string()
+        .regex(/^[A-Z0-9]{5,16}$/)
+        .optional()
+    })
+    .passthrough()
+    .safeParse(error);
+  return parsed.success ? parsed.data : null;
+}
+
 function credentialRefreshFailureStage(
   error: MercadoLibreCredentialError
 ): CredentialRefreshFailureStage {
+  if (error.details.refreshFailureStage) {
+    return error.details.refreshFailureStage === 'refresh_cas' && !error.details.casFailure
+      ? 'refresh_post_claim_validation'
+      : error.details.refreshFailureStage;
+  }
   if (error.stage === 'READ') return 'refresh_credential_read';
   if (error.stage === 'DECRYPT') return 'refresh_credential_decrypt';
   if (error.stage === 'CLAIM') return 'refresh_lease';
@@ -476,7 +491,7 @@ function credentialRefreshFailureStage(
   }
   if (error.stage === 'PROVIDER_RESPONSE') return 'refresh_provider_response';
   if (error.stage === 'ENCRYPT') return 'refresh_encrypt';
-  if (error.stage === 'CAS_COMPLETE') return 'refresh_cas';
+  if (error.stage === 'CAS_COMPLETE' && error.details.casFailure) return 'refresh_cas';
   return 'refresh_post_claim_validation';
 }
 

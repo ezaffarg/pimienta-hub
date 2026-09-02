@@ -282,6 +282,38 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
     expect(JSON.stringify(error)).not.toContain('material');
   });
 
+  it.each(['CAS_RPC_THROW', 'CAS_RPC_ERROR', 'CAS_RESPONSE_INVALID', 'CAS_CONFLICT'] as const)(
+    'preserves credential refresh subtype %s before any provider call',
+    async (casFailure) => {
+      const test = setup();
+      test.credentials.getValidAccessToken.mockRejectedValue(
+        new MercadoLibreCredentialError('REFRESH_COMPLETE_RPC_FAILED', 'CAS_COMPLETE', {
+          refreshFailureStage: 'refresh_cas',
+          casFailure,
+          refreshCallsAttempted: 1,
+          refreshCallsSucceeded: 1
+        })
+      );
+
+      const error = await test.service
+        .recoverItems({ organizationId, connectionId })
+        .catch((cause) => cause);
+
+      expect(error).toMatchObject({
+        code: 'credential_failed',
+        failureStage: 'credential_resolution',
+        providerCallsAttempted: 0,
+        providerCallsSucceeded: 0,
+        credentialRefreshFailureStage: 'refresh_cas',
+        credentialRefreshCasFailure: casFailure,
+        credentialRefreshCallsAttempted: 1,
+        credentialRefreshCallsSucceeded: 1
+      });
+      expect(test.identity.getCurrentUser).not.toHaveBeenCalled();
+      expect(test.feeds.getItemsPage).not.toHaveBeenCalled();
+    }
+  );
+
   it('preserves a missed-feed HTTP failure after one identity and page attempt', async () => {
     const test = setup();
     test.feeds.getItemsPage.mockRejectedValue(

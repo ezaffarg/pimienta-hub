@@ -84,6 +84,9 @@ export const credentialRefreshDiagnosticsSchema = z
     if (value.casFailure !== null && value.failureStage !== 'refresh_cas') {
       context.addIssue({ code: 'custom', message: 'Credential refresh CAS stage invalid' });
     }
+    if (value.failureStage === 'refresh_cas' && value.casFailure === null) {
+      context.addIssue({ code: 'custom', message: 'Credential refresh CAS subtype missing' });
+    }
   });
 export type CredentialRefreshDiagnostics = z.infer<typeof credentialRefreshDiagnosticsSchema>;
 

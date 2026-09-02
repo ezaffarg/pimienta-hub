@@ -172,37 +172,47 @@ describe('runIncrementalEventMaintenance', () => {
     expect(JSON.stringify(test.maintenance.finalize.mock.calls)).not.toContain('payload');
   });
 
-  it('persists safe credential refresh stage, CAS subtype and separate OAuth counters', async () => {
-    const test = setup();
-    test.events.listReceivedForConnection.mockReset().mockResolvedValue([]);
-    test.events.listDueRetriesForConnection.mockResolvedValue([]);
-    test.missedFeeds.recoverItems.mockRejectedValue(
-      new MercadoLibreMissedFeedsError('credential_failed', {
-        failureStage: 'credential_resolution',
-        credentialRefreshFailureStage: 'refresh_cas',
-        credentialRefreshCasFailure: 'CAS_CONFLICT',
-        credentialRefreshCallsAttempted: 1,
-        credentialRefreshCallsSucceeded: 1
-      })
-    );
+  it.each(['CAS_RPC_THROW', 'CAS_RPC_ERROR', 'CAS_RESPONSE_INVALID', 'CAS_CONFLICT'] as const)(
+    'persists safe credential refresh subtype %s and separate OAuth counters',
+    async (casFailure) => {
+      const test = setup();
+      test.events.listReceivedForConnection.mockReset().mockResolvedValue([]);
+      test.events.listDueRetriesForConnection.mockResolvedValue([]);
+      test.missedFeeds.recoverItems.mockRejectedValue(
+        new MercadoLibreMissedFeedsError('credential_failed', {
+          failureStage: 'credential_resolution',
+          credentialRefreshFailureStage: 'refresh_cas',
+          credentialRefreshCasFailure: casFailure,
+          credentialRefreshCallsAttempted: 1,
+          credentialRefreshCallsSucceeded: 1
+        })
+      );
 
-    await runIncrementalEventMaintenance({
-      ...test,
-      now: () => new Date('2026-08-28T12:00:00Z')
-    });
+      await runIncrementalEventMaintenance({
+        ...test,
+        now: () => new Date('2026-08-28T12:00:00Z')
+      });
 
-    expect(test.maintenance.finalize).toHaveBeenCalledWith(
-      expect.objectContaining({
-        missedFeedFailureStage: 'credential_resolution',
-        credentialRefresh: {
-          failureStage: 'refresh_cas',
-          casFailure: 'CAS_CONFLICT',
-          providerCallsAttempted: 1,
-          providerCallsSucceeded: 1
-        }
-      })
-    );
-  });
+      const expectedDiagnostics = {
+        failureStage: 'refresh_cas',
+        casFailure,
+        providerCallsAttempted: 1,
+        providerCallsSucceeded: 1
+      };
+      expect(test.maintenance.checkpoint).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          missedFeedFailureStage: 'credential_resolution',
+          credentialRefresh: expectedDiagnostics
+        })
+      );
+      expect(test.maintenance.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          missedFeedFailureStage: 'credential_resolution',
+          credentialRefresh: expectedDiagnostics
+        })
+      );
+    }
+  );
 
   it('respects total work budgets without an automatic loop', async () => {
     const test = setup();
