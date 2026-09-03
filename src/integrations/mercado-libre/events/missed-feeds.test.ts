@@ -92,6 +92,23 @@ function setup(messages = [message()]) {
   };
 }
 
+function providerMessage(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const { externalEventId: _id, ...notification } = message();
+  return { _id, ...notification, ...overrides };
+}
+
+function requestProviderPage(payload: unknown) {
+  const client = new MercadoLibreMissedFeedsClient(
+    vi.fn().mockResolvedValue(new Response(JSON.stringify(payload)))
+  );
+  return client.getItemsPage({
+    accessToken: 'test-token',
+    applicationId: '456',
+    siteId: 'MLA',
+    offset: 0
+  });
+}
+
 describe('MercadoLibreMissedFeedsClient', () => {
   it('uses the official items query and returns only canonical message fields', async () => {
     const fetcher = vi.fn().mockResolvedValue(
@@ -169,6 +186,83 @@ describe('MercadoLibreMissedFeedsClient', () => {
         offset: 0
       })
     ).resolves.toEqual([message()]);
+  });
+
+  it.each([
+    ['resource', 'RESPONSE_SCHEMA_RESOURCE'],
+    ['user_id', 'RESPONSE_SCHEMA_USER_ID'],
+    ['topic', 'RESPONSE_SCHEMA_TOPIC'],
+    ['application_id', 'RESPONSE_SCHEMA_APPLICATION_ID'],
+    ['attempts', 'RESPONSE_SCHEMA_ATTEMPTS'],
+    ['sent', 'RESPONSE_SCHEMA_SENT'],
+    ['received', 'RESPONSE_SCHEMA_RECEIVED']
+  ] as const)('classifies an omitted required %s field', async (field, responseSchemaCategory) => {
+    const fixture = providerMessage();
+    delete fixture[field];
+
+    await expect(requestProviderPage({ messages: [fixture] })).rejects.toMatchObject({
+      code: 'provider_response_invalid',
+      responseSubdiagnostic: 'RESPONSE_SCHEMA',
+      responseSchemaCategory
+    });
+  });
+
+  it.each([
+    ['resource', { resource: '/orders/123' }, 'RESPONSE_SCHEMA_RESOURCE'],
+    ['user_id', { user_id: null }, 'RESPONSE_SCHEMA_USER_ID'],
+    ['topic', { topic: 'orders' }, 'RESPONSE_SCHEMA_TOPIC'],
+    ['application_id', { application_id: {} }, 'RESPONSE_SCHEMA_APPLICATION_ID'],
+    ['attempts', { attempts: 0 }, 'RESPONSE_SCHEMA_ATTEMPTS'],
+    ['sent', { sent: 'not-a-timestamp' }, 'RESPONSE_SCHEMA_SENT'],
+    ['received', { received: 'not-a-timestamp' }, 'RESPONSE_SCHEMA_RECEIVED']
+  ] as const)('classifies a malformed %s field', async (_field, change, responseSchemaCategory) => {
+    await expect(
+      requestProviderPage({ messages: [providerMessage(change)] })
+    ).rejects.toMatchObject({
+      code: 'provider_response_invalid',
+      responseSubdiagnostic: 'RESPONSE_SCHEMA',
+      responseSchemaCategory
+    });
+  });
+
+  it.each([
+    ['missing messages', {}, 'RESPONSE_SCHEMA_MESSAGES'],
+    ['malformed messages', { messages: null }, 'RESPONSE_SCHEMA_MESSAGES'],
+    ['malformed top level', null, 'RESPONSE_SCHEMA_TOP_LEVEL'],
+    [
+      'too many messages',
+      { messages: Array.from({ length: 11 }, () => providerMessage()) },
+      'RESPONSE_SCHEMA_MESSAGES'
+    ]
+  ] as const)(
+    'classifies a %s response wrapper',
+    async (_label, payload, responseSchemaCategory) => {
+      await expect(requestProviderPage(payload)).rejects.toMatchObject({
+        code: 'provider_response_invalid',
+        responseSubdiagnostic: 'RESPONSE_SCHEMA',
+        responseSchemaCategory
+      });
+    }
+  );
+
+  it('chooses the first allowlisted priority for multiple schema issues', async () => {
+    await expect(
+      requestProviderPage({
+        messages: [providerMessage({ resource: '/orders/123', sent: 'not-a-timestamp' })]
+      })
+    ).rejects.toMatchObject({
+      responseSubdiagnostic: 'RESPONSE_SCHEMA',
+      responseSchemaCategory: 'RESPONSE_SCHEMA_RESOURCE'
+    });
+  });
+
+  it('classifies an unsupported message field path without exposing its details', async () => {
+    await expect(
+      requestProviderPage({ messages: [providerMessage({ _id: '' })] })
+    ).rejects.toMatchObject({
+      responseSubdiagnostic: 'RESPONSE_SCHEMA',
+      responseSchemaCategory: 'RESPONSE_SCHEMA_OTHER'
+    });
   });
 
   it.each([
@@ -421,9 +515,84 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
   });
 
   it.each([
-    ['RESPONSE_JSON', '{'],
-    ['RESPONSE_SCHEMA', JSON.stringify({ results: [] })]
-  ] as const)('emits one safe %s diagnostic before rejecting', async (subdiagnostic, body) => {
+    ['RESPONSE_JSON', '{', null],
+    ['RESPONSE_SCHEMA', JSON.stringify({ results: [] }), 'RESPONSE_SCHEMA_MESSAGES']
+  ] as const)(
+    'emits one safe %s diagnostic before rejecting',
+    async (subdiagnostic, body, responseSchemaCategory) => {
+      const test = setup();
+      const log = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const service = new MercadoLibreMissedFeedRecoveryService({
+        connections: test.connections as never,
+        credentials: test.credentials,
+        identity: test.identity,
+        feeds: new MercadoLibreMissedFeedsClient(
+          vi.fn().mockResolvedValue(new Response(body, { status: 200 }))
+        ),
+        intake: test.intake,
+        applicationId: () => '456'
+      });
+
+      await expect(service.recoverItems({ organizationId, connectionId })).rejects.toMatchObject({
+        code: 'provider_response_invalid',
+        failureStage: 'missed_feed_response',
+        providerCallsAttempted: 2,
+        providerCallsSucceeded: 2,
+        responseSubdiagnostic: subdiagnostic,
+        responseSchemaCategory
+      });
+      expect(log).toHaveBeenCalledTimes(1);
+      expect(log).toHaveBeenCalledWith(
+        `${JSON.stringify({
+          component: 'meli-missed-feed',
+          failureStage: 'missed_feed_response',
+          subdiagnostic,
+          ...(responseSchemaCategory === null ? {} : { schemaCategory: responseSchemaCategory })
+        })}\n`
+      );
+      log.mockRestore();
+    }
+  );
+
+  it('logs only an allowlisted schema category and stops before intake', async () => {
+    const test = setup();
+    const log = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const rawIdentifier = 'SECRET_RAW_IDENTIFIER';
+    const service = new MercadoLibreMissedFeedRecoveryService({
+      connections: test.connections as never,
+      credentials: test.credentials,
+      identity: test.identity,
+      feeds: new MercadoLibreMissedFeedsClient(
+        vi
+          .fn()
+          .mockResolvedValue(
+            new Response(
+              JSON.stringify({ messages: [providerMessage({ resource: rawIdentifier })] })
+            )
+          )
+      ),
+      intake: test.intake,
+      applicationId: () => '456'
+    });
+
+    await expect(service.recoverItems({ organizationId, connectionId })).rejects.toMatchObject({
+      responseSubdiagnostic: 'RESPONSE_SCHEMA',
+      responseSchemaCategory: 'RESPONSE_SCHEMA_RESOURCE'
+    });
+    expect(test.intake.intakeItemsNotification).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(
+      `${JSON.stringify({
+        component: 'meli-missed-feed',
+        failureStage: 'missed_feed_response',
+        subdiagnostic: 'RESPONSE_SCHEMA',
+        schemaCategory: 'RESPONSE_SCHEMA_RESOURCE'
+      })}\n`
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain(rawIdentifier);
+    log.mockRestore();
+  });
+
+  it('lets a valid response schema proceed to binding validation', async () => {
     const test = setup();
     const log = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const service = new MercadoLibreMissedFeedRecoveryService({
@@ -431,25 +600,27 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
       credentials: test.credentials,
       identity: test.identity,
       feeds: new MercadoLibreMissedFeedsClient(
-        vi.fn().mockResolvedValue(new Response(body, { status: 200 }))
+        vi
+          .fn()
+          .mockResolvedValue(
+            new Response(JSON.stringify({ messages: [providerMessage({ user_id: 999 })] }))
+          )
       ),
       intake: test.intake,
       applicationId: () => '456'
     });
 
     await expect(service.recoverItems({ organizationId, connectionId })).rejects.toMatchObject({
-      code: 'provider_response_invalid',
-      failureStage: 'missed_feed_response',
-      providerCallsAttempted: 2,
-      providerCallsSucceeded: 2,
-      responseSubdiagnostic: subdiagnostic
+      code: 'connection_binding_invalid',
+      responseSubdiagnostic: 'RESPONSE_BINDING',
+      responseSchemaCategory: null
     });
-    expect(log).toHaveBeenCalledTimes(1);
+    expect(test.intake.intakeItemsNotification).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith(
       `${JSON.stringify({
         component: 'meli-missed-feed',
         failureStage: 'missed_feed_response',
-        subdiagnostic
+        subdiagnostic: 'RESPONSE_BINDING'
       })}\n`
     );
     log.mockRestore();
