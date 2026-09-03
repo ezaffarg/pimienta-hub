@@ -203,7 +203,8 @@ describe('MercadoLibreMissedFeedsClient', () => {
     await expect(requestProviderPage({ messages: [fixture] })).rejects.toMatchObject({
       code: 'provider_response_invalid',
       responseSubdiagnostic: 'RESPONSE_SCHEMA',
-      responseSchemaCategory
+      responseSchemaCategory,
+      responseMessagesDetail: null
     });
   });
 
@@ -221,29 +222,55 @@ describe('MercadoLibreMissedFeedsClient', () => {
     ).rejects.toMatchObject({
       code: 'provider_response_invalid',
       responseSubdiagnostic: 'RESPONSE_SCHEMA',
-      responseSchemaCategory
+      responseSchemaCategory,
+      responseMessagesDetail: null
     });
   });
 
   it.each([
-    ['missing messages', {}, 'RESPONSE_SCHEMA_MESSAGES'],
-    ['malformed messages', { messages: null }, 'RESPONSE_SCHEMA_MESSAGES'],
-    ['malformed top level', null, 'RESPONSE_SCHEMA_TOP_LEVEL'],
+    ['missing messages', {}, 'RESPONSE_SCHEMA_MESSAGES', 'MESSAGES_TYPE'],
+    ['malformed messages', { messages: null }, 'RESPONSE_SCHEMA_MESSAGES', 'MESSAGES_TYPE'],
+    [
+      'wrong-type messages',
+      { messages: 'not-an-array' },
+      'RESPONSE_SCHEMA_MESSAGES',
+      'MESSAGES_TYPE'
+    ],
+    [
+      'malformed message element',
+      { messages: [null] },
+      'RESPONSE_SCHEMA_MESSAGES',
+      'MESSAGES_ELEMENT'
+    ],
+    ['malformed top level', null, 'RESPONSE_SCHEMA_TOP_LEVEL', null],
     [
       'too many messages',
       { messages: Array.from({ length: 11 }, () => providerMessage()) },
-      'RESPONSE_SCHEMA_MESSAGES'
+      'RESPONSE_SCHEMA_MESSAGES',
+      'MESSAGES_LENGTH'
     ]
   ] as const)(
     'classifies a %s response wrapper',
-    async (_label, payload, responseSchemaCategory) => {
+    async (_label, payload, responseSchemaCategory, responseMessagesDetail) => {
       await expect(requestProviderPage(payload)).rejects.toMatchObject({
         code: 'provider_response_invalid',
         responseSubdiagnostic: 'RESPONSE_SCHEMA',
-        responseSchemaCategory
+        responseSchemaCategory,
+        responseMessagesDetail
       });
     }
   );
+
+  it.each([
+    ['an empty messages array', 0],
+    ['the requested page limit', 10]
+  ] as const)('accepts %s', async (_label, count) => {
+    const messages = Array.from({ length: count }, (_, index) =>
+      providerMessage({ _id: `feed-${index}`, resource: `/items/MLA${100000 + index}` })
+    );
+
+    await expect(requestProviderPage({ messages })).resolves.toHaveLength(count);
+  });
 
   it('chooses the first allowlisted priority for multiple schema issues', async () => {
     await expect(
@@ -253,6 +280,17 @@ describe('MercadoLibreMissedFeedsClient', () => {
     ).rejects.toMatchObject({
       responseSubdiagnostic: 'RESPONSE_SCHEMA',
       responseSchemaCategory: 'RESPONSE_SCHEMA_RESOURCE'
+    });
+  });
+
+  it('chooses the fixed messages-detail priority for multiple messages issues', async () => {
+    await expect(
+      requestProviderPage({
+        messages: [null, ...Array.from({ length: 10 }, () => providerMessage())]
+      })
+    ).rejects.toMatchObject({
+      responseSchemaCategory: 'RESPONSE_SCHEMA_MESSAGES',
+      responseMessagesDetail: 'MESSAGES_LENGTH'
     });
   });
 
@@ -515,11 +553,45 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
   });
 
   it.each([
-    ['RESPONSE_JSON', '{', null],
-    ['RESPONSE_SCHEMA', JSON.stringify({ results: [] }), 'RESPONSE_SCHEMA_MESSAGES']
+    ['RESPONSE_JSON', '{', null, null, null],
+    [
+      'RESPONSE_SCHEMA',
+      JSON.stringify({ results: [] }),
+      'RESPONSE_SCHEMA_MESSAGES',
+      'MESSAGES_TYPE',
+      null
+    ],
+    [
+      'RESPONSE_SCHEMA',
+      JSON.stringify({ messages: null }),
+      'RESPONSE_SCHEMA_MESSAGES',
+      'MESSAGES_TYPE',
+      null
+    ],
+    [
+      'RESPONSE_SCHEMA',
+      JSON.stringify({ messages: 'SECRET_RAW_MESSAGES' }),
+      'RESPONSE_SCHEMA_MESSAGES',
+      'MESSAGES_TYPE',
+      'SECRET_RAW_MESSAGES'
+    ],
+    [
+      'RESPONSE_SCHEMA',
+      JSON.stringify({ messages: Array.from({ length: 11 }, () => providerMessage()) }),
+      'RESPONSE_SCHEMA_MESSAGES',
+      'MESSAGES_LENGTH',
+      null
+    ],
+    [
+      'RESPONSE_SCHEMA',
+      JSON.stringify({ messages: [null] }),
+      'RESPONSE_SCHEMA_MESSAGES',
+      'MESSAGES_ELEMENT',
+      null
+    ]
   ] as const)(
     'emits one safe %s diagnostic before rejecting',
-    async (subdiagnostic, body, responseSchemaCategory) => {
+    async (subdiagnostic, body, responseSchemaCategory, responseMessagesDetail, forbidden) => {
       const test = setup();
       const log = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const service = new MercadoLibreMissedFeedRecoveryService({
@@ -539,7 +611,8 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
         providerCallsAttempted: 2,
         providerCallsSucceeded: 2,
         responseSubdiagnostic: subdiagnostic,
-        responseSchemaCategory
+        responseSchemaCategory,
+        responseMessagesDetail
       });
       expect(log).toHaveBeenCalledTimes(1);
       expect(log).toHaveBeenCalledWith(
@@ -547,9 +620,11 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
           component: 'meli-missed-feed',
           failureStage: 'missed_feed_response',
           subdiagnostic,
-          ...(responseSchemaCategory === null ? {} : { schemaCategory: responseSchemaCategory })
+          ...(responseSchemaCategory === null ? {} : { schemaCategory: responseSchemaCategory }),
+          ...(responseMessagesDetail === null ? {} : { messagesDetail: responseMessagesDetail })
         })}\n`
       );
+      if (forbidden !== null) expect(JSON.stringify(log.mock.calls)).not.toContain(forbidden);
       log.mockRestore();
     }
   );

@@ -97,6 +97,15 @@ export const missedFeedResponseSchemaCategories = [
 export type MercadoLibreMissedFeedResponseSchemaCategory =
   (typeof missedFeedResponseSchemaCategories)[number];
 
+export const missedFeedMessagesDetails = [
+  'MESSAGES_TYPE',
+  'MESSAGES_LENGTH',
+  'MESSAGES_ELEMENT',
+  'MESSAGES_OTHER'
+] as const;
+
+export type MercadoLibreMissedFeedMessagesDetail = (typeof missedFeedMessagesDetails)[number];
+
 export class MercadoLibreMissedFeedsError extends Error {
   constructor(
     public readonly code:
@@ -122,6 +131,7 @@ export class MercadoLibreMissedFeedsError extends Error {
       credentialRefreshCallsSucceeded?: number;
       responseSubdiagnostic?: MercadoLibreMissedFeedResponseSubdiagnostic | null;
       responseSchemaCategory?: MercadoLibreMissedFeedResponseSchemaCategory | null;
+      responseMessagesDetail?: MercadoLibreMissedFeedMessagesDetail | null;
     } = {}
   ) {
     super(code);
@@ -136,6 +146,7 @@ export class MercadoLibreMissedFeedsError extends Error {
     this.credentialRefreshCallsSucceeded = observability.credentialRefreshCallsSucceeded ?? 0;
     this.responseSubdiagnostic = observability.responseSubdiagnostic ?? null;
     this.responseSchemaCategory = observability.responseSchemaCategory ?? null;
+    this.responseMessagesDetail = observability.responseMessagesDetail ?? null;
   }
 
   readonly failureStage: MercadoLibreMissedFeedFailureStage;
@@ -148,6 +159,7 @@ export class MercadoLibreMissedFeedsError extends Error {
   readonly credentialRefreshCallsSucceeded: number;
   readonly responseSubdiagnostic: MercadoLibreMissedFeedResponseSubdiagnostic | null;
   readonly responseSchemaCategory: MercadoLibreMissedFeedResponseSchemaCategory | null;
+  readonly responseMessagesDetail: MercadoLibreMissedFeedMessagesDetail | null;
 }
 
 export class MercadoLibreMissedFeedsClient {
@@ -207,10 +219,11 @@ export class MercadoLibreMissedFeedsClient {
     }
     const parsed = responseSchema.safeParse(payload);
     if (!parsed.success) {
+      const classification = classifyResponseSchemaError(parsed.error);
       throw new MercadoLibreMissedFeedsError('provider_response_invalid', {
         providerCallSucceeded: true,
         responseSubdiagnostic: 'RESPONSE_SCHEMA',
-        responseSchemaCategory: classifyResponseSchemaError(parsed.error)
+        ...classification
       });
     }
     return parsed.data.messages.map((message) => {
@@ -522,6 +535,8 @@ function observedFailure(
     error instanceof MercadoLibreMissedFeedsError ? error.responseSubdiagnostic : null;
   const responseSchemaCategory =
     error instanceof MercadoLibreMissedFeedsError ? error.responseSchemaCategory : null;
+  const responseMessagesDetail =
+    error instanceof MercadoLibreMissedFeedsError ? error.responseMessagesDetail : null;
   if (failureStage === 'missed_feed_response' && responseSubdiagnostic !== null) {
     process.stderr.write(
       `${JSON.stringify({
@@ -530,6 +545,9 @@ function observedFailure(
         subdiagnostic: responseSubdiagnostic,
         ...(responseSubdiagnostic === 'RESPONSE_SCHEMA' && responseSchemaCategory !== null
           ? { schemaCategory: responseSchemaCategory }
+          : {}),
+        ...(responseSchemaCategory === 'RESPONSE_SCHEMA_MESSAGES' && responseMessagesDetail !== null
+          ? { messagesDetail: responseMessagesDetail }
           : {})
       })}\n`
     );
@@ -543,18 +561,55 @@ function observedFailure(
     credentialRefreshCallsAttempted: credentialRefreshDiagnostics.providerCallsAttempted,
     credentialRefreshCallsSucceeded: credentialRefreshDiagnostics.providerCallsSucceeded,
     responseSubdiagnostic,
-    responseSchemaCategory
+    responseSchemaCategory,
+    responseMessagesDetail
   });
 }
 
-function classifyResponseSchemaError(error: {
-  issues: readonly { path: readonly PropertyKey[] }[];
-}): MercadoLibreMissedFeedResponseSchemaCategory {
+interface ResponseSchemaIssueMetadata {
+  readonly code: string;
+  readonly path: readonly PropertyKey[];
+  readonly expected?: unknown;
+  readonly origin?: unknown;
+}
+
+function classifyResponseSchemaError(error: { issues: readonly ResponseSchemaIssueMetadata[] }): {
+  responseSchemaCategory: MercadoLibreMissedFeedResponseSchemaCategory;
+  responseMessagesDetail: MercadoLibreMissedFeedMessagesDetail | null;
+} {
   const categories = new Set(error.issues.map((issue) => schemaCategoryForPath(issue.path)));
-  return (
+  const responseSchemaCategory =
     missedFeedResponseSchemaCategories.find((category) => categories.has(category)) ??
-    'RESPONSE_SCHEMA_OTHER'
+    'RESPONSE_SCHEMA_OTHER';
+  return {
+    responseSchemaCategory,
+    responseMessagesDetail:
+      responseSchemaCategory === 'RESPONSE_SCHEMA_MESSAGES'
+        ? classifyMessagesDetail(error.issues)
+        : null
+  };
+}
+
+function classifyMessagesDetail(
+  issues: readonly ResponseSchemaIssueMetadata[]
+): MercadoLibreMissedFeedMessagesDetail {
+  const details = new Set(
+    issues
+      .filter((issue) => schemaCategoryForPath(issue.path) === 'RESPONSE_SCHEMA_MESSAGES')
+      .map(messagesDetailForIssue)
   );
+  return missedFeedMessagesDetails.find((detail) => details.has(detail)) ?? 'MESSAGES_OTHER';
+}
+
+function messagesDetailForIssue(
+  issue: ResponseSchemaIssueMetadata
+): MercadoLibreMissedFeedMessagesDetail {
+  if (issue.path[0] !== 'messages') return 'MESSAGES_OTHER';
+  if (issue.path.length === 2 && typeof issue.path[1] === 'number') return 'MESSAGES_ELEMENT';
+  if (issue.path.length !== 1) return 'MESSAGES_OTHER';
+  if (issue.code === 'too_big' && issue.origin === 'array') return 'MESSAGES_LENGTH';
+  if (issue.code === 'invalid_type' && issue.expected === 'array') return 'MESSAGES_TYPE';
+  return 'MESSAGES_OTHER';
 }
 
 function schemaCategoryForPath(
