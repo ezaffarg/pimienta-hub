@@ -229,7 +229,6 @@ describe('MercadoLibreMissedFeedsClient', () => {
 
   it.each([
     ['missing messages', {}, 'RESPONSE_SCHEMA_MESSAGES', 'MESSAGES_MISSING'],
-    ['null messages', { messages: null }, 'RESPONSE_SCHEMA_MESSAGES', 'MESSAGES_NULL'],
     [
       'string messages',
       { messages: 'not-an-array' },
@@ -272,6 +271,10 @@ describe('MercadoLibreMissedFeedsClient', () => {
     );
 
     await expect(requestProviderPage({ messages })).resolves.toHaveLength(count);
+  });
+
+  it('normalizes null messages to an empty canonical page', async () => {
+    await expect(requestProviderPage({ messages: null })).resolves.toEqual([]);
   });
 
   it('chooses the first allowlisted priority for multiple schema issues', async () => {
@@ -565,13 +568,6 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
     ],
     [
       'RESPONSE_SCHEMA',
-      JSON.stringify({ messages: null }),
-      'RESPONSE_SCHEMA_MESSAGES',
-      'MESSAGES_NULL',
-      null
-    ],
-    [
-      'RESPONSE_SCHEMA',
       JSON.stringify({ messages: 'SECRET_RAW_MESSAGES' }),
       'RESPONSE_SCHEMA_MESSAGES',
       'MESSAGES_WRONG_TYPE',
@@ -721,6 +717,35 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
     });
     expect(test.identity.getCurrentUser).toHaveBeenCalledTimes(1);
     expect(test.feeds.getItemsPage).toHaveBeenCalledTimes(1);
+    expect(test.intake.intakeItemsNotification).not.toHaveBeenCalled();
+  });
+
+  it('treats null provider messages as the canonical empty-page recovery path', async () => {
+    const test = setup();
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ messages: null })));
+    const service = new MercadoLibreMissedFeedRecoveryService({
+      connections: test.connections as never,
+      credentials: test.credentials,
+      identity: test.identity,
+      feeds: new MercadoLibreMissedFeedsClient(fetcher),
+      intake: test.intake,
+      applicationId: () => '456'
+    });
+
+    await expect(service.recoverItems({ organizationId, connectionId })).resolves.toEqual({
+      pages: 1,
+      accepted: 0,
+      duplicates: 0,
+      exhausted: true,
+      nextOffset: null,
+      providerCallsAttempted: 2,
+      providerCallsSucceeded: 2,
+      credentialRefreshFailureStage: null,
+      credentialRefreshCasFailure: null,
+      credentialRefreshCallsAttempted: 0,
+      credentialRefreshCallsSucceeded: 0
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
     expect(test.intake.intakeItemsNotification).not.toHaveBeenCalled();
   });
 

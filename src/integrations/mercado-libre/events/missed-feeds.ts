@@ -43,7 +43,7 @@ const missedFeedMessageSchema = z
   })
   .passthrough();
 const responseSchema = z
-  .object({ messages: z.array(missedFeedMessageSchema).max(PAGE_LIMIT) })
+  .object({ messages: z.array(missedFeedMessageSchema).max(PAGE_LIMIT).nullable() })
   .passthrough();
 
 export interface MercadoLibreMissedFeedMessage {
@@ -228,7 +228,7 @@ export class MercadoLibreMissedFeedsClient {
         ...classification
       });
     }
-    return parsed.data.messages.map((message) => {
+    return (parsed.data.messages ?? []).map((message) => {
       const { _id: externalEventId } = message;
       return {
         ...(externalEventId === undefined ? {} : { externalEventId }),
