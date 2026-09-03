@@ -228,21 +228,23 @@ describe('MercadoLibreMissedFeedsClient', () => {
   });
 
   it.each([
-    ['missing messages', {}, 'RESPONSE_SCHEMA_MESSAGES', 'MESSAGES_TYPE'],
-    ['malformed messages', { messages: null }, 'RESPONSE_SCHEMA_MESSAGES', 'MESSAGES_TYPE'],
+    ['missing messages', {}, 'RESPONSE_SCHEMA_MESSAGES', 'MESSAGES_MISSING'],
+    ['null messages', { messages: null }, 'RESPONSE_SCHEMA_MESSAGES', 'MESSAGES_NULL'],
     [
-      'wrong-type messages',
+      'string messages',
       { messages: 'not-an-array' },
       'RESPONSE_SCHEMA_MESSAGES',
-      'MESSAGES_TYPE'
+      'MESSAGES_WRONG_TYPE'
     ],
+    ['numeric messages', { messages: 123 }, 'RESPONSE_SCHEMA_MESSAGES', 'MESSAGES_WRONG_TYPE'],
+    ['object messages', { messages: {} }, 'RESPONSE_SCHEMA_MESSAGES', 'MESSAGES_WRONG_TYPE'],
     [
       'malformed message element',
       { messages: [null] },
       'RESPONSE_SCHEMA_MESSAGES',
       'MESSAGES_ELEMENT'
     ],
-    ['malformed top level', null, 'RESPONSE_SCHEMA_TOP_LEVEL', null],
+    ['malformed top level', 'not-an-object', 'RESPONSE_SCHEMA_TOP_LEVEL', null],
     [
       'too many messages',
       { messages: Array.from({ length: 11 }, () => providerMessage()) },
@@ -558,21 +560,21 @@ describe('MercadoLibreMissedFeedRecoveryService', () => {
       'RESPONSE_SCHEMA',
       JSON.stringify({ results: [] }),
       'RESPONSE_SCHEMA_MESSAGES',
-      'MESSAGES_TYPE',
+      'MESSAGES_MISSING',
       null
     ],
     [
       'RESPONSE_SCHEMA',
       JSON.stringify({ messages: null }),
       'RESPONSE_SCHEMA_MESSAGES',
-      'MESSAGES_TYPE',
+      'MESSAGES_NULL',
       null
     ],
     [
       'RESPONSE_SCHEMA',
       JSON.stringify({ messages: 'SECRET_RAW_MESSAGES' }),
       'RESPONSE_SCHEMA_MESSAGES',
-      'MESSAGES_TYPE',
+      'MESSAGES_WRONG_TYPE',
       'SECRET_RAW_MESSAGES'
     ],
     [
