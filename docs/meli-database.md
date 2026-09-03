@@ -492,3 +492,17 @@ La tabla mantiene RLS deny-by-default y las RPC siguen `SECURITY DEFINER`,
 `search_path=pg_catalog` y `service_role`-only. Reset, matrices local/regresión y
 callers reales `supabase-js -> PostgREST .rpc()` pasaron. La migration quedó
 aplicada al proyecto remoto; el run histórico conserva stage y calls UNKNOWN.
+
+## Subfase 2.20X-F3-C — diagnóstico durable de credential refresh
+
+La migration `20260902113000_durable_credential_refresh_diagnostics.sql` suma
+stage de refresh, subtipo CAS allowlisted y counters attempted/succeeded. Sus
+constraints sólo permiten el subtipo cuando el stage es `refresh_cas` y
+mantienen coherencia con `missed_feed_failure_stage=credential_resolution`.
+Checkpoint, finalize y summary preservan esos campos; las firmas con defaults
+siguen compatibles con callers `supabase-js -> PostgREST .rpc()`.
+
+La migration y sus matrices quedaron aplicadas y validadas en el Supabase
+remoto. Los fixes posteriores de parsing, `messages: null → []` y scheduler no
+cambian schema. Los dos primeros runs programados terminaron `succeeded`, sin
+lease residual; la credencial quedó en versión 6.

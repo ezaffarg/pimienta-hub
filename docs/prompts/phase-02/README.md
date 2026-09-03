@@ -92,9 +92,8 @@ foundation controlada en
 [X-E](2.20x-e-retries-missed-feeds-recovery.md), con validación local PASS.
 [X-F](2.20x-f-scheduler-event-observability.md) agrega orchestration acotada,
 maintenance runs persistentes y el resumen administrativo Owner/Manager, con
-validación local PASS. El trigger scheduler/cron permanece bloqueado hasta
-seleccionar el deployment productivo canónico; no existe ejecución automática
-ni route pública.
+validación local PASS. En ese checkpoint el trigger seguía bloqueado; F3-C lo
+resolvió posteriormente mediante Coolify y una ruta interna.
 [X-F2](2.20x-f2-deployment-scheduler-decision.md) confirmó que el deployment
 productivo no está seleccionado y dejó la decisión Vercel Pro vs Docker/VPS al
 usuario antes de F3. No implementó trigger.
@@ -158,3 +157,6 @@ agrega observabilidad durable y segura de stage y provider calls mediante una mi
 diagnostica y corrige localmente el scope estricto de resolución de credenciales sin nuevas llamadas reales.
 [X-F3-C-LOCAL-2D3C14](2.20x-f3c-local2d3c14-durable-credential-refresh-diagnostics.md)
 agrega diagnósticos durables y seguros del refresh OAuth sin llamadas reales.
+[X-F3-C-LOCAL-2E3](2.20x-f3c-local2e3-scheduler-stabilization-closure.md)
+resume la validación real final, crea y observa el Scheduled Task de Coolify y
+cierra 2.20X. Estado: **2.20X CLOSED; siguiente bloque 2.20Y i18n.**

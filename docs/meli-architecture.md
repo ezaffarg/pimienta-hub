@@ -206,10 +206,9 @@ actúa como lock compatible por Connection, conserva cadence/continuación de
 CAS de cada evento continúan siendo la autoridad contra doble procesamiento.
 
 La lectura administrativa se integra en la pantalla existente de Listing Sync
-Runs y no crea una superficie de ejecución. El repositorio no identifica un
-deployment productivo canónico entre Vercel y Docker self-hosted; por eso el
-servicio quedó listo pero no se inventó cron, endpoint público, daemon ni
-trigger manual.
+Runs y no crea una superficie de ejecución. F3 seleccionó Docker/Coolify y
+agregó una ruta interna machine-authenticated; Coolify es dueño del scheduler y
+Pimienta Hub conserva discovery, eligibility, cooldown y locking.
 
 ## Maintenance stale reclaim — 2.20X-F2b
 
@@ -221,3 +220,16 @@ diez minutos puede pasar atómicamente a `failed/maintenance_stale_reclaimed`.
 El reclaim sólo libera el lock por Connection y preserva counters, scope y
 continuación. Los leases/CAS X-D siguen gobernando cada evento; por eso un nuevo
 maintenance cycle no fuerza reprocessing ni resetea trabajo in-flight.
+
+## Runtime incremental cerrado — 2.20X-F3-C
+
+El flujo vigente es `Coolify Scheduled Task → POST interno Bearer sin body →
+maintenance service → Connection-scoped run → retries/missed feeds/intake →
+event lease + freshness CAS`. El command usa loopback dentro del container y el
+secreto sólo desde runtime. La cadencia es cinco minutos; la aplicación, no
+Coolify, decide el cooldown de missed feeds.
+
+La validación real cubrió refresh/CAS, stages seguros, `messages: null → []`,
+terminación de paginación y dos ejecuciones naturales. La segunda respetó
+`missed_feed_due=false` con cero llamadas provider. El scheduler queda
+habilitado y la futura superficie Owner permanece read-only.

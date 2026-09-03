@@ -111,7 +111,7 @@ Validación base:
 | --- | --- | --- |
 | 0 | Decisiones, fuentes y boundaries | Completada |
 | 1 | Seguridad base server-side | Cerrada |
-| 2 | Persistencia multi-tenant e integración Mercado Libre incremental | **Activa — 2.20X-F3-B foundation local implementada; validación remota pendiente** |
+| 2 | Persistencia multi-tenant e integración Mercado Libre incremental | **Activa — 2.20X cerrado; siguiente bloque 2.20Y i18n** |
 | 3–7 | Evolución funcional y productiva posterior | No iniciadas como fases independientes |
 
 La Fase 2 evolucionó mediante subfases explícitamente aprobadas e incorporó
@@ -145,7 +145,7 @@ privacidad Sentry. Los detalles históricos viven en
 - Onboarding real, reconnect target-bound real y reutilización de Store y
   Connection sin duplicados.
 - Safe refresh con lease, versionado y CAS; las credenciales persistidas
-  actuales están en `credential_version=3` y lease libre.
+  actuales están en `credential_version=6` y lease libre.
 - Listings read-only normalizados y persistencia idempotente tenant-bound.
 - Primera listing real persistida e idempotencia comprobada.
 - 2.20S: discovery completo, paginación/scan, chunks de hasta 20, timeout,
@@ -220,11 +220,11 @@ funcional. **2.20V-A, 2.20V-B y 2.20V están cerrados.**
 Permanece diferido y requiere planificación/aprobación propia:
 
 - lifecycle provider-confirmed y soft-delete;
-- scheduler, worker/queue y ejecución periódica;
+- worker/queue dedicado distinto del scheduler acotado vigente;
 - recovery automática de runs stale;
 - resumability con cursor persistente;
 - writes hacia Mercado Libre;
-- webhooks y otros dominios aún no implementados;
+- topics y dominios de provider distintos del callback `items` vigente;
 - órdenes, preguntas, envíos, variaciones, inventario y otros providers.
 
 Checkpoint no equivale a resumability: los runs actuales no persisten offset,
@@ -238,6 +238,9 @@ ausencia no cambia el status provider ni implica cierre, eliminación o removal.
 Runs parciales, fallidos, incompletos o recuperados quedan ineligible. W-C
 aplicó y validó remotamente la migration con cleanup total y recursos reales
 intactos. **2.20W-A, 2.20W-A2, 2.20W-B, 2.20W-C y 2.20W están cerrados.**
+
+Las secciones G.2–G.10 conservan el estado incremental de cada checkpoint. El
+estado canónico final que las sucede está en G.11.
 
 ## G.2 Estado — 2.20X-B
 
@@ -364,6 +367,27 @@ ni ejecutado. Coolify, Traefik, dominio/TLS, migrations remotas y deploy
 productivo siguen sujetos a gates explícitos. El orden futuro es
 backup/preflight → apply controlado → verificación → deploy → healthcheck →
 habilitar scheduler → observar. No hay migrations al startup.
+
+## G.11 Cierre — 2.20X
+
+2.20X quedó operativo en el laboratorio local Coolify contra el Supabase remoto
+dedicado. El callback `items`, intake durable, processing con freshness CAS,
+retries, missed feeds, maintenance runs, checkpoints y stale reclaim conservan
+scope tenant-bound, límites explícitos y errores seguros. Las migrations X y
+sus firmas PostgREST quedaron aplicadas y validadas; el adapter normaliza
+`messages: null` a una página vacía y termina la paginación sin loops.
+
+La ruta interna exige Bearer server-only y body de cero bytes. Coolify mantiene
+un único Scheduled Task `Pimienta Hub Incremental Events`, habilitado cada cinco
+minutos, con timeout de 60 segundos y secreto tomado sólo del runtime. Dos
+ejecuciones naturales terminaron `succeeded`, sin retries ni leases residuales:
+la primera realizó 2/2 llamadas provider elegibles y la segunda, con
+`missed_feed_due=false`, realizó 0. La credencial quedó en versión 6 y lease
+`CLEAR`. **2.20X está cerrado; el siguiente bloque es 2.20Y i18n con `es-419`
+principal, `pt-BR` soportado y fallback `en`.**
+
+Seguimiento de seguridad pendiente, sin material sensible: rotar/revisar la
+credencial Redis local de Coolify expuesta accidentalmente.
 
 ## H. Condiciones generales de avance
 

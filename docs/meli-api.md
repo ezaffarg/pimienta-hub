@@ -250,8 +250,8 @@ vuelve al intake X-B. Un batch procesa hasta diez páginas y devuelve
 retención oficial es de hasta dos días, por lo que el
 full scan y reconciliation siguen siendo la última red de seguridad.
 
-No existe scheduler, cron o loop activo. Toda la validación X-E fue local con
-fixtures y provider mockeado.
+En el checkpoint X-E todavía no existía scheduler, cron o loop activo y la
+validación era local con provider mockeado. F3-C completó luego el runtime.
 
 ## Event maintenance orchestration — 2.20X-F
 
@@ -273,9 +273,10 @@ El read model administrativo agrega backlog y el último maintenance run para
 Owner/Manager en la pantalla existente de Listing Sync Runs. Employee y Client
 quedan denegados por membership persistente. F3-B agregó
 `POST /api/internal/maintenance/incremental-events` como boundary técnico para
-el futuro job de Coolify: exige Bearer secret dedicado, rechaza bodies, no usa
-Clerk ni autoridad tenant del caller y sólo devuelve estados sanitizados. La
-ruta debe bloquearse en el ingress público; ningún trigger real está activo.
+el job de Coolify: exige Bearer secret dedicado, rechaza bodies no vacíos, no
+usa Clerk ni autoridad tenant del caller y sólo devuelve estados sanitizados.
+El Scheduled Task local lo invoca dentro del container por loopback; no depende
+de Cloudflare ni de internet público.
 
 ## Maintenance stale reclaim — 2.20X-F2b
 
@@ -288,3 +289,17 @@ El cutoff se calcula dentro de PostgreSQL y no es input del caller. Reclaim no
 procesa eventos, retries o missed feeds, no reinicia leases y no escribe
 Listings ni provider. En F2b el deployment seguía sin seleccionar y no existía
 trigger; F3-A/F3-B seleccionaron Coolify e implementaron sólo el boundary local.
+
+## Cierre runtime — 2.20X-F3-C
+
+La resolución de credenciales y el refresh canónico conservan scope estricto,
+lease y persistencia CAS. Los fallos exponen sólo stages allowlisted y subtipo
+CAS seguro; los counters durable distinguen llamadas provider de missed feeds y
+del refresh. El adapter acepta el contrato real `messages: null`, lo normaliza a
+`[]` y termina la página como exhausted sin repetir offsets.
+
+Coolify ejecuta `Pimienta Hub Incremental Events` cada cinco minutos mediante un
+POST sin body y Bearer leído del runtime. La observación controlada confirmó un
+run elegible con 2/2 llamadas y, cinco minutos después, un run con
+`missed_feed_due=false` y 0 llamadas. Ambos terminaron `succeeded`, sin retries,
+refresh, overlap ni lease residual. **2.20X está cerrado.**

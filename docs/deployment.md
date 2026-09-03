@@ -56,14 +56,14 @@ migration or privileged capability occurs at startup. Persistent volume:
 none; Supabase remains the persistence authority. Coolify owns restart and
 deployment lifecycle.
 
-Future Coolify contract:
+Coolify contract:
 
 - Build Pack: Dockerfile; path: `./Dockerfile`.
 - Port: `3000`; healthcheck: `GET /api/health`.
 - Persistent volume: none.
 - Scheduler cadence: every five minutes.
-- Invocation: `POST /api/internal/maintenance/incremental-events` over the
-  internal Docker/Coolify network with `Authorization: Bearer
+- Invocation: `POST /api/internal/maintenance/incremental-events` by loopback
+  inside the application container with `Authorization: Bearer
   <INTERNAL_SCHEDULER_SECRET>`.
 
 ## Scheduler boundary — 2.20X-F3-B
@@ -75,10 +75,12 @@ does not use Clerk or caller tenant authority, and directly invokes
 `runIncrementalEventMaintenance`. Responses are limited to safe status values.
 
 The route is intended only for internal machine traffic. Production Traefik
-must block it from public ingress, while the Coolify job calls the service by
-its internal hostname every five minutes. The existing 45-second execution
-budget and ten-minute stale threshold remain unchanged. No real job has been
-configured or executed.
+must block it from public ingress. The local Coolify task
+`Pimienta Hub Incremental Events` calls loopback every five minutes with an
+empty body, 60-second task timeout and the secret inherited from runtime. The
+existing 45-second application budget and ten-minute stale threshold remain
+unchanged. Its first two natural executions succeeded; the second respected
+the application cooldown and made no provider calls.
 
 The future Owner status surface is initially read-only: it reports whether
 incremental sync is active, the five-minute cadence, last run timestamp and
@@ -98,15 +100,13 @@ Before enabling the job, use this controlled deployment order:
 
 Migrations never run during application startup.
 
-## Remaining production gates
+## Remaining production gates beyond the local laboratory
 
 - Configure Coolify restart/resource/log retention and VPS firewall/backups.
 - Align the final HTTPS domain with Clerk, `NEXT_PUBLIC_APP_URL`, Mercado Libre
   OAuth redirect and the items callback.
-- Apply and validate the pending X-B/D/E/F/F2b migrations through an explicitly
-  authorized remote gate.
-- Configure and validate private scheduler routing after the application and
-  database gates pass.
+- Reproduce the validated private scheduler routing on the final production
+  host; the local Coolify task is not evidence of Hostinger ingress policy.
 
 The detailed audit is recorded in
 [2.20X-F3-A](./prompts/phase-02/2.20x-f3a-coolify-docker-deployment-readiness-audit.md).

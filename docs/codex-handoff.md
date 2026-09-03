@@ -29,7 +29,7 @@ deny-by-default y no existen policies browser-facing para las tablas Hub.
 ## Estado actual
 
 - Fase 0 completada y Fase 1 cerrada.
-- Fase 2 activa; **2.20T, 2.20U, 2.20V y 2.20W cerrados; 2.20X-F3-B local PASS**.
+- Fase 2 activa; **2.20T, 2.20U, 2.20V, 2.20W y 2.20X cerrados**.
 - Modelo persistente multi-tenant operativo: memberships, Stores, assignments,
   Connections, secretos, auditoría, listings y sync runs.
 - Stores y Connections reales operativas y tenant-bound.
@@ -43,8 +43,9 @@ deny-by-default y no existen policies browser-facing para las tablas Hub.
 - Recovery administrativa 2.20U validada localmente y en remoto y cerrada.
 - UI administrativa read-only 2.20V-A cerrada.
 - Recovery UI 2.20V-B cerrada sobre el boundary 2.20U.
-- Intake durable server-only de eventos Mercado Libre `items` implementado y
-  validado localmente; callback público X-C implementado y worker aún ausente.
+- Intake, callback `items`, processing incremental, missed feeds y maintenance
+  periódico operativos; Coolify ejecuta el scheduler y la app conserva locks,
+  cooldown y observabilidad durable.
 
 El código conserva un camino `clerk-fallback` transicional para compatibilidad;
 no sustituye la autoridad de `hub_memberships` ni concede Store assignments.
@@ -166,7 +167,7 @@ counters al read model. W-C aplicó una sola migration y pasó con fixtures
 sintéticos completamente eliminados, cero provider calls y recursos reales
 intactos. **2.20W-A, 2.20W-A2, 2.20W-B, 2.20W-C y 2.20W están cerrados.**
 
-## Bloque local vigente — 2.20X-B
+## Checkpoint histórico — 2.20X-B
 
 `integration_events` y `intake_integration_event` aportan intake durable,
 tenant-bound e idempotente bajo `service_role`. El parser acepta sólo topic
@@ -177,7 +178,7 @@ La matriz SQL pasó 9/9, los focalizados 24/24, la suite 260/260, typecheck y
 lint. No se aplicó la migration remotamente ni se agregó callback público,
 provider call, worker o procesamiento de Listings.
 
-## Bloque local vigente — 2.20X-C
+## Checkpoint histórico — 2.20X-C
 
 Existe `POST /api/integrations/mercado-libre/notifications/items`: acepta un
 body limitado, reutiliza el boundary X-B y devuelve ACK vacío. Rechazos
@@ -189,7 +190,7 @@ Callback/intake/repository pasaron 39/39, seguridad 14/14, regresión amplia
 ni writes remotos. La verificación HMAC queda abierta hasta contar con un
 contrato oficial implementable.
 
-## Bloque local vigente — 2.20X-D
+## Checkpoint histórico — 2.20X-D
 
 El processor server-only recibe sólo `eventId`, adquiere un lease atómico,
 revalida el scope persistido y usa credential service, listings client y
@@ -202,7 +203,7 @@ Reset y matrices X-D/X-B/W-B pasaron; los focalizados quedaron 70/70, suite
 remote, OAuth, refresh, sync real ni Git. Scheduler/worker automático, dispatch
 de retry, `missed_feeds` y operación remota siguen pendientes.
 
-## Bloque local vigente — 2.20X-E
+## Checkpoint histórico — 2.20X-E
 
 `integration_events` conserva lifecycle X-D y suma `next_retry_at`, backoff
 determinista, Retry-After como piso y agotamiento terminal al quinto claim. El
@@ -219,7 +220,7 @@ Reset y matrices X-E/X-D/X-B/W-B pasaron; focalizados 85/85, suite 333/333,
 typecheck y lint PASS. Provider fue totalmente mockeado. No hubo remote,
 scheduler, webhook real, OAuth, sync real ni Git.
 
-## Bloque local vigente — 2.20X-F
+## Checkpoint histórico — 2.20X-F
 
 `runIncrementalEventMaintenance` coordina received, retries due y missed feeds
 con budgets globales y aislamiento por Connection. Los maintenance runs
@@ -235,7 +236,7 @@ El siguiente gate requiere decidir deployment productivo canónico. Hasta
 entonces el servicio es invocable, pero scheduler/cron, endpoint público y
 trigger manual permanecen bloqueados.
 
-## Decisión pendiente — 2.20X-F2
+## Decisión histórica — 2.20X-F2
 
 El audit clasificó el deployment como `DEPLOYMENT_NOT_SELECTED`. La mención
 Vercel Recommended es herencia del starter y coexiste con Dockerfiles Node/Bun;
@@ -248,7 +249,7 @@ También debe resolverse el reclaim seguro de un maintenance run abandonado
 entre start y finalize antes de activar ejecución periódica. Tras cerrar 2.20X,
 continúa 2.20Y i18n con `es-419`, `pt-BR` y fallback `en`.
 
-## Bloque local vigente — 2.20X-F2b
+## Checkpoint histórico — 2.20X-F2b
 
 El gap de crash recovery quedó resuelto localmente. Checkpoints monotónicos
 actualizan `last_checkpoint_at` después de progreso real y la RPC
@@ -273,7 +274,7 @@ gate controlado, y el trigger. F3-B debe implementar un Coolify scheduled job
 cada cinco minutos contra un boundary HTTP interno machine-authenticated y no
 expuesto por Traefik. F3-A no modificó código, containers ni infraestructura.
 
-## Estado vigente — 2.20X-F3-B
+## Checkpoint histórico — 2.20X-F3-B
 
 La foundation productiva local quedó implementada: `Dockerfile` canónico con
 Bun 1.3.14 para install/build y Node 22 non-root para standalone; healthcheck
@@ -288,3 +289,18 @@ contra servicios reales. No hubo remote, provider, migrations ni Git. El
 siguiente gate es la validación/deploy remoto controlado F3-C, incluyendo
 migrations, URLs/TLS, bloqueo público de la ruta interna y habilitación final
 del job cada cinco minutos.
+
+## Último bloque cerrado — 2.20X
+
+El laboratorio local ejecuta Pimienta Hub en Coolify con Supabase remoto. Las
+migrations X, los callers PostgREST, la ruta interna Bearer con body de cero
+bytes, credential refresh/CAS y la normalización `messages: null → []` quedaron
+validados. La paginación termina con `exhausted=true` y sin repetición.
+
+Coolify conserva un único Scheduled Task `Pimienta Hub Incremental Events`,
+habilitado con cron `*/5 * * * *`, timeout 60 y secreto sólo desde runtime. Las
+dos primeras ejecuciones naturales terminaron sanas: la primera consumió el
+trabajo missed-feed elegible con 2/2 llamadas y la segunda respetó cooldown con
+0 llamadas. No hubo retries, overlap inseguro, refresh adicional ni lease
+residual; `credential_version=6`. **2.20X está cerrado. Próximo bloque: 2.20Y
+i18n (`es-419`, `pt-BR`, fallback `en`).**
