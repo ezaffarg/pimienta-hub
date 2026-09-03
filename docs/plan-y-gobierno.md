@@ -389,6 +389,15 @@ principal, `pt-BR` soportado y fallback `en`.**
 Seguimiento de seguridad pendiente, sin material sensible: rotar/revisar la
 credencial Redis local de Coolify expuesta accidentalmente.
 
+## G.12 Foundation i18n — 2.20Y-I18N-02
+
+La foundation usa `next-intl` sin routing por locale. El contrato canónico es
+`es-419` default, `pt-BR` soportado y `en` fallback, con resolución server-side
+por locale explícito, cookie `pimienta_locale`, `Accept-Language` y default. El
+root refleja el locale en `<html lang>` sin provider global ni catálogos
+completos en el cliente. La arquitectura y los límites de los slices siguientes
+viven en [Internacionalización](./i18n.md).
+
 ## H. Condiciones generales de avance
 
 Antes de cerrar una fase o abrir la siguiente debe existir evidencia de:

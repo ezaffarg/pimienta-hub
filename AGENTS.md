@@ -177,6 +177,7 @@ validaciones remotas fuera del alcance expresamente autorizado.
   `src/components/icons.tsx`. Primitives shadcn existentes pueden conservar
   imports directos legítimos de Tabler cuando forman parte de su implementación.
 - No introducir dependencias ni abstracciones especulativas.
+- Para copy internacionalizable, seguir el contrato de [i18n](./docs/i18n.md).
 
 ## 10. TanStack Query
 

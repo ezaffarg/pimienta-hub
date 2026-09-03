@@ -1,5 +1,8 @@
 import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
+import createNextIntlPlugin from 'next-intl/plugin';
+
+const withNextIntl = createNextIntlPlugin();
 
 // Define the base Next.js configuration
 const baseConfig: NextConfig = {
@@ -67,5 +70,5 @@ if (!process.env.NEXT_PUBLIC_SENTRY_DISABLED) {
   });
 }
 
-const nextConfig = configWithPlugins;
+const nextConfig = withNextIntl(configWithPlugins);
 export default nextConfig;

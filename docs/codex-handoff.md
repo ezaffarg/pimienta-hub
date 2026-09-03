@@ -304,3 +304,13 @@ trabajo missed-feed elegible con 2/2 llamadas y la segunda respetó cooldown con
 0 llamadas. No hubo retries, overlap inseguro, refresh adicional ni lease
 residual; `credential_version=6`. **2.20X está cerrado. Próximo bloque: 2.20Y
 i18n (`es-419`, `pt-BR`, fallback `en`).**
+
+## Bloque activo — 2.20Y-I18N-02
+
+La foundation i18n instala `next-intl` y define `es-419` como default, `pt-BR`
+como locale soportado y `en` como fallback estructural. La resolución vive en
+el servidor, no altera URLs ni proxy, y el root usa el locale canónico en
+`<html lang>`. La fuente técnica es [Internacionalización](./i18n.md); selector,
+escritura de cookie y migración amplia de copy quedan para slices posteriores.
+La matriz i18n pasó 28/28 junto con typecheck, lint y build; el único warning
+del build fue el fallback ya conocido de Google Sans Flex.
