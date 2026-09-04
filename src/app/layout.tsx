@@ -11,6 +11,7 @@ import NextTopLoader from 'nextjs-toploader';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { resolveHtmlLang } from '@/i18n/config';
 import { buildRootMetadata } from '@/i18n/shell';
+import { loadClerkLocalization } from '@/i18n/clerk-localization';
 import '../styles/globals.css';
 
 const META_THEME_COLORS = {
@@ -37,6 +38,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const isValidTheme = THEMES.some((t) => t.value === activeThemeValue);
   const themeToApply = isValidTheme ? activeThemeValue! : DEFAULT_THEME;
   const locale = resolveHtmlLang(requestLocale);
+  const clerkLocalization = await loadClerkLocalization(locale);
 
   return (
     <html lang={locale} suppressHydrationWarning data-theme={themeToApply}>
@@ -69,7 +71,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             disableTransitionOnChange
             enableColorScheme
           >
-            <Providers activeThemeValue={themeToApply}>
+            <Providers activeThemeValue={themeToApply} clerkLocalization={clerkLocalization}>
               <Toaster />
               {children}
             </Providers>

@@ -36,6 +36,7 @@ import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Icons } from '../icons';
 import { OrgSwitcher } from '../org-switcher';
+import { LocaleSelector } from '../locale-selector';
 
 export default function AppSidebar() {
   const pathname = usePathname();
@@ -171,6 +172,8 @@ export default function AppSidebar() {
                     {translateNavigation('notifications')}
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <LocaleSelector />
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={() => signOut({ redirectUrl: '/auth/sign-in' })}>

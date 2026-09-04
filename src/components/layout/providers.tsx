@@ -3,18 +3,22 @@ import { ClerkProvider } from '@clerk/nextjs';
 import React from 'react';
 import { ActiveThemeProvider } from '../themes/active-theme';
 import QueryProvider from './query-provider';
+import type { ClerkLocalization } from '@/i18n/clerk-localization';
 
 export default function Providers({
   activeThemeValue,
+  clerkLocalization,
   children
 }: {
   activeThemeValue: string;
+  clerkLocalization: ClerkLocalization;
   children: React.ReactNode;
 }) {
   return (
     <>
       <ActiveThemeProvider initialTheme={activeThemeValue}>
         <ClerkProvider
+          localization={clerkLocalization}
           appearance={{
             variables: {
               colorPrimary: 'var(--primary)',

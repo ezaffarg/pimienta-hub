@@ -1,5 +1,7 @@
 {
   "language": "Idioma",
+  "languageSelector": "Idioma",
+  "languageChangeError": "No se pudo guardar la preferencia de idioma.",
   "loading": "Cargando",
   "error": "Algo salió mal",
   "skipToContent": "Saltar al contenido",

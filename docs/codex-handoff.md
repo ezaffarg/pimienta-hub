@@ -316,7 +316,7 @@ La matriz i18n pasó 28/28 junto con typecheck, lint y build; el único warning
 del build fue el fallback ya conocido de Google Sans Flex. El cierre se publicó
 en `9113ebf16a9a153e8cf08a55b5d63b999741aa14`.
 
-## Bloque local — 2.20Y-I18N-03
+## Shell cerrado — 2.20Y-I18N-03
 
 El shell global usa los namespaces acotados `navigation` y `shell`: navegación,
 sidebar, header, breadcrumbs estáticos, command/search, controles de tema,
@@ -325,5 +325,18 @@ URLs, RBAC y valores dinámicos permanecen estables; no existe provider global
 ni se envía `common` al cliente.
 
 Los focalizados i18n/shell pasaron 39/39, junto con typecheck, lint y build. El
-único warning del build fue Google Sans Flex. Este bloque permanece local y sin
-commit; selector/cookie y sincronización Clerk corresponden al próximo gate.
+único warning del build fue Google Sans Flex. El bloque fue auditado, cerrado y
+publicado en `68cbd896a07c9646a297727165134518483b134e`.
+
+## Bloque local — 2.20Y-I18N-04
+
+El footer de usuario incorpora el selector `es-419`/`pt-BR`/`en`. Una Server
+Action allowlisted persiste `pimienta_locale` durante 365 días y
+`router.refresh()` actualiza el shell sin modificar la URL. El locale canónico
+server-side también selecciona la localización oficial de Clerk:
+`es-419 → es-MX`, `pt-BR → pt-BR`, `en → en-US`.
+
+`@clerk/localizations@4.6.4` conserva compatibilidad con el shared package de
+Clerk 7.3.5 sin upgrades laterales. Persistencia cross-device, routing por
+locale, formatos, formularios/Zod y features siguen diferidos. Y04 permanece
+local, sin stage, commit, push ni deploy.

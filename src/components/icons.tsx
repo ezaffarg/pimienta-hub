@@ -48,6 +48,7 @@ import {
   IconLayoutDashboard,
   IconLayoutKanban,
   IconLayoutSidebar,
+  IconLanguage,
   IconLoader2,
   IconLock,
   IconLogin,
@@ -111,6 +112,7 @@ export const Icons = {
   spinner: IconLoader2,
   search: IconSearch,
   settings: IconSettings,
+  language: IconLanguage,
   trash: IconTrash,
 
   // Navigation / Chevrons

@@ -406,9 +406,21 @@ los IDs de navegación, URLs y reglas de acceso. El dashboard serializa sólo
 `next-intl`. Breadcrumbs dinámicos y contenido de features/provider no se
 traducen.
 
-La matriz focalizada pasó 39/39 junto con typecheck, lint y build. El slice
-permanece local: selector, escritura de cookie y localización Clerk siguen
-fuera de alcance hasta el gate siguiente.
+La matriz focalizada pasó 39/39 junto con typecheck, lint y build. El slice fue
+cerrado y publicado en `68cbd896a07c9646a297727165134518483b134e`.
+
+## G.14 Selector de locale y Clerk — 2.20Y-I18N-04
+
+El selector de preferencias del footer escribe únicamente la cookie
+allowlisted `pimienta_locale` durante 365 días y refresca la ruta actual sin
+alterar la URL. El locale server-side continúa como fuente única para el shell,
+`<html lang>` y Clerk. Los componentes Clerk embebidos usan recursos oficiales
+con el mapping `es-419 → es-MX`, `pt-BR → pt-BR` y `en → en-US`.
+
+El slice permanece local y sin cierre Git. Persistencia DB/Clerk metadata,
+routing por locale, formatos, formularios, Zod y traducción de features siguen
+diferidos a gates posteriores; el detalle técnico vive en
+[Internacionalización](./i18n.md).
 
 ## H. Condiciones generales de avance
 

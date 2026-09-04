@@ -1,5 +1,7 @@
 {
   "language": "Language",
+  "languageSelector": "Language",
+  "languageChangeError": "Language preference could not be saved.",
   "loading": "Loading",
   "error": "Something went wrong",
   "skipToContent": "Skip to content",

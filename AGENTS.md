@@ -13,7 +13,8 @@ Stack vigente:
 - Next.js 16.2.12 con App Router y React 19.2.4.
 - TypeScript estricto, Zod y TanStack.
 - Tailwind CSS v4 y shadcn Base Nova sobre Base UI.
-- Clerk para identidad y contexto técnico de Organization.
+- Clerk para identidad y contexto técnico de Organization, con
+  `@clerk/localizations` para sus componentes embebidos.
 - Supabase PostgreSQL para persistencia.
 - Sentry para observabilidad y Recharts para visualización.
 - Bun como package manager preferido.
