@@ -149,11 +149,15 @@ function Sidebar({
   className,
   children,
   dir,
+  mobileTitle = 'Sidebar',
+  mobileDescription = 'Displays the mobile sidebar.',
   ...props
 }: React.ComponentProps<'div'> & {
   side?: 'left' | 'right';
   variant?: 'sidebar' | 'floating' | 'inset';
   collapsible?: 'offcanvas' | 'icon' | 'none';
+  mobileTitle?: string;
+  mobileDescription?: string;
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
 
@@ -189,8 +193,8 @@ function Sidebar({
           side={side}
         >
           <SheetHeader className='sr-only'>
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            <SheetTitle>{mobileTitle}</SheetTitle>
+            <SheetDescription>{mobileDescription}</SheetDescription>
           </SheetHeader>
           <div className='flex h-full w-full flex-col'>{children}</div>
         </SheetContent>
@@ -244,7 +248,12 @@ function Sidebar({
   );
 }
 
-function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
+function SidebarTrigger({
+  className,
+  onClick,
+  label = 'Toggle Sidebar',
+  ...props
+}: React.ComponentProps<typeof Button> & { label?: string }) {
   const { toggleSidebar } = useSidebar();
 
   return (
@@ -261,7 +270,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       {...props}
     >
       <IconLayoutSidebar />
-      <span className='sr-only'>Toggle Sidebar</span>
+      <span className='sr-only'>{label}</span>
     </Button>
   );
 }

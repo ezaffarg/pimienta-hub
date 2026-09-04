@@ -1,4 +1,5 @@
 import { Icons } from '@/components/icons';
+import type { NavigationKey } from '@/i18n/config';
 
 export interface PermissionCheck {
   permission?: string;
@@ -10,6 +11,7 @@ export interface PermissionCheck {
 
 export interface NavItem {
   title: string;
+  labelKey?: NavigationKey;
   url: string;
   disabled?: boolean;
   external?: boolean;
@@ -24,6 +26,7 @@ export interface NavItem {
 
 export interface NavGroup {
   label: string;
+  labelKey?: NavigationKey;
   items: NavItem[];
 }
 

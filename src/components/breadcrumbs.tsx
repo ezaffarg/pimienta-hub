@@ -10,9 +10,11 @@ import {
 import { useBreadcrumbs } from '@/hooks/use-breadcrumbs';
 import { Icons } from '@/components/icons';
 import { Fragment } from 'react';
+import { useTranslations } from 'next-intl';
 
 export function Breadcrumbs() {
-  const items = useBreadcrumbs();
+  const translate = useTranslations('navigation');
+  const items = useBreadcrumbs(translate);
   if (items.length === 0) return null;
 
   return (

@@ -1,5 +1,65 @@
 {
   "language": "Idioma",
   "loading": "Cargando",
-  "error": "Algo salió mal"
+  "error": "Algo salió mal",
+  "skipToContent": "Saltar al contenido",
+  "search": {
+    "trigger": "Buscar...",
+    "placeholder": "Buscar comandos...",
+    "noResults": "No se encontraron resultados.",
+    "navigationSection": "Navegación",
+    "goTo": "Ir a {destination}",
+    "navigate": "navegar",
+    "open": "abrir",
+    "close": "cerrar"
+  },
+  "sidebar": {
+    "title": "Barra lateral",
+    "description": "Muestra la barra lateral en dispositivos móviles.",
+    "toggle": "Alternar barra lateral"
+  },
+  "account": {
+    "signOut": "Cerrar sesión"
+  },
+  "organization": {
+    "loading": "Cargando...",
+    "organizations": "Organizaciones",
+    "create": "Crear organización",
+    "getStarted": "Comenzar",
+    "fallback": "Organización",
+    "add": "Agregar organización"
+  },
+  "theme": {
+    "label": "Tema",
+    "select": "Seleccionar un tema",
+    "themes": "Temas",
+    "toggle": "Alternar tema",
+    "switch": "Cambiar tema",
+    "toggleColorMode": "Alternar modo claro/oscuro",
+    "setLight": "Usar tema claro",
+    "setDark": "Usar tema oscuro"
+  },
+  "info": {
+    "title": "Documentación",
+    "gettingStarted": "Primeros pasos",
+    "description": "Aprende a comenzar a usar esta aplicación.",
+    "installationGuide": "Guía de instalación",
+    "learnMore": "Más información",
+    "noContent": "No hay contenido disponible",
+    "panelTitle": "Información",
+    "panelDescription": "Muestra el panel de información en dispositivos móviles.",
+    "closePanel": "Cerrar panel de información",
+    "togglePanel": "Alternar panel de información"
+  },
+  "github": "Ver en GitHub",
+  "notifications": {
+    "title": "Notificaciones",
+    "newCount": "{count, plural, one {# nueva} other {# nuevas}}",
+    "markAllRead": "Marcar todas como leídas",
+    "empty": "Todavía no hay notificaciones"
+  },
+  "metadata": {
+    "description": "Plataforma operativa multi-tenant para administrar Stores e integraciones e-commerce.",
+    "imageAlt": "Vista general del panel de Pimienta Hub"
+  }
 }

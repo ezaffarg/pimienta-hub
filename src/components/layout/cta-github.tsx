@@ -1,17 +1,17 @@
 import { Button } from '@/components/ui/button';
 import { Icons } from '@/components/icons';
 
-export default function CtaGithub() {
+export default function CtaGithub({ label = 'View on GitHub' }: { label?: string }) {
   return (
     <Button
       variant='ghost'
       size='sm'
       className='group hidden sm:flex'
       nativeButton={false}
-      aria-label='View on GitHub'
+      aria-label={label}
       render={
         <a
-          aria-label='View on GitHub'
+          aria-label={label}
           href='https://github.com/Kiranism/next-shadcn-dashboard-starter'
           rel='noopener noreferrer'
           target='_blank'

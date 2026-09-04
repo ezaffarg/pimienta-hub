@@ -1,5 +1,65 @@
 {
   "language": "Idioma",
   "loading": "Carregando",
-  "error": "Algo deu errado"
+  "error": "Algo deu errado",
+  "skipToContent": "Pular para o conteúdo",
+  "search": {
+    "trigger": "Buscar...",
+    "placeholder": "Buscar comandos...",
+    "noResults": "Nenhum resultado encontrado.",
+    "navigationSection": "Navegação",
+    "goTo": "Ir para {destination}",
+    "navigate": "navegar",
+    "open": "abrir",
+    "close": "fechar"
+  },
+  "sidebar": {
+    "title": "Barra lateral",
+    "description": "Exibe a barra lateral em dispositivos móveis.",
+    "toggle": "Alternar barra lateral"
+  },
+  "account": {
+    "signOut": "Sair"
+  },
+  "organization": {
+    "loading": "Carregando...",
+    "organizations": "Organizações",
+    "create": "Criar organização",
+    "getStarted": "Começar",
+    "fallback": "Organização",
+    "add": "Adicionar organização"
+  },
+  "theme": {
+    "label": "Tema",
+    "select": "Selecionar um tema",
+    "themes": "Temas",
+    "toggle": "Alternar tema",
+    "switch": "Trocar tema",
+    "toggleColorMode": "Alternar modo claro/escuro",
+    "setLight": "Usar tema claro",
+    "setDark": "Usar tema escuro"
+  },
+  "info": {
+    "title": "Documentação",
+    "gettingStarted": "Primeiros passos",
+    "description": "Saiba como começar a usar este aplicativo.",
+    "installationGuide": "Guia de instalação",
+    "learnMore": "Saiba mais",
+    "noContent": "Nenhum conteúdo disponível",
+    "panelTitle": "Informações",
+    "panelDescription": "Exibe o painel de informações em dispositivos móveis.",
+    "closePanel": "Fechar painel de informações",
+    "togglePanel": "Alternar painel de informações"
+  },
+  "github": "Ver no GitHub",
+  "notifications": {
+    "title": "Notificações",
+    "newCount": "{count, plural, one {# nova} other {# novas}}",
+    "markAllRead": "Marcar todas como lidas",
+    "empty": "Ainda não há notificações"
+  },
+  "metadata": {
+    "description": "Plataforma operacional multi-tenant para gerenciar Stores e integrações de e-commerce.",
+    "imageAlt": "Visão geral do painel do Pimienta Hub"
+  }
 }

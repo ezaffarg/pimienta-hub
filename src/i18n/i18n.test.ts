@@ -17,6 +17,14 @@ function ClientTranslationProof() {
   return createElement('span', null, translate('language'));
 }
 
+function leafPaths(value: unknown, prefix = ''): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [prefix];
+
+  return Object.entries(value).flatMap(([key, child]) =>
+    leafPaths(child, prefix ? `${prefix}.${key}` : key)
+  );
+}
+
 describe('i18n locale resolution', () => {
   it('defines the canonical allowlist, default, fallback and cookie name', () => {
     expect(SUPPORTED_LOCALES).toEqual(['es-419', 'pt-BR', 'en']);
@@ -110,18 +118,11 @@ describe('i18n messages', () => {
 
   it('keeps structural parity across all real catalogs', async () => {
     const catalogs = await Promise.all(SUPPORTED_LOCALES.map(loadMessages));
-    const shapes = catalogs.map((catalog) => JSON.stringify(Object.keys(catalog).toSorted()));
+    const shapes = catalogs.map((catalog) => JSON.stringify(leafPaths(catalog).toSorted()));
 
     expect(new Set(shapes).size).toBe(1);
-    for (const catalog of catalogs) {
-      expect(Object.keys(catalog.common.actions).toSorted()).toEqual(['cancel', 'close', 'save']);
-      expect(Object.keys(catalog.navigation).toSorted()).toEqual([
-        'dashboard',
-        'products',
-        'users'
-      ]);
-      expect(Object.keys(catalog.shell).toSorted()).toEqual(['error', 'language', 'loading']);
-    }
+    expect(leafPaths(catalogs[0])).toContain('shell.search.placeholder');
+    expect(leafPaths(catalogs[0])).toContain('navigation.listingSyncRuns');
   });
 
   it('falls back to a safe allowlisted catalog for unsupported runtime input', async () => {

@@ -1,5 +1,65 @@
 {
   "language": "Language",
   "loading": "Loading",
-  "error": "Something went wrong"
+  "error": "Something went wrong",
+  "skipToContent": "Skip to content",
+  "search": {
+    "trigger": "Search...",
+    "placeholder": "Search commands...",
+    "noResults": "No results found.",
+    "navigationSection": "Navigation",
+    "goTo": "Go to {destination}",
+    "navigate": "navigate",
+    "open": "open",
+    "close": "close"
+  },
+  "sidebar": {
+    "title": "Sidebar",
+    "description": "Displays the mobile sidebar.",
+    "toggle": "Toggle sidebar"
+  },
+  "account": {
+    "signOut": "Sign out"
+  },
+  "organization": {
+    "loading": "Loading...",
+    "organizations": "Organizations",
+    "create": "Create organization",
+    "getStarted": "Get started",
+    "fallback": "Organization",
+    "add": "Add organization"
+  },
+  "theme": {
+    "label": "Theme",
+    "select": "Select a theme",
+    "themes": "Themes",
+    "toggle": "Toggle theme",
+    "switch": "Switch theme",
+    "toggleColorMode": "Toggle dark/light mode",
+    "setLight": "Set light theme",
+    "setDark": "Set dark theme"
+  },
+  "info": {
+    "title": "Documentation",
+    "gettingStarted": "Getting started",
+    "description": "Learn how to get started with this application.",
+    "installationGuide": "Installation guide",
+    "learnMore": "Learn more",
+    "noContent": "No content available",
+    "panelTitle": "Information",
+    "panelDescription": "Displays the mobile information panel.",
+    "closePanel": "Close information panel",
+    "togglePanel": "Toggle information panel"
+  },
+  "github": "View on GitHub",
+  "notifications": {
+    "title": "Notifications",
+    "newCount": "{count, plural, one {# new} other {# new}}",
+    "markAllRead": "Mark all as read",
+    "empty": "No notifications yet"
+  },
+  "metadata": {
+    "description": "Multi-tenant operations platform for managing Stores and e-commerce integrations.",
+    "imageAlt": "Pimienta Hub dashboard overview"
+  }
 }

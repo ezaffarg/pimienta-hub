@@ -22,6 +22,7 @@ import {
   useSidebar
 } from '@/components/ui/sidebar';
 import { useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 
 export function OrgSwitcher() {
   const { isMobile, state } = useSidebar();
@@ -34,6 +35,7 @@ export function OrgSwitcher() {
   });
 
   const { orgId } = useAuth();
+  const translate = useTranslations('shell.organization');
 
   useEffect(() => {
     if (userMemberships?.revalidate) {
@@ -75,8 +77,10 @@ export function OrgSwitcher() {
                   : 'visible max-w-full opacity-100'
               }`}
             >
-              <span className='truncate font-medium'>Loading...</span>
-              <span className='text-muted-foreground truncate text-xs'>Organizations</span>
+              <span className='truncate font-medium'>{translate('loading')}</span>
+              <span className='text-muted-foreground truncate text-xs'>
+                {translate('organizations')}
+              </span>
             </div>
           </SidebarMenuButton>
         </SidebarMenuItem>
@@ -104,8 +108,10 @@ export function OrgSwitcher() {
                   : 'visible max-w-full opacity-100'
               }`}
             >
-              <span className='truncate font-medium'>Create organization</span>
-              <span className='text-muted-foreground truncate text-xs'>Get started</span>
+              <span className='truncate font-medium'>{translate('create')}</span>
+              <span className='text-muted-foreground truncate text-xs'>
+                {translate('getStarted')}
+              </span>
             </div>
             <Icons.chevronsUpDown
               className={`ml-auto transition-all duration-200 ease-in-out ${
@@ -162,7 +168,7 @@ export function OrgSwitcher() {
               <span className='truncate font-medium'>{displayOrganization.name}</span>
               <span className='text-muted-foreground truncate text-xs'>
                 {userMemberships.data.find((m) => m.organization.id === displayOrganization.id)
-                  ?.role || 'Organization'}
+                  ?.role || translate('fallback')}
               </span>
             </div>
             <Icons.chevronsUpDown
@@ -181,7 +187,7 @@ export function OrgSwitcher() {
           >
             <DropdownMenuGroup>
               <DropdownMenuLabel className='text-muted-foreground text-xs'>
-                Organizations
+                {translate('organizations')}
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuGroup>
@@ -224,7 +230,7 @@ export function OrgSwitcher() {
                 <div className='flex size-6 items-center justify-center rounded-md border bg-transparent'>
                   <Icons.add className='size-4' />
                 </div>
-                <div className='text-muted-foreground font-medium'>Add organization</div>
+                <div className='text-muted-foreground font-medium'>{translate('add')}</div>
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>

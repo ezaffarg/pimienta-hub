@@ -221,6 +221,8 @@ function Infobar({
   side = 'left',
   variant = 'sidebar',
   collapsible = 'offcanvas',
+  mobileTitle = 'Infobar',
+  mobileDescription = 'Displays the mobile infobar.',
   className,
   children,
   ...props
@@ -228,6 +230,8 @@ function Infobar({
   side?: 'left' | 'right';
   variant?: 'sidebar' | 'floating' | 'inset';
   collapsible?: 'offcanvas' | 'icon' | 'none';
+  mobileTitle?: string;
+  mobileDescription?: string;
 }) {
   const { isMobile, state, setOpen, openMobile, setOpenMobile, isPathnameChanging } = useInfobar();
 
@@ -269,8 +273,8 @@ function Infobar({
           side={side}
         >
           <SheetHeader className='sr-only'>
-            <SheetTitle>Infobar</SheetTitle>
-            <SheetDescription>Displays the mobile infobar.</SheetDescription>
+            <SheetTitle>{mobileTitle}</SheetTitle>
+            <SheetDescription>{mobileDescription}</SheetDescription>
           </SheetHeader>
           <div className='flex h-full w-full flex-col'>{children}</div>
         </SheetContent>
@@ -313,7 +317,12 @@ function Infobar({
   );
 }
 
-function InfobarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
+function InfobarTrigger({
+  className,
+  onClick,
+  label = 'Close info panel',
+  ...props
+}: React.ComponentProps<typeof Button> & { label?: string }) {
   const { toggleInfobar } = useInfobar();
 
   return (
@@ -323,7 +332,7 @@ function InfobarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       variant='ghost'
       size='icon'
       className={cn('size-7', className)}
-      aria-label='Close info panel'
+      aria-label={label}
       onClick={(event) => {
         onClick?.(event);
         toggleInfobar();

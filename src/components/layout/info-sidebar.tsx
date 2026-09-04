@@ -13,36 +13,35 @@ import {
   InfobarTrigger,
   useInfobar
 } from '@/components/ui/infobar';
-
-// Default/fallback data when no content is set
-const defaultData = {
-  title: 'Documentation',
-  sections: [
-    {
-      title: 'Getting Started',
-      description: 'Learn how to get started with this application.',
-      links: [
-        {
-          title: 'Installation Guide',
-          url: '#'
-        }
-      ]
-    }
-  ]
-};
+import { useTranslations } from 'next-intl';
 
 export function InfoSidebar({ ...props }: React.ComponentProps<typeof Infobar>) {
   const { content } = useInfobar();
+  const translate = useTranslations('shell.info');
+  const defaultData = {
+    title: translate('title'),
+    sections: [
+      {
+        title: translate('gettingStarted'),
+        description: translate('description'),
+        links: [{ title: translate('installationGuide'), url: '#' }]
+      }
+    ]
+  };
   const data = content || defaultData;
 
   return (
-    <Infobar {...props}>
+    <Infobar
+      mobileTitle={translate('panelTitle')}
+      mobileDescription={translate('panelDescription')}
+      {...props}
+    >
       <InfobarHeader className='bg-sidebar sticky top-0 z-10 flex flex-row items-center justify-between gap-2 border-b px-4 py-3'>
         <div className='min-w-0 flex-1'>
           <h2 className='text-lg font-semibold wrap-break-word'>{data.title}</h2>
         </div>
         <div className='shrink-0'>
-          <InfobarTrigger />
+          <InfobarTrigger label={translate('closePanel')} />
         </div>
       </InfobarHeader>
       <InfobarContent>
@@ -63,7 +62,7 @@ export function InfoSidebar({ ...props }: React.ComponentProps<typeof Infobar>) 
                     {section.links && section.links.length > 0 && (
                       <div className='flex flex-col gap-2'>
                         <h4 className='text-muted-foreground text-xs font-medium tracking-wide uppercase'>
-                          Learn more
+                          {translate('learnMore')}
                         </h4>
                         <ul className='flex flex-col gap-1.5'>
                           {section.links.map((link) => (
@@ -86,14 +85,14 @@ export function InfoSidebar({ ...props }: React.ComponentProps<typeof Infobar>) 
                 ))
               ) : (
                 <div className='text-muted-foreground px-2 py-4 text-center text-sm'>
-                  No content available
+                  {translate('noContent')}
                 </div>
               )}
             </div>
           </InfobarGroupContent>
         </InfobarGroup>
       </InfobarContent>
-      <InfobarRail />
+      <InfobarRail aria-label={translate('togglePanel')} title={translate('togglePanel')} />
     </Infobar>
   );
 }

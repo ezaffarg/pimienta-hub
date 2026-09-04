@@ -6,38 +6,51 @@ import { InfobarProvider } from '@/components/ui/infobar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages, getTranslations } from 'next-intl/server';
+import { pickShellMessages } from '@/i18n/shell';
 
-export const metadata: Metadata = {
-  title: 'Pimienta Hub',
-  description: 'Operación multi-tenant de Stores e integraciones e-commerce.',
-  robots: {
-    index: false,
-    follow: false
-  }
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const translate = await getTranslations('shell.metadata');
+  return {
+    title: 'Pimienta Hub',
+    description: translate('description'),
+    robots: {
+      index: false,
+      follow: false
+    }
+  };
+}
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Persisting the sidebar state in the cookie.
-  const cookieStore = await cookies();
+  const [cookieStore, locale, messages, translate] = await Promise.all([
+    cookies(),
+    getLocale(),
+    getMessages(),
+    getTranslations('shell')
+  ]);
   const defaultOpen = cookieStore.get('sidebar_state')?.value === 'true';
   return (
-    <KBar>
-      <SidebarProvider defaultOpen={defaultOpen}>
-        <a
-          href='#main-content'
-          className='bg-background ring-ring sr-only rounded-md px-3 py-2 text-sm font-medium shadow focus:not-sr-only focus:absolute focus:top-2 focus:start-2 focus:z-50 focus:ring-2'
-        >
-          Skip to content
-        </a>
-        <AppSidebar />
-        <SidebarInset id='main-content' tabIndex={-1} className='scroll-mt-16'>
-          <Header />
-          <InfobarProvider defaultOpen={false}>
-            {children}
-            <InfoSidebar side='right' />
-          </InfobarProvider>
-        </SidebarInset>
-      </SidebarProvider>
-    </KBar>
+    <NextIntlClientProvider locale={locale} messages={pickShellMessages(messages)}>
+      <KBar>
+        <SidebarProvider defaultOpen={defaultOpen}>
+          <a
+            href='#main-content'
+            className='bg-background ring-ring sr-only rounded-md px-3 py-2 text-sm font-medium shadow focus:not-sr-only focus:absolute focus:top-2 focus:start-2 focus:z-50 focus:ring-2'
+          >
+            {translate('skipToContent')}
+          </a>
+          <AppSidebar />
+          <SidebarInset id='main-content' tabIndex={-1} className='scroll-mt-16'>
+            <Header />
+            <InfobarProvider defaultOpen={false}>
+              {children}
+              <InfoSidebar side='right' />
+            </InfobarProvider>
+          </SidebarInset>
+        </SidebarProvider>
+      </KBar>
+    </NextIntlClientProvider>
   );
 }

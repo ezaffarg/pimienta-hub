@@ -29,8 +29,10 @@ import { navGroups } from '@/config/nav-config';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { useClerk, useOrganization, useUser } from '@clerk/nextjs';
 import { useFilteredNavGroups } from '@/hooks/use-nav';
+import { localizeNavGroups } from '@/i18n/shell';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Icons } from '../icons';
 import { OrgSwitcher } from '../org-switcher';
@@ -43,20 +45,30 @@ export default function AppSidebar() {
   const { signOut } = useClerk();
   const router = useRouter();
   const filteredGroups = useFilteredNavGroups(navGroups);
+  const translateNavigation = useTranslations('navigation');
+  const translateShell = useTranslations('shell');
+  const localizedGroups = React.useMemo(
+    () => localizeNavGroups(filteredGroups, translateNavigation),
+    [filteredGroups, translateNavigation]
+  );
 
   React.useEffect(() => {
     // Side effects based on sidebar state changes
   }, [isOpen]);
 
   return (
-    <Sidebar collapsible='icon'>
+    <Sidebar
+      collapsible='icon'
+      mobileTitle={translateShell('sidebar.title')}
+      mobileDescription={translateShell('sidebar.description')}
+    >
       <SidebarHeader className='group-data-[collapsible=icon]:pt-4'>
         <OrgSwitcher />
       </SidebarHeader>
       <SidebarContent className='overflow-x-hidden'>
-        {filteredGroups.map((group) => (
+        {localizedGroups.map((group) => (
           <SidebarGroup key={group.label || 'ungrouped'} className='py-0'>
-            {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
+            {group.label && <SidebarGroupLabel>{group.displayLabel}</SidebarGroupLabel>}
             <SidebarMenu>
               {group.items.map((item) => {
                 const Icon = item.icon ? Icons[item.icon] : Icons.logo;
@@ -69,14 +81,14 @@ export default function AppSidebar() {
                     <CollapsibleTrigger
                       render={
                         <SidebarMenuButton
-                          tooltip={item.title}
+                          tooltip={item.displayTitle}
                           isActive={pathname === item.url}
                           className='group/collapsible'
                         />
                       }
                     >
                       {item.icon && <Icon />}
-                      <span>{item.title}</span>
+                      <span>{item.displayTitle}</span>
                       <Icons.chevronRight className='ml-auto transition-transform duration-200 group-data-panel-open/collapsible:rotate-90' />
                     </CollapsibleTrigger>
                     <CollapsibleContent>
@@ -84,10 +96,10 @@ export default function AppSidebar() {
                         {item.items?.map((subItem) => (
                           <SidebarMenuSubItem key={subItem.title}>
                             <SidebarMenuSubButton
-                              render={<Link href={subItem.url} aria-label={subItem.title} />}
+                              render={<Link href={subItem.url} aria-label={subItem.displayTitle} />}
                               isActive={pathname === subItem.url}
                             >
-                              <span>{subItem.title}</span>
+                              <span>{subItem.displayTitle}</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         ))}
@@ -97,12 +109,12 @@ export default function AppSidebar() {
                 ) : (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
-                      render={<Link href={item.url} aria-label={item.title} />}
-                      tooltip={item.title}
+                      render={<Link href={item.url} aria-label={item.displayTitle} />}
+                      tooltip={item.displayTitle}
                       isActive={pathname === item.url}
                     >
                       <Icon />
-                      <span>{item.title}</span>
+                      <span>{item.displayTitle}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -146,24 +158,24 @@ export default function AppSidebar() {
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={() => router.push('/dashboard/profile')}>
                     <Icons.account className='mr-2 h-4 w-4' />
-                    Profile
+                    {translateNavigation('profile')}
                   </DropdownMenuItem>
                   {organization && (
                     <DropdownMenuItem onClick={() => router.push('/dashboard/billing')}>
                       <Icons.creditCard className='mr-2 h-4 w-4' />
-                      Billing
+                      {translateNavigation('billing')}
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onClick={() => router.push('/dashboard/notifications')}>
                     <Icons.notification className='mr-2 h-4 w-4' />
-                    Notifications
+                    {translateNavigation('notifications')}
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={() => signOut({ redirectUrl: '/auth/sign-in' })}>
                     <Icons.logout aria-hidden className='mr-2 h-4 w-4' />
-                    Sign out
+                    {translateShell('account.signOut')}
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               </DropdownMenuContent>
@@ -171,7 +183,10 @@ export default function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-      <SidebarRail />
+      <SidebarRail
+        aria-label={translateShell('sidebar.toggle')}
+        title={translateShell('sidebar.toggle')}
+      />
     </Sidebar>
   );
 }

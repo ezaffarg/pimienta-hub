@@ -398,6 +398,18 @@ root refleja el locale en `<html lang>` sin provider global ni catálogos
 completos en el cliente. La arquitectura y los límites de los slices siguientes
 viven en [Internacionalización](./i18n.md).
 
+## G.13 Shell global i18n — 2.20Y-I18N-03
+
+El shell global traduce en el boundary de render y conserva en inglés estable
+los IDs de navegación, URLs y reglas de acceso. El dashboard serializa sólo
+`navigation` y `shell`; metadata y labels server-owned usan las APIs server de
+`next-intl`. Breadcrumbs dinámicos y contenido de features/provider no se
+traducen.
+
+La matriz focalizada pasó 39/39 junto con typecheck, lint y build. El slice
+permanece local: selector, escritura de cookie y localización Clerk siguen
+fuera de alcance hasta el gate siguiente.
+
 ## H. Condiciones generales de avance
 
 Antes de cerrar una fase o abrir la siguiente debe existir evidencia de:

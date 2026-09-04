@@ -15,14 +15,16 @@ import {
 import { Icons } from '../icons';
 import { Kbd } from '@/components/ui/kbd';
 import { THEMES } from './theme.config';
+import { useTranslations } from 'next-intl';
 
 export function ThemeSelector() {
   const { activeTheme, setActiveTheme } = useThemeConfig();
+  const translate = useTranslations('shell.theme');
 
   return (
     <div className='flex items-center gap-2'>
       <Label htmlFor='theme-selector' className='sr-only'>
-        Theme
+        {translate('label')}
       </Label>
       <Select
         items={THEMES.map((theme) => ({ value: theme.value, label: theme.name }))}
@@ -38,15 +40,15 @@ export function ThemeSelector() {
           <span className='text-muted-foreground hidden sm:block'>
             <Icons.palette />
           </span>
-          <span className='text-muted-foreground block sm:hidden'>Theme</span>
-          <SelectValue placeholder='Select a theme' />
+          <span className='text-muted-foreground block sm:hidden'>{translate('label')}</span>
+          <SelectValue placeholder={translate('select')} />
           <Kbd>T T</Kbd>
         </SelectTrigger>
         <SelectContent align='end'>
           {THEMES.length > 0 && (
             <>
               <SelectGroup>
-                <SelectLabel>themes</SelectLabel>
+                <SelectLabel>{translate('themes')}</SelectLabel>
                 {THEMES.map((theme) => (
                   <SelectItem key={theme.name} value={theme.value}>
                     {theme.name}

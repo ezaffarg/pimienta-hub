@@ -8,9 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Kbd } from '@/components/ui/kbd';
 import { startThemeTransition } from '@/lib/theme-transition';
+import { useTranslations } from 'next-intl';
 
 export function ThemeModeToggle() {
   const { setTheme, resolvedTheme } = useTheme();
+  const translate = useTranslations('shell.theme');
 
   const handleThemeToggle = React.useCallback(
     (e?: React.MouseEvent) => {
@@ -55,10 +57,10 @@ export function ThemeModeToggle() {
         }
       >
         <Icons.brightness />
-        <span className='sr-only'>Toggle theme</span>
+        <span className='sr-only'>{translate('toggle')}</span>
       </TooltipTrigger>
       <TooltipContent>
-        Toggle theme <Kbd>⌘⇧D</Kbd> <Kbd>D D</Kbd>
+        {translate('toggle')} <Kbd>⌘⇧D</Kbd> <Kbd>D D</Kbd>
       </TooltipContent>
     </Tooltip>
   );

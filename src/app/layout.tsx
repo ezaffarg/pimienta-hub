@@ -6,10 +6,11 @@ import ThemeProvider from '@/components/themes/theme-provider';
 import { cn } from '@/lib/utils';
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
-import { getLocale } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import NextTopLoader from 'nextjs-toploader';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { resolveHtmlLang } from '@/i18n/config';
+import { buildRootMetadata } from '@/i18n/shell';
 import '../styles/globals.css';
 
 const META_THEME_COLORS = {
@@ -17,39 +18,14 @@ const META_THEME_COLORS = {
   dark: '#09090b'
 };
 
-export const metadata: Metadata = {
-  ...(process.env.NEXT_PUBLIC_APP_URL
-    ? { metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL) }
-    : {}),
-  title: {
-    default: 'Pimienta Hub',
-    template: '%s | Pimienta Hub'
-  },
-  description:
-    'Plataforma operativa multi-tenant para administrar Stores e integraciones e-commerce.',
-  openGraph: {
-    title: 'Pimienta Hub',
-    description:
-      'Plataforma operativa multi-tenant para administrar Stores e integraciones e-commerce.',
-    siteName: 'Pimienta Hub',
-    type: 'website',
-    images: [
-      {
-        url: '/shadcn-dashboard.png',
-        width: 3200,
-        height: 1600,
-        alt: 'Shadcn Dashboard overview page'
-      }
-    ]
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Pimienta Hub',
-    description:
-      'Plataforma operativa multi-tenant para administrar Stores e integraciones e-commerce.',
-    images: ['/shadcn-dashboard.png']
-  }
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const translate = await getTranslations('shell.metadata');
+  const metadataBase = process.env.NEXT_PUBLIC_APP_URL
+    ? new URL(process.env.NEXT_PUBLIC_APP_URL)
+    : undefined;
+
+  return buildRootMetadata(translate, metadataBase);
+}
 
 export const viewport: Viewport = {
   themeColor: META_THEME_COLORS.light
